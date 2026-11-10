@@ -35,6 +35,27 @@ type IsPlainJson<K> = K extends
 	: false;
 
 /**
+ * Media types whose content is typed by its schema and parsed as JSON: JSON ones, and the
+ * wildcards that could be JSON (`*\/*`, `application/*`), as `isBinaryMedia` leaves them.
+ */
+type KeepsSchema<K> = K extends
+	| "application/json"
+	| `application/json;${string}`
+	| `${string}+json`
+	| `${string}+json;${string}`
+	| "*/*"
+	| `*/*;${string}`
+	| "application/*"
+	| `application/*;${string}`
+	? true
+	: false;
+
+/** What `parseAs: "json"` gives: the schema of JSON media types, unknown for the others. */
+type JsonContent<B> = B extends { content: infer C }
+	? { [K in keyof C]: KeepsSchema<K> extends true ? C[K] : unknown }[keyof C]
+	: undefined;
+
+/**
  * How a body of media type K is passed. contentType picks the media type and so the
  * encoding; it may be left out for application/json, which is what is sent then, and
  * for a FormData or URLSearchParams, which carry their own.
@@ -115,7 +136,8 @@ type IsSuccess<S> = S extends number
 /** `ok` per status, as fetch sets it. `default` covers any undocumented status, 2xx included. */
 type Ok<S> = S extends "default" ? boolean : IsSuccess<S>;
 
-type Parsed<A, D> = A extends "text"
+/** `data` for a response object B (its `content`), read as parseAs A says. */
+type Parsed<A, B> = A extends "text"
 	? string
 	: A extends "blob"
 		? Blob
@@ -123,20 +145,46 @@ type Parsed<A, D> = A extends "text"
 			? ArrayBuffer
 			: A extends "stream"
 				? ReadableStream<Uint8Array> | null
-				: D;
+				: A extends "json"
+					? JsonContent<B>
+					: Content<B>;
+
+/** fetch gives HEAD responses and these statuses a null body, whatever is declared. */
+type NullBodyStatus = 204 | 205 | 304;
+
+/** The response object as fetch delivers it: without content where fetch gives no body. */
+type Delivered<M, S, B> = [M] extends ["head"]
+	? Empty
+	: S extends NullBodyStatus
+		? Empty
+		: B;
+
+/** A response nothing documents: any status, any body. */
+type Undocumented = { content: Record<string, unknown> };
 
 /** Discriminated union over the documented statuses. */
-export type Result<O, A extends ParseAs | undefined = undefined> = O extends {
+export type Result<
+	O,
+	A extends ParseAs | undefined = undefined,
+	M extends Method = Method,
+> = O extends {
 	responses: infer R;
 }
-	? {
-			[S in keyof R]: {
-				status: Status<S>;
-				ok: Ok<S>;
-				data: Parsed<A, Content<R[S]>>;
+	? [keyof R] extends [never]
+		? {
+				status: number;
+				ok: boolean;
+				data: Parsed<A, Undocumented>;
 				response: Response;
-			};
-		}[keyof R]
+			}
+		: {
+				[S in keyof R]: {
+					status: Status<S>;
+					ok: Ok<S>;
+					data: Parsed<A, Delivered<M, S, R[S]>>;
+					response: Response;
+				};
+			}[keyof R]
 	: never;
 
 type MaybePromise<T> = T | Promise<T>;
@@ -182,7 +230,7 @@ type Call<P, M extends Method> = <
 >(
 	path: Path,
 	...args: Args<Op<P, Path, M>, A>
-) => Promise<Result<Op<P, Path, M>, A>>;
+) => Promise<Result<Op<P, Path, M>, A, M>>;
 
 export type Client<P> = { [M in Method]: Call<P, M> };
 
@@ -329,7 +377,7 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 
 		const request = new Request(url, requestInit);
 		const response = await (config.fetch ?? globalThis.fetch)(request);
-		let data = await readData(method, response, init.parseAs);
+		let data = await readData(response, init.parseAs);
 		if (config.onData !== undefined) {
 			const { status } = response;
 			data = await config.onData(data, {
@@ -551,8 +599,8 @@ function isRawBody(body: unknown): body is BodyInit {
 	);
 }
 
+/** A response body, read by parseAs or by its content-type; empty is undefined. */
 async function readData(
-	method: Method,
 	response: Response,
 	parseAs: ParseAs | undefined,
 ): Promise<unknown> {
@@ -568,14 +616,7 @@ async function readData(
 		case "json":
 			return parseJson(response, await response.text());
 	}
-	if (
-		method === "head" ||
-		response.status === 204 ||
-		response.status === 205 ||
-		response.status === 304
-	) {
-		return undefined;
-	}
+	// HEAD and 204, 205, 304 responses have a null body under fetch, so they are empty here too.
 	const type = response.headers.get("content-type") ?? "";
 	if (type !== "" && isBinaryMedia(type)) {
 		const blob = await response.blob();

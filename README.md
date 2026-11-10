@@ -106,9 +106,10 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 
 `{ status, ok, data, response }`, a union over the statuses the operation documents.
 
-- **`data`** is parsed by the response's content-type: JSON, text, or `Blob` for binary types. It is `undefined` for an empty body (204, HEAD, or any status that sends none), as a response without `content` is typed. `parseAs` overrides this for one call and changes `data`'s type.
+- **`data`** is parsed by the response's content-type: JSON, text, or `Blob` for binary types. An empty body gives `undefined`. fetch gives HEAD responses and 204, 205 and 304 no body, so their `data` is typed `undefined` whatever the document declares. A status that declares `content` but sends none also gives `undefined`; check for it in `onData`.
+- **`parseAs`** reads the body its way for one call and types `data` to match: `text` a string, `blob` a `Blob`, `arrayBuffer` an `ArrayBuffer`, `stream` the body (`null` when there is none), `json` the parsed JSON (`undefined` when empty), typed by the schemas of JSON and wildcard media types and `unknown` for the others.
 - **`ok`** is fetch's: `true` for 2xx. For `default` (every status the operation does not list, 2xx included) it is `boolean`; narrow by `status` or `ok`.
-- **Undocumented statuses:** list them with `default` or a range (`4XX`, `5XX`) in the document and they are typed. A status outside the document is still returned, in the branch the types call unreachable.
+- **Undocumented statuses:** list them with `default` or a range (`4XX`, `5XX`) in the document and they are typed. A status outside the document is still returned, in the branch the types call unreachable. An operation that documents no responses gives `status: number`, `ok: boolean` and `data: unknown`.
 - **Response headers** are typed in the declarations (`responses[200].headers`); read them from `res.response.headers`.
 
 ### Details

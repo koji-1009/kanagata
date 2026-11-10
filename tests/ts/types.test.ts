@@ -11,6 +11,7 @@ import type * as Basic from "../spec/basic/expected";
 import type * as Api from "../spec/client/expected";
 import type * as Cookies from "../spec/params-header-cookie/expected";
 import type * as ReadWrite from "../spec/read-write-only/expected";
+import type * as NoResponses from "../spec/responses-missing/expected";
 
 type Equal<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
@@ -285,6 +286,115 @@ export async function parseAs(): Promise<void> {
 	expectType<Equal<typeof json.data, Api.Item>>();
 	// @ts-expect-error unknown parseAs
 	await api.get("/events", { parseAs: "xml" });
+}
+
+interface JsonParsePaths {
+	"/mixed": {
+		get: {
+			responses: {
+				200: {
+					content: {
+						"application/json": { a: number };
+						"application/vnd.x+json; v=1": { b: number };
+						"text/plain": string;
+					};
+				};
+				201: { content: { "application/octet-stream": Blob } };
+				202: { content: { "*/*": { c: number } } };
+				203: { content: { "application/*": { d: number } } };
+				204: Record<never, never>;
+			};
+		};
+	};
+}
+
+export async function parseAsJson(): Promise<void> {
+	const j = createClient<JsonParsePaths>({ baseUrl: "https://api.test" });
+	// JSON is parsed whatever the content-type says: JSON and wildcard media types keep
+	// their schema; text, binary and form ones are unknown; no content is undefined.
+	const res = await j.get("/mixed", { parseAs: "json" });
+	if (res.status === 200) expectType<Equal<typeof res.data, unknown>>();
+	if (res.status === 201) expectType<Equal<typeof res.data, unknown>>();
+	if (res.status === 202) expectType<Equal<typeof res.data, { c: number }>>();
+	if (res.status === 203) expectType<Equal<typeof res.data, { d: number }>>();
+	if (res.status === 204) expectType<Equal<typeof res.data, undefined>>();
+	const thing = await api.get("/things/{id}", {
+		path: { id: 1 },
+		parseAs: "json",
+	});
+	if (thing.status === 404)
+		// 404 also matches "2XX" (text/plain, so unknown) and "4XX" (problem+json).
+		expectType<Equal<typeof thing.data, unknown>>();
+}
+
+interface JsonOnlyPaths {
+	"/j": {
+		get: {
+			responses: {
+				200: {
+					content: {
+						"application/json": { a: number };
+						"application/vnd.x+json; v=1": { b: number };
+					};
+				};
+			};
+		};
+	};
+}
+
+export async function parseAsJsonKeepsJsonSchemas(): Promise<void> {
+	const j = createClient<JsonOnlyPaths>({ baseUrl: "https://api.test" });
+	const res = await j.get("/j", { parseAs: "json" });
+	expectType<Equal<typeof res.data, { a: number } | { b: number }>>();
+}
+
+interface NoBodyPaths {
+	"/n": {
+		head: {
+			responses: { 200: { content: { "application/json": { a: number } } } };
+		};
+		delete: {
+			responses: {
+				204: { content: { "application/json": { a: number } } };
+				205: { content: { "application/json": { a: number } } };
+				304: { content: { "application/json": { a: number } } };
+			};
+		};
+		get: {
+			responses: { 200: { content: { "application/json": { a: number } } } };
+		};
+	};
+}
+
+export async function noBody(): Promise<void> {
+	const n = createClient<NoBodyPaths>({ baseUrl: "https://api.test" });
+	// fetch gives HEAD and 204, 205, 304 responses no body, whatever the document declares.
+	const head = await n.head("/n");
+	expectType<Equal<typeof head.data, undefined>>();
+	const del = await n.delete("/n");
+	expectType<Equal<typeof del.data, undefined>>();
+	// parseAs reads that empty body as it says.
+	const text = await n.head("/n", { parseAs: "text" });
+	expectType<Equal<typeof text.data, string>>();
+	const json = await n.delete("/n", { parseAs: "json" });
+	expectType<Equal<typeof json.data, undefined>>();
+	const stream = await n.head("/n", { parseAs: "stream" });
+	expectType<Equal<typeof stream.data, ReadableStream<Uint8Array> | null>>();
+	// The same content on a GET 200 is read.
+	const get = await n.get("/n");
+	expectType<Equal<typeof get.data, { a: number }>>();
+}
+
+export async function noResponses(): Promise<void> {
+	const none = createClient<NoResponses.paths>({ baseUrl: "https://api.test" });
+	// Nothing documented: whatever comes back, typed as fetch gives it.
+	const res = await none.get("/a");
+	expectType<Equal<typeof res.status, number>>();
+	expectType<Equal<typeof res.ok, boolean>>();
+	expectType<Equal<typeof res.data, unknown>>();
+	expectType<Equal<typeof res.response, Response>>();
+	const text = await none.get("/a", { parseAs: "text" });
+	expectType<Equal<typeof text.data, string>>();
 }
 
 export function config(): void {

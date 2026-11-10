@@ -677,8 +677,19 @@ test("the global fetch is used when config.fetch is not given", async (t) => {
 	assert.equal(rec.request(0).url, "https://api.test/r");
 });
 
-test("204, HEAD and empty bodies give undefined", async () => {
+test("204, 205, 304, HEAD and empty bodies give undefined", async () => {
 	assert.equal((await client(recorder()).get("/r")).data, undefined);
+	// fetch gives these statuses a null body; a content-type does not make one.
+	for (const status of [205, 304]) {
+		const rec = recorder(
+			() =>
+				new Response(null, {
+					status,
+					headers: { "content-type": "application/octet-stream" },
+				}),
+		);
+		assert.equal((await client(rec).get("/r")).data, undefined, `${status}`);
+	}
 	const head = recorder(
 		() =>
 			new Response(null, {
