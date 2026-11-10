@@ -116,13 +116,14 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 
 - **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. `""` is the page's origin. Its own query is kept, before the call's.
 - **Headers:** the config's `headers`, then the call's header parameters, then the call's `headers`; a later one replaces an earlier one of the same name. Cookies go in the `cookie` header (which browsers do not let fetch set) and replace one from the config. A `Date` is sent as its ISO string.
-- **content-type** comes from the body, never from the config's `headers`; one in the call's `headers` replaces it, except for multipart, whose boundary fetch sets.
+- **content-type** comes from the body, never from the config's `headers` (with or without a body); one in the call's `headers` replaces it, except for a multipart body made from an object or a `FormData`, which needs its boundary.
 - **Request bodies:** a value is sent as JSON (strings included), URL-encoded, or as `FormData`, by its media type; text and binary bodies as they are.
   - `contentType` may be left out for `application/json` (which is then sent) and for a `FormData` or `URLSearchParams`, with or without media type parameters. Other JSON types (`application/merge-patch+json`) must be named.
   - A binary body is a `Blob`, `ArrayBuffer`, typed array or `ReadableStream`.
   - A wildcard (`*/*`, `application/*`) sets no content-type: a string, `Blob` or other raw body carries its own, and any other value goes as JSON.
   - A URL-encoded or multipart body must be an object, and a URL-encoded one cannot hold a `Blob`; otherwise a TypeError.
-  - Multipart fields: an array repeats the field, a `Blob` is a file, a `Date` its ISO string, another object JSON.
+  - Multipart fields: an array repeats the field, a `Blob` is a file, a `Date` its ISO string, another object JSON. Another multipart type (`multipart/mixed`, `multipart/related`) gets the same named parts under its own type.
+  - A raw body (string, `Blob`, `URLSearchParams`, …) is sent as it is for form media types too.
 - **Parameters:** an object or array inside an array is JSON, in every `arrayFormat`. Path, header and cookie parameters take the same values: arrays `1,2`, objects `x,1,y,2`. Undefined and null are left out, and so is an empty array. A path parameter of `""`, `.` or `..` throws, since the URL would reach another endpoint.
 - **Errors:** HTTP error statuses never throw; network failures are fetch's own errors. A body that is not what its content-type or `parseAs: "json"` says (HTML sent as JSON) throws `ResponseBodyError`, which carries the response and the text.
 - **`config.fetch`** receives the built `Request`; what it returns is read. A request body can be sent once, so a retrying wrapper sends a `request.clone()` taken before the first attempt.

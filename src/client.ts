@@ -377,6 +377,8 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 				? await config.headers()
 				: config.headers;
 		copyHeaders(headers, shared);
+		// The body decides content-type, or the call's headers; never the client's.
+		headers.delete("content-type");
 		for (const [name, value] of Object.entries(init.header ?? {})) {
 			const parts = simple(value);
 			if (parts.length > 0) headers.set(name, parts.join(","));
@@ -393,17 +395,11 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 			headers,
 		};
 		if (init.body !== undefined) {
-			// A content-type given for this call wins; one from the client's headers does not, as the body decides it.
-			const chosen =
-				init.headers === undefined
-					? null
-					: new Headers(init.headers).get("content-type");
-			requestInit.body = encodeBody(
+			requestInit.body = await encodeBody(
 				init.body,
 				init.contentType,
 				headers,
 				formats,
-				chosen,
 			);
 		}
 		if (requestInit.body instanceof ReadableStream) requestInit.duplex = "half";
@@ -436,27 +432,31 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 }
 
 /**
- * Encodes a body by its contentType (as JSON without one) and sets content-type for
- * it: `chosen` (from this call's headers) if given, else the body's own. FormData and
- * the like without a contentType get theirs from fetch (with the multipart boundary).
+ * Encodes a body by its contentType and sets content-type for it, unless the call's
+ * headers did: a value is JSON without a contentType, a form for a form media type; a
+ * raw body (string, Blob, FormData, …) is sent as it is, except a string as JSON.
  */
-function encodeBody(
+async function encodeBody(
 	value: unknown,
 	requested: string | undefined,
 	headers: Headers,
 	formats: Formats,
-	chosen: string | null,
-): BodyInit {
+): Promise<BodyInit> {
 	// A wildcard (`*/*`, `application/*`) names no media type, so no content-type is
 	// set for it: a raw body (a string too) carries its own, a value goes as JSON.
 	const wildcard = requested?.includes("*") === true;
 	const contentType = wildcard ? undefined : requested;
 	const type = contentType === undefined ? undefined : essence(contentType);
-	headers.delete("content-type");
 	const set = (t: string | undefined) => {
-		const v = chosen ?? t;
-		if (v !== undefined) headers.set("content-type", v);
+		if (t !== undefined && !headers.has("content-type"))
+			headers.set("content-type", t);
 	};
+	if (value instanceof FormData) {
+		// fetch sets content-type with the boundary.
+		headers.delete("content-type");
+		return value;
+	}
+	const raw = isRawBody(value);
 	// A form is made of the fields of an object.
 	const fields = (form: string) => {
 		if (typeof value !== "object" || value === null)
@@ -465,22 +465,27 @@ function encodeBody(
 			);
 		return value as Record<string, unknown>;
 	};
-	if (value instanceof FormData || type === "multipart/form-data") {
-		// fetch sets content-type with the boundary
-		if (value instanceof FormData) return value;
+	if (type?.startsWith("multipart/") && !raw) {
 		const form = new FormData();
-		formFields(fields("multipart/form-data"), (name, field) =>
-			form.append(name, field),
-		);
-		return form;
+		formFields(fields(type), (name, field) => form.append(name, field));
+		headers.delete("content-type");
+		// fetch sets content-type with the boundary.
+		if (type === "multipart/form-data") return form;
+		// fetch writes only multipart/form-data; its parts are named by the object's
+		// properties, which other multipart types allow (OpenAPI 3.1.1, "Encoding
+		// multipart Media Types").
+		const encoded = new Response(form);
+		const formType = encoded.headers.get("content-type") as string;
+		headers.set("content-type", formType.replace("multipart/form-data", type));
+		return encoded.blob();
 	}
-	if (type === "application/x-www-form-urlencoded" && !isRawBody(value)) {
+	if (type === "application/x-www-form-urlencoded" && !raw) {
 		set(contentType);
-		return urlEncode(fields("application/x-www-form-urlencoded"), formats);
+		return urlEncode(fields(type), formats);
 	}
 	// A JSON body is the JSON text of the value, a string included; other bodies are sent as they are.
 	const json = type === undefined ? !wildcard : isJsonMedia(type);
-	if (isRawBody(value) && !(json && typeof value === "string")) {
+	if (raw && !(json && typeof value === "string")) {
 		set(contentType);
 		return value;
 	}

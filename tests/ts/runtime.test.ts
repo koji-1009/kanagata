@@ -244,6 +244,7 @@ test("a form body that is not an object throws TypeError", async () => {
 	const rec = recorder();
 	for (const contentType of [
 		"multipart/form-data",
+		"multipart/mixed",
 		"application/x-www-form-urlencoded",
 	]) {
 		await assert.rejects(client(rec).post("/f", { body: null, contentType }), {
@@ -508,6 +509,68 @@ test("contentType: an object body becomes FormData for multipart", async () => {
 	assert.equal((await rec.request(1).formData()).get("caption"), "mine");
 });
 
+test("contentType: an object body for another multipart type is sent as its named parts", async () => {
+	const rec = recorder();
+	await client(rec).post("/f", {
+		body: {
+			id: "1",
+			file: new Blob(["img"], { type: "image/png" }),
+			meta: { k: 1 },
+		},
+		contentType: "multipart/mixed",
+		headers: { "content-type": "multipart/mixed" }, // dropped: the boundary is needed
+	});
+	const req = rec.request(0);
+	const type = req.headers.get("content-type") ?? "";
+	const boundary = /^multipart\/mixed; boundary=(.+)$/.exec(type)?.[1];
+	assert.ok(boundary, type);
+	// The parts are those of multipart/form-data: named, by the same field rules.
+	const parts = await new Response(await req.blob(), {
+		headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+	}).formData();
+	assert.equal(parts.get("id"), "1");
+	const file = parts.get("file");
+	assert.ok(file instanceof Blob);
+	assert.equal(await file.text(), "img");
+	assert.equal(parts.get("meta"), '{"k":1}');
+});
+
+test("a raw body is sent as it is for form media types too", async () => {
+	const rec = recorder();
+	const api = client(rec);
+	for (const type of ["multipart/form-data", "multipart/related"]) {
+		await api.post("/f", {
+			body: new Blob(["--b\r\n...--b--"]),
+			contentType: type,
+			headers: { "content-type": `${type}; boundary=b` },
+		});
+	}
+	await api.post("/f", {
+		body: "a=1&b=2",
+		contentType: "application/x-www-form-urlencoded",
+	});
+	await api.post("/f", {
+		body: new URLSearchParams({ a: "1" }),
+		contentType: "application/x-www-form-urlencoded",
+	});
+	for (const [i, type] of [
+		"multipart/form-data",
+		"multipart/related",
+	].entries()) {
+		assert.equal(await rec.request(i).text(), "--b\r\n...--b--", type);
+		assert.equal(
+			rec.request(i).headers.get("content-type"),
+			`${type}; boundary=b`,
+		);
+	}
+	assert.equal(await rec.request(2).text(), "a=1&b=2");
+	assert.equal(
+		rec.request(2).headers.get("content-type"),
+		"application/x-www-form-urlencoded",
+	);
+	assert.equal(await rec.request(3).text(), "a=1");
+});
+
 test("contentType: JSON media types are stringified, others sent as is", async () => {
 	const rec = recorder();
 	const api = client(rec);
@@ -577,6 +640,19 @@ test("without contentType an object body is JSON, even if a form content-type he
 		"application/x-www-form-urlencoded",
 		"a per-call header is the caller's choice",
 	);
+});
+
+test("a content-type in the client's headers is never sent", async () => {
+	const rec = recorder();
+	const api = client(rec, {
+		headers: { "content-type": "application/json", "x-kept": "1" },
+	});
+	await api.get("/f");
+	await api.delete("/f");
+	for (const req of rec.requests) {
+		assert.equal(req.headers.has("content-type"), false, req.method);
+		assert.equal(req.headers.get("x-kept"), "1");
+	}
 });
 
 test("the body decides content-type over a content-type in the client's headers", async () => {
