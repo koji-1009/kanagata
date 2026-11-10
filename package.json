@@ -10,7 +10,10 @@
 		"api-client"
 	],
 	"license": "MIT",
-	"repository": "github:koji-1009/kanagata",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/koji-1009/kanagata.git"
+	},
 	"type": "module",
 	"packageManager": "pnpm@12.18.0",
 	"engines": {
