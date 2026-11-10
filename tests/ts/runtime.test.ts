@@ -148,6 +148,23 @@ test("query skips undefined and null, repeats arrays by default", async () => {
 	assert.equal(new URL(rec.request(0).url).search, "?a=1&ids=1&ids=2&s=x%20y");
 });
 
+test("a Date is its ISO string in path, header and cookie parameters and multipart fields", async () => {
+	const rec = recorder();
+	const when = new Date("2026-11-10T00:00:00Z");
+	await client(rec).post("/d/{when}", {
+		path: { when },
+		header: { "x-when": when },
+		cookie: { when },
+		body: { when },
+		contentType: "multipart/form-data",
+	});
+	const req = rec.request(0);
+	assert.equal(new URL(req.url).pathname, "/v1/d/2026-11-10T00%3A00%3A00.000Z");
+	assert.equal(req.headers.get("x-when"), "2026-11-10T00:00:00.000Z");
+	assert.equal(req.headers.get("cookie"), "when=2026-11-10T00%3A00%3A00.000Z");
+	assert.equal((await req.formData()).get("when"), "2026-11-10T00:00:00.000Z");
+});
+
 test("query arrays in brackets format", async () => {
 	const rec = recorder();
 	await client(rec, { arrayFormat: "brackets" }).get("/q", {

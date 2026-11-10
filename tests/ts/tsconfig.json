@@ -1,11 +1,12 @@
 {
 	// src/client.ts and the generated declarations as a strict user project would compile
 	// them (bundler style, DOM types). Based on `tsc --init` (TypeScript 7.0); no
-	// skipLibCheck, because checking the expected .d.ts files is the point.
+	// skipLibCheck, because checking the expected .d.ts files is the point. ES2022, the
+	// baseline README states, so the client cannot use a newer API.
 	"compilerOptions": {
 		"module": "preserve",
-		"target": "esnext",
-		"lib": ["esnext", "dom", "dom.iterable"],
+		"target": "es2022",
+		"lib": ["es2022", "dom", "dom.iterable"],
 		"types": [],
 		"noEmit": true,
 		"allowImportingTsExtensions": true,
