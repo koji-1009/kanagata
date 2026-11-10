@@ -76,7 +76,11 @@ function pathItems(
 				const opAt = child(itemAt, method);
 				// A webhook is called by the API: it sends the request and reads the response.
 				const sent: View = key === "webhooks" ? "read" : "write";
-				const ty = operation(cx, { item, itemAt, op, at: opAt, sent });
+				// fetch cannot send a body with GET or HEAD (OpenAPI 3.0 has consumers ignore
+				// one); a webhook's request is sent by the API, so it keeps its body.
+				const body =
+					key === "webhooks" || (method !== "get" && method !== "head");
+				const ty = operation(cx, { item, itemAt, op, at: opAt, sent, body });
 				const opDoc = doc(op);
 				const id = op.str("operationId");
 				if (id !== undefined && id !== "") {
@@ -103,11 +107,13 @@ interface OperationAt {
 	at: string;
 	/** The view of what the caller sends; the response is the other one. */
 	sent: View;
+	/** Whether the request can have a body, so `requestBody` is read. */
+	body: boolean;
 }
 
 function operation(
 	cx: Ctx,
-	{ item, itemAt, op: o, at, sent }: OperationAt,
+	{ item, itemAt, op: o, at, sent, body: hasBody }: OperationAt,
 ): Ty {
 	const fields: Prop[] = [];
 	const received: View = sent === "write" ? "read" : "write";
@@ -137,7 +143,7 @@ function operation(
 	if (groups.length > 0) fields.push(prop("parameters", object(groups)));
 
 	const rawBody = o.get("requestBody");
-	if (rawBody !== undefined) {
+	if (rawBody !== undefined && hasBody) {
 		const bodyAt = child(at, "requestBody");
 		cx.derefIn(rawBody, bodyAt, (value) => {
 			const body = value as JsonObject;

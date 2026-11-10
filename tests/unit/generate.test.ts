@@ -56,14 +56,14 @@ test("an error anywhere in the document stops generation and names its location"
 			`${p}/parameters/0/schema`,
 		],
 		[
-			paths(`"/a":{"get":{"requestBody":{"$ref":"#/nowhere"}}}`),
-			`${p}/requestBody`,
+			paths(`"/a":{"post":{"requestBody":{"$ref":"#/nowhere"}}}`),
+			"#/paths/~1a/post/requestBody",
 		],
 		[
 			paths(
-				`"/a":{"get":{"requestBody":{"content":{"text/plain":{"schema":${MISSING}}}}}}`,
+				`"/a":{"post":{"requestBody":{"content":{"text/plain":{"schema":${MISSING}}}}}}`,
 			),
-			`${p}/requestBody/content/text~1plain/schema`,
+			"#/paths/~1a/post/requestBody/content/text~1plain/schema",
 		],
 		[
 			paths(`"/a":{"get":{"responses":{"200":{"$ref":"#/nowhere"}}}}`),
