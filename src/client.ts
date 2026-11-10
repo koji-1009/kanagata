@@ -149,9 +149,14 @@ export interface ClientConfig extends FetchOptions {
 	 * Response to read: wrap the global fetch here for auth, retries, logging or tests.
 	 */
 	fetch?: typeof fetch;
-	/** A function is called on every request. */
+	/**
+	 * Headers for every request; a function (sync or async) is called on every request.
+	 * A call's header parameters and `headers` replace them by name.
+	 */
 	headers?: HeadersInit | (() => MaybePromise<HeadersInit>);
+	/** Arrays in queries and URL-encoded bodies; `repeat` when left out. */
 	arrayFormat?: ArrayFormat;
+	/** Objects in queries and URL-encoded bodies; `deepObject` when left out. */
 	objectFormat?: ObjectFormat;
 	/**
 	 * Receives every parsed body; what it returns becomes `data`. The place for runtime
@@ -264,6 +269,11 @@ function resolveBase(baseUrl: string): URL {
 	return url;
 }
 
+/**
+ * A client for the `paths` that `kanagata generate` declares: one function per HTTP
+ * method, `api.get("/users/{id}", { path: { id: 1 } })`, resolving to a union over the
+ * documented statuses. HTTP error statuses do not throw.
+ */
 export function createClient<P>(config: ClientConfig): Client<P> {
 	async function send(
 		method: Method,

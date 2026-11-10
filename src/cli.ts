@@ -14,7 +14,6 @@ export interface Io {
 	exists(path: string): boolean;
 	stdout(text: string): void;
 	stderr(text: string): void;
-	/** A file shipped with kanagata. */
 	/** A file of the package, by its path from the package root. */
 	asset(name: "src/client.ts" | "package.json"): string;
 }
@@ -22,7 +21,7 @@ export interface Io {
 /** An I/O failure; the message says what went wrong without naming the file (`no such file or directory`). */
 export class IoError extends Error {}
 
-const HELP = `kanagata - TypeScript types from OpenAPI 3.0 / 3.1 (JSON or YAML)
+const HELP = `kanagata - TypeScript types from OpenAPI 3.0 / 3.1 (JSON or YAML), and a typed fetch client
 
 Usage:
   kanagata generate <openapi.json|yaml> [-o <out.d.ts>] [--check]
@@ -33,14 +32,14 @@ Commands:
   init       Copy the fetch client (kanagata/client) into your project to own it
 
 Options:
-  -o <path>   Output file (generate: stdout, init: ./client.ts)
-  --check     Exit with 1 if the -o file differs from the generated output
-  --force     Let init overwrite an existing file
-  -h, --help  Show this help
+  -o <path>      Output file (generate: stdout, init: ./client.ts)
+  --check        Exit with 1 if the -o file differs from the generated output
+  --force        Let init overwrite an existing file
+  -h, --help     Show this help
   -V, --version  Show the version
 
-Exit codes: 0 success, 1 --check found a difference, 2 input error,
-3 a bug in kanagata
+Exit codes: 0 success, 1 --check found a difference, 2 an error in the
+document, the command line or a file, 3 a bug in kanagata
 `;
 
 /** Exit code for usage, input and I/O errors. */

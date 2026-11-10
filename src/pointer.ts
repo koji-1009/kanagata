@@ -1,4 +1,4 @@
-// `$ref` (JSON Pointer) resolution, cycle detection, and diagnostics.
+// `$ref` resolution (JSON Pointers, `$anchor`s, `$id`s, other files), conversion state, and diagnostics.
 
 import { GenerateError } from "./error.ts";
 import {
@@ -12,7 +12,10 @@ import {
 } from "./json.ts";
 import type { View } from "./ty.ts";
 
-/** A problem at a location in the input, given as a JSON Pointer (`#/paths/~1users/get`). */
+/**
+ * A problem at a location in the input: a JSON Pointer (`#/paths/~1users/get`), after
+ * the file's path relative to the document for another file (`schemas/User.yaml#/id`).
+ */
 export interface Diag {
 	at: string;
 	msg: string;
@@ -365,7 +368,8 @@ export class Ctx {
 	/**
 	 * The key in `components.schemas` of a schema object, so references to it stay
 	 * named: the component itself, or the target of a component that is only a `$ref`
-	 * (a schema kept in another file, `User: { $ref: schemas/User.yaml }`). Schemas are
+	 * (with at most `title` and `description`; a schema kept in another file,
+	 * `User: { $ref: schemas/User.yaml }`). Schemas are
 	 * matched by identity.
 	 */
 	componentKey(v: Value): string | undefined {

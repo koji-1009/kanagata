@@ -1,4 +1,4 @@
-// Paths and operations → `Ty`.
+// Paths, webhooks and operations → `Ty`.
 
 import { isBinaryMedia, isFormMedia, isTextMedia, METHODS } from "./client.ts";
 import { JsonObject, type Value } from "./json.ts";
