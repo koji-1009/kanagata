@@ -263,7 +263,8 @@ type Call<P, M extends Method> = <
 	...args: Args<NeedsAll<Op<P, Path, M>>, A>
 ) => Promise<Result<Op<P, Path, M>, A, M>>;
 
-export type Client<P> = { [M in Method]: Call<P, M> };
+/** A function per method fetch sends: every one but TRACE, which fetch rejects. */
+export type Client<P> = { [M in Exclude<Method, "trace">]: Call<P, M> };
 
 interface AnyInit extends RequestOptions {
 	path?: Record<string, unknown>;
@@ -423,12 +424,12 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 		return { status: response.status, ok: response.ok, data, response };
 	}
 
-	const client = {} as Record<
-		Method,
-		(path: string, init?: AnyInit) => Promise<AnyResult>
-	>;
+	const client: Partial<
+		Record<Method, (path: string, init?: AnyInit) => Promise<AnyResult>>
+	> = {};
 	for (const method of METHODS) {
-		client[method] = (path, init) => send(method, path, init);
+		if (method !== "trace")
+			client[method] = (path, init) => send(method, path, init);
 	}
 	return client as unknown as Client<P>;
 }

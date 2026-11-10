@@ -59,7 +59,7 @@ interface LooseResult {
 	response: Response;
 }
 type LooseClient = Record<
-	Method,
+	Exclude<Method, "trace">,
 	(path: string, init?: LooseInit) => Promise<LooseResult>
 >;
 
@@ -70,6 +70,27 @@ function loose(config: ClientConfig): LooseClient {
 function client(rec: Recorder, extra: Partial<ClientConfig> = {}): LooseClient {
 	return loose({ baseUrl: "https://api.test/v1/", fetch: rec.fetch, ...extra });
 }
+
+test("the client has a function per method fetch sends, which leaves out TRACE", async () => {
+	const rec = recorder();
+	const api = client(rec);
+	assert.deepEqual(Object.keys(api), [
+		"get",
+		"put",
+		"post",
+		"delete",
+		"options",
+		"head",
+		"patch",
+	]);
+	for (const method of Object.keys(api) as (keyof LooseClient)[])
+		await api[method]("/m");
+	assert.deepEqual(
+		rec.requests.map((r) => r.method),
+		["GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+	);
+	assert.throws(() => new Request("https://api.test", { method: "TRACE" }));
+});
 
 test("path parameters are substituted and encoded", async () => {
 	const rec = recorder();

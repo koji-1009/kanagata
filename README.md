@@ -77,7 +77,7 @@ await api.put("/files/{name}", {
 const events = await api.get("/events", { parseAs: "stream" }); // events.data: ReadableStream | null
 ```
 
-`api.get`, `api.post`, … (one per HTTP method) take the path template and an object of options, which is optional when nothing in it is required. A required body cannot be `undefined`, even when its schema admits any value. A union of path templates takes options that hold what every one of them needs.
+`api.get`, `api.post`, … (one per HTTP method but `trace`, which fetch rejects; the declarations still type trace operations) take the path template and an object of options, which is optional when nothing in it is required. A required body cannot be `undefined`, even when its schema admits any value. A union of path templates takes options that hold what every one of them needs.
 
 ### Config (`createClient`)
 

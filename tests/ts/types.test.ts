@@ -24,6 +24,8 @@ declare const basic: Client<Basic.paths>;
 declare const api: Client<Api.paths>;
 
 export async function paths(): Promise<void> {
+	// @ts-expect-error fetch rejects TRACE, so the client has no trace
+	basic.trace;
 	await basic.get("/users/{id}", { path: { id: 1 } });
 	// @ts-expect-error unknown path
 	await basic.get("/users");
