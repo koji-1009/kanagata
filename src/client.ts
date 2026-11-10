@@ -378,7 +378,8 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 				: config.headers;
 		copyHeaders(headers, shared);
 		for (const [name, value] of Object.entries(init.header ?? {})) {
-			if (value != null) headers.set(name, simple(value).join(","));
+			const parts = simple(value);
+			if (parts.length > 0) headers.set(name, parts.join(","));
 		}
 		// Browsers do not let fetch set this header; their cookies come from the cookie jar.
 		const cookie = buildCookie(init.cookie);
@@ -488,17 +489,20 @@ function encodeBody(
 }
 
 /**
- * A value in the simple style (path and header parameters): arrays `1,2`, objects
- * `x,1,y,2`. undefined and null are left out, as in queries.
+ * The parts of a path, header or cookie parameter: arrays `1,2`, objects `x,1,y,2`.
+ * undefined and null are left out, as in queries, so these may be none.
  */
 function simple(value: unknown): string[] {
-	const parts = Array.isArray(value)
-		? value.filter((v) => v != null)
-		: typeof value === "object" && !(value instanceof Date)
-			? Object.entries(value as object)
-					.filter(([, v]) => v != null)
-					.flat()
-			: [value];
+	const parts =
+		value == null
+			? []
+			: Array.isArray(value)
+				? value.filter((v) => v != null)
+				: typeof value === "object" && !(value instanceof Date)
+					? Object.entries(value)
+							.filter(([, v]) => v != null)
+							.flat()
+					: [value];
 	return parts.map(scalar);
 }
 
@@ -548,16 +552,23 @@ function serialize(
 			`a Blob cannot be URL-encoded: ${decodeURIComponent(key)}`,
 		);
 	if (Array.isArray(value)) {
-		const joiner = JOINERS[formats.array];
-		if (joiner === undefined) {
-			const itemKey = formats.array === "brackets" ? `${key}[]` : key;
-			for (const item of value) serialize(parts, itemKey, item, formats);
-		} else {
-			const items = value
-				.filter((item) => item != null)
-				.map((item) => encodeURIComponent(scalar(item)));
-			if (items.length > 0) parts.push(`${key}=${items.join(joiner)}`);
+		// Items are text: an object or array inside is JSON.
+		const items: string[] = [];
+		for (const item of value) {
+			if (item == null) continue;
+			if (item instanceof Blob)
+				throw new TypeError(
+					`a Blob cannot be URL-encoded: ${decodeURIComponent(key)}`,
+				);
+			items.push(encodeURIComponent(scalar(item)));
 		}
+		const joiner = JOINERS[formats.array];
+		if (joiner !== undefined) {
+			if (items.length > 0) parts.push(`${key}=${items.join(joiner)}`);
+			return;
+		}
+		const itemKey = formats.array === "brackets" ? `${key}[]` : key;
+		for (const item of items) parts.push(`${itemKey}=${item}`);
 	} else if (typeof value === "object" && !(value instanceof Date)) {
 		if (formats.object === "json") {
 			parts.push(`${key}=${encodeURIComponent(JSON.stringify(value))}`);
@@ -601,17 +612,18 @@ function formFields(
 	}
 }
 
-/** `a=1; ids=1,2` (form style); undefined and null are left out. */
+/**
+ * `a=1; ids=1,2; p=x,1,y,2` (form style, the values of `simple`), each part encoded;
+ * a cookie with no parts is left out.
+ */
 function buildCookie(cookie: Record<string, unknown> = {}): string {
-	const parts: string[] = [];
+	const cookies: string[] = [];
 	for (const [name, value] of Object.entries(cookie)) {
-		if (value == null) continue;
-		const items = Array.isArray(value) ? value : [value];
-		parts.push(
-			`${name}=${items.map((v) => encodeURIComponent(scalar(v))).join(",")}`,
-		);
+		const parts = simple(value);
+		if (parts.length > 0)
+			cookies.push(`${name}=${parts.map(encodeURIComponent).join(",")}`);
 	}
-	return parts.join("; ");
+	return cookies.join("; ");
 }
 
 function copyHeaders(target: Headers, source: HeadersInit | undefined): void {

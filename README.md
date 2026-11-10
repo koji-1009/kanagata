@@ -123,7 +123,7 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
   - A wildcard (`*/*`, `application/*`) sets no content-type: a string, `Blob` or other raw body carries its own, and any other value goes as JSON.
   - A URL-encoded or multipart body must be an object, and a URL-encoded one cannot hold a `Blob`; otherwise a TypeError.
   - Multipart fields: an array repeats the field, a `Blob` is a file, a `Date` its ISO string, another object JSON.
-- **Parameters:** an object inside a joined array (`comma`, `space`, `pipe`) is JSON. Path and header parameters use the simple style (`1,2`). Undefined and null are left out. A path parameter of `""`, `.` or `..` throws, since the URL would reach another endpoint.
+- **Parameters:** an object or array inside an array is JSON, in every `arrayFormat`. Path, header and cookie parameters take the same values: arrays `1,2`, objects `x,1,y,2`. Undefined and null are left out, and so is an empty array. A path parameter of `""`, `.` or `..` throws, since the URL would reach another endpoint.
 - **Errors:** HTTP error statuses never throw; network failures are fetch's own errors. A body that is not what its content-type or `parseAs: "json"` says (HTML sent as JSON) throws `ResponseBodyError`, which carries the response and the text.
 - **`config.fetch`** receives the built `Request`; what it returns is read. A request body can be sent once, so a retrying wrapper sends a `request.clone()` taken before the first attempt.
 - **`onData`'s `call`** has `method`, `path` (the template, `/users/{id}`), `status`, `parseAs`, `request` and `response`. Plug a zod or valibot schema in here; `data` stays typed by the OpenAPI schema.

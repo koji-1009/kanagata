@@ -227,11 +227,17 @@ test("undefined and null are left out of arrays and objects in the simple style,
 	const rec = recorder();
 	await client(rec).get("/h/{ids}", {
 		path: { ids: [1, null, 2] },
-		header: { "x-ids": [1, null, undefined, "b"], "x-o": { a: 1, b: null } },
+		header: {
+			"x-ids": [1, null, undefined, "b"],
+			"x-o": { a: 1, b: null },
+			"x-empty": [],
+		},
 	});
 	assert.equal(rec.request(0).url, "https://api.test/v1/h/1,2");
 	assert.equal(rec.request(0).headers.get("x-ids"), "1,b");
 	assert.equal(rec.request(0).headers.get("x-o"), "a,1");
+	// An empty array is left out, as in queries.
+	assert.equal(rec.request(0).headers.has("x-empty"), false);
 });
 
 test("a form body that is not an object throws TypeError", async () => {
@@ -248,12 +254,37 @@ test("a form body that is not an object throws TypeError", async () => {
 	assert.equal(rec.requests.length, 0);
 });
 
-test("objects inside joined query arrays are JSON", async () => {
+test("objects and arrays inside query arrays are JSON in every arrayFormat", async () => {
 	const rec = recorder();
-	await client(rec, { arrayFormat: "comma" }).get("/q", {
-		query: { f: [{ a: 1 }, 2] },
+	const query = { f: [{ a: 1 }, [2, 3], 4] };
+	await client(rec, { arrayFormat: "comma" }).get("/q", { query });
+	await client(rec).get("/q", { query });
+	await client(rec, { arrayFormat: "brackets" }).get("/q", { query });
+	assert.deepEqual(
+		rec.requests.map((r) => new URL(r.url).search),
+		[
+			"?f=%7B%22a%22%3A1%7D,%5B2%2C3%5D,4",
+			"?f=%7B%22a%22%3A1%7D&f=%5B2%2C3%5D&f=4",
+			"?f[]=%7B%22a%22%3A1%7D&f[]=%5B2%2C3%5D&f[]=4",
+		],
+	);
+	// So in URL-encoded bodies, which are serialized the same way.
+	await client(rec).post("/f", {
+		body: { items: [{ price: "p1" }, { price: "p2" }] },
+		contentType: "application/x-www-form-urlencoded",
 	});
-	assert.equal(new URL(rec.request(0).url).search, "?f=%7B%22a%22%3A1%7D,2");
+	assert.equal(
+		await rec.request(3).text(),
+		"items=%7B%22price%22%3A%22p1%22%7D&items=%7B%22price%22%3A%22p2%22%7D",
+	);
+	// A Blob is not text in any array.
+	await assert.rejects(
+		client(rec, { arrayFormat: "comma" }).get("/q", {
+			query: { f: [new Blob(["x"])] },
+		}),
+		{ name: "TypeError", message: "a Blob cannot be URL-encoded: f" },
+	);
+	assert.equal(rec.requests.length, 4);
 });
 
 test("a baseUrl with a query keeps it, and the path goes before it", async () => {
@@ -658,14 +689,17 @@ test("cookie parameters are sent in the cookie header", async () => {
 		cookie: {
 			session: "a b;c",
 			n: 1,
-			ids: [1, 2],
+			ids: [1, null, undefined, "x,y"],
+			point: { x: 1, y: "a b", z: null },
+			empty: [],
 			skip: undefined,
 			none: null,
 		},
 	});
+	// The values path and header parameters take, each part encoded.
 	assert.equal(
 		rec.request(0).headers.get("cookie"),
-		"session=a%20b%3Bc; n=1; ids=1,2",
+		"session=a%20b%3Bc; n=1; ids=1,x%2Cy; point=x,1,y,a%20b",
 	);
 	await client(rec).get("/c", { cookie: { skip: undefined } });
 	assert.equal(rec.request(1).headers.has("cookie"), false);
