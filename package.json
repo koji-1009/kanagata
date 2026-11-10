@@ -2,6 +2,13 @@
 	"name": "kanagata",
 	"version": "0.1.0",
 	"description": "TypeScript types from OpenAPI 3.0 / 3.1 (JSON or YAML), and a typed fetch client",
+	"keywords": [
+		"openapi",
+		"typescript",
+		"codegen",
+		"fetch",
+		"api-client"
+	],
 	"license": "MIT",
 	"repository": "github:koji-1009/kanagata",
 	"type": "module",
