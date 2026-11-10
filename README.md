@@ -3,7 +3,7 @@
 TypeScript types from an OpenAPI 3.0 / 3.1 document (JSON or YAML), and a typed `fetch` client for them.
 
 - `kanagata generate` writes one `.d.ts` file.
-- `createClient` from `kanagata/client` is one function over `fetch`, with no imports: path, query, headers and body are checked against the operation, and the result is a union per status code.
+- `createClient` from `kanagata/client` is one function over `fetch`, with no imports: the path, query, header and cookie parameters and the body are checked against the operation, and the result is a union per status code.
 
 ## Quick start
 
@@ -107,6 +107,8 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 `{ status, ok, data, response }`, a union over the statuses the operation documents.
 
 - **`data`** is parsed by the response's content-type: JSON, text, or `Blob` for binary types. An empty body gives `undefined`. fetch gives HEAD responses and 204, 205 and 304 no body, so their `data` is typed `undefined` whatever the document declares. A status that declares `content` but sends none also gives `undefined`; check for it in `onData`.
+  - The content-type the server sends decides, not the document: content typed by a wildcard (`*/*`) is typed by its schema but read as whatever arrives, and a response without a content-type is text (`parseAs: "blob"` keeps its bytes).
+  - `data` is read once the whole body has arrived; for a stream that stays open (`text/event-stream`), use `parseAs: "stream"`.
 - **`parseAs`** reads the body its way for one call and types `data` to match: `text` a string, `blob` a `Blob`, `arrayBuffer` an `ArrayBuffer`, `stream` the body (`null` when there is none), `json` the parsed JSON (`undefined` when empty), typed by the schemas of JSON and wildcard media types and `unknown` for the others.
 - **`ok`** is fetch's: `true` for 2xx. For `default` (every status the operation does not list, 2xx included) it is `boolean`; narrow by `status` or `ok`.
 - **Undocumented statuses:** list them with `default` or a range (`4XX`, `5XX`) in the document and they are typed. A status outside the document is still returned, in the branch the types call unreachable. An operation that documents no responses gives `status: number`, `ok: boolean` and `data: unknown`.
@@ -114,24 +116,24 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 
 ### Details
 
-- **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. `""` is the page's origin. Its own query is kept, before the call's.
-- **Headers:** the config's `headers`, then the call's header parameters, then the call's `headers`; a later one replaces an earlier one of the same name. Cookies go in the `cookie` header (which browsers do not let fetch set) and replace one from the config. A `Date` is sent as its ISO string.
+- **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. `""` is the origin of the page's base URL. Its own query is kept, before the call's.
+- **Headers:** the config's `headers`, then the call's header parameters, then its cookie parameters, then its `headers`; a later one replaces an earlier one of the same name. Cookie parameters go in the `cookie` header, which browsers do not let fetch set. A `Date` is sent as its ISO string.
 - **content-type** comes from the body, never from the config's `headers` (with or without a body); one in the call's `headers` replaces it, except for a multipart body made from an object or a `FormData`, which needs its boundary.
 - **Request bodies:** a value is sent as JSON (strings included), URL-encoded, or as `FormData`, by its media type; text and binary bodies as they are.
   - `contentType` may be left out for `application/json` (which is then sent) and for a `FormData` or `URLSearchParams`, with or without media type parameters. Other JSON types (`application/merge-patch+json`) must be named.
   - A binary body is a `Blob`, `ArrayBuffer`, typed array or `ReadableStream`.
-  - A wildcard (`*/*`, `application/*`) sets no content-type: a string, `Blob` or other raw body carries its own, and any other value goes as JSON.
-  - A URL-encoded or multipart body must be an object, and a URL-encoded one cannot hold a `Blob`; otherwise a TypeError.
+  - A wildcard (`*/*`, `application/*`) names no media type: a string, `Blob` or other raw body is sent with its own content-type, and any other value as JSON with `application/json`.
+  - A URL-encoded or multipart value that is not a raw body must be an object; otherwise a TypeError. A `Blob` cannot be URL-encoded, in a body or a query; that is a TypeError too.
   - Multipart fields: an array repeats the field, a `Blob` is a file, a `Date` its ISO string, another object JSON. Another multipart type (`multipart/mixed`, `multipart/related`) gets the same named parts under its own type.
   - A raw body (string, `Blob`, `URLSearchParams`, …) is sent as it is for form media types too.
 - **Parameters:** an object or array inside an array is JSON, in every `arrayFormat`. Path, header and cookie parameters take the same values: arrays `1,2`, objects `x,1,y,2`. Undefined and null are left out, and so is an empty array. A path parameter of `""`, `.` or `..` throws, since the URL would reach another endpoint.
-- **Errors:** HTTP error statuses never throw; network failures are fetch's own errors. A body that is not what its content-type or `parseAs: "json"` says (HTML sent as JSON) throws `ResponseBodyError`, which carries the response and the text.
+- **Errors:** HTTP error statuses never throw; network failures are fetch's own errors. A body that is not valid JSON where its content-type or `parseAs: "json"` says JSON (HTML sent as JSON) throws `ResponseBodyError`, which carries the response and the text. An error thrown by `config.headers`, `config.fetch` or `onData` rejects the call as it is.
 - **`config.fetch`** receives the built `Request`; what it returns is read. A request body can be sent once, so a retrying wrapper sends a `request.clone()` taken before the first attempt.
 - **`onData`'s `call`** has `method`, `path` (the template, `/users/{id}`), `status`, `parseAs`, `request` and `response`. Plug a zod or valibot schema in here; `data` stays typed by the OpenAPI schema.
 
 ### Owning the client
 
-`kanagata init -o src/api/client.ts` copies the client's source (one TypeScript file, no imports, stamped with the kanagata version) into your project; import it from there instead of `kanagata/client` and edit it as you like. After upgrading kanagata, refresh it with `kanagata init --force` and reapply your edits: the generated types follow the media type rules of the client of the same version.
+`kanagata init -o src/api/client.ts` copies the client's source (one TypeScript file, no imports, stamped with the kanagata version) into your project; import it from there instead of `kanagata/client` and edit it as you like. After upgrading kanagata, refresh it with `kanagata init -o src/api/client.ts --force` and reapply your edits: the generated types follow the media type rules of the client of the same version.
 
 ## Library API
 
@@ -215,7 +217,7 @@ Content by media type:
 ## Not supported
 
 - Runtime validation (use `onData`), middleware (wrap `config.fetch`), per-operation functions, framework bindings, mocks.
-- Per-parameter `style` / `explode` / `encoding`: a server parses every query and form the same way, so one `arrayFormat` / `objectFormat` per client matches it.
+- Per-parameter `style` / `explode` / `encoding`: a server parses every query and form the same way, so one `arrayFormat` / `objectFormat` per client (or per call) matches it.
 - Fetching `$ref`s over the network; Swagger 2.0.
 - Pathological inputs: a schema that is directly itself (`A: { $ref: A }`), looping `$ref`s or YAML aliases, nesting thousands of levels deep, or exponential expansion may crash (exit code 3) or not finish.
 

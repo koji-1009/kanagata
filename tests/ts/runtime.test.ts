@@ -857,6 +857,18 @@ test("HTTP errors do not throw", async () => {
 	}
 });
 
+test("an error from config.headers rejects the call as it is, before fetch", async () => {
+	const rec = recorder();
+	const failure = new Error("no token");
+	const api = client(rec, {
+		headers: async () => {
+			throw failure;
+		},
+	});
+	await assert.rejects(api.get("/r"), (e) => e === failure);
+	assert.equal(rec.requests.length, 0);
+});
+
 test("network failures propagate", async () => {
 	const failing: typeof fetch = async () => {
 		throw new TypeError("network down");

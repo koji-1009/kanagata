@@ -230,7 +230,8 @@ export interface ClientConfig extends FetchOptions {
 	fetch?: typeof fetch;
 	/**
 	 * Headers for every request; a function (sync or async) is called on every request.
-	 * A call's header parameters and `headers` replace them by name.
+	 * A call's header and cookie parameters and `headers` replace them by name. A
+	 * content-type here is never sent: the body decides it.
 	 */
 	headers?: HeadersInit | (() => MaybePromise<HeadersInit>);
 	/** Arrays in queries and URL-encoded bodies; `repeat` when left out. */
@@ -334,7 +335,7 @@ function resolveBase(baseUrl: string): URL {
 	const page = scope.document?.baseURI ?? scope.location?.href;
 	let url: URL;
 	try {
-		// "" is the page's origin, as in fetch("" + path); resolved, it would be the page itself.
+		// "" is the origin of the page's base URL, as in fetch("" + path); resolved, it would be the page itself.
 		url = new URL(baseUrl === "" ? "/" : baseUrl, page);
 	} catch {
 		throw new TypeError(
@@ -442,8 +443,8 @@ async function encodeBody(
 	headers: Headers,
 	formats: Formats,
 ): Promise<BodyInit> {
-	// A wildcard (`*/*`, `application/*`) names no media type, so no content-type is
-	// set for it: a raw body (a string too) carries its own, a value goes as JSON.
+	// A wildcard (`*/*`, `application/*`) names no media type, so it sets no content-type:
+	// a raw body (a string too) carries its own, a value goes as application/json.
 	const wildcard = requested?.includes("*") === true;
 	const contentType = wildcard ? undefined : requested;
 	const type = contentType === undefined ? undefined : essence(contentType);
@@ -676,7 +677,7 @@ async function readData(
 	return isJsonMedia(type) ? parseJson(response, text) : text;
 }
 
-/** A body that is not what its content-type (or parseAs) says, such as an HTML error page sent as JSON. */
+/** A body that is not valid JSON where its content-type (or parseAs) says JSON, such as an HTML error page. */
 export class ResponseBodyError extends Error {
 	readonly response: Response;
 	readonly text: string;
