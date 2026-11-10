@@ -1,0 +1,27 @@
+{
+	// Based on `tsc --init` (TypeScript 7.0) for Node: the library (src/) and its tests, as
+	// Node runs them directly (type stripping), with nothing built or generated first.
+	// tsconfig.build.json compiles src/ into dist/; tests/ts/tsconfig.json checks the client
+	// as a browser project would; scripts/real-specs.tsconfig.json checks what test:real
+	// builds and generates.
+	"compilerOptions": {
+		"module": "nodenext",
+		"target": "esnext",
+		"lib": ["esnext"],
+		"types": ["node"],
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
+		"erasableSyntaxOnly": true,
+
+		"noUncheckedIndexedAccess": true,
+		"exactOptionalPropertyTypes": true,
+
+		"strict": true,
+		"verbatimModuleSyntax": true,
+		"isolatedModules": true,
+		"noUncheckedSideEffectImports": true,
+		"moduleDetection": "force",
+		"skipLibCheck": true
+	},
+	"include": ["src", "tests/*.ts", "tests/unit", "tests/ts/runtime.test.ts"]
+}

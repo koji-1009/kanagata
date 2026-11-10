@@ -1,0 +1,13 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": false,
+		"target": "es2022",
+		"allowImportingTsExtensions": false,
+		"rewriteRelativeImportExtensions": true,
+		"rootDir": "src",
+		"outDir": "dist",
+		"declaration": true
+	},
+	"include": ["src"]
+}
