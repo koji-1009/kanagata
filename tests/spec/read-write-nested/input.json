@@ -1,0 +1,39 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Page": {
+        "description": "No readOnly/writeOnly of its own, but Item has one, so Page has a write view too.",
+        "type": "object",
+        "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Item" } } }
+      },
+      "Item": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "readOnly": true },
+          "part": { "$ref": "#/components/x-parts/Part" }
+        }
+      },
+      "Plain": {
+        "type": "object",
+        "properties": { "part": { "$ref": "#/components/x-parts/Part" } }
+      },
+      "Bundle": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": { "token": { "type": "string", "writeOnly": true }, "size": { "type": "integer" } }
+          }
+        ]
+      }
+    },
+    "x-parts": {
+      "Part": {
+        "type": "object",
+        "properties": { "key": { "type": "string", "writeOnly": true }, "name": { "type": "string" } }
+      }
+    }
+  }
+}

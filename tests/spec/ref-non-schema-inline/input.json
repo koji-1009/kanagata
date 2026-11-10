@@ -1,0 +1,16 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Item": {
+        "type": "object",
+        "required": ["price"],
+        "properties": { "price": { "type": "number" }, "id": { "$ref": "#/components/x-common/id" } }
+      },
+      "Price": { "$ref": "#/components/schemas/Item/properties/price" },
+      "Shared": { "$ref": "#/components/x-common/id" }
+    },
+    "x-common": { "id": { "type": "string", "format": "uuid" } }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Ok": { "type": "string" },
+      "Deep": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "allOf": [{ "$ref": "#/components/schemas/Ok" }],
+              "oneOf": [{ "type": "object", "additionalProperties": { "$ref": "#/components/schemas/Missing" } }]
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/notes": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } } },
+            "text/plain": { "schema": { "type": "string" } },
+            "application/x-www-form-urlencoded": { "schema": { "type": "object", "properties": { "text": { "type": "string" } } } }
+          }
+        },
+        "responses": { "201": { "description": "created" } }
+      }
+    }
+  }
+}

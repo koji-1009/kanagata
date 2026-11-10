@@ -1,0 +1,32 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Res": {
+        "description": "Inside a schema with $id, $refs resolve against that $id.",
+        "$id": "https://example.com/res",
+        "type": "object",
+        "properties": {
+          "child": { "$ref": "#/$defs/child" },
+          "sib": { "$ref": "sibling" },
+          "tag": { "$ref": "#tag" }
+        },
+        "$defs": {
+          "child": { "type": "integer" },
+          "t": { "$anchor": "tag", "type": "boolean" }
+        }
+      },
+      "Sibling": { "$id": "https://example.com/sibling", "type": "string" },
+      "Other": {
+        "$id": "https://example.com/other",
+        "properties": { "tag": { "$ref": "#tag" } },
+        "$defs": { "t": { "$anchor": "tag", "type": "number" } }
+      },
+      "Holder": {
+        "type": "object",
+        "properties": { "examples": { "$anchor": "ex", "type": "string" }, "e": { "$ref": "#ex" } }
+      }
+    }
+  }
+}

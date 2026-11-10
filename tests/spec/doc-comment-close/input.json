@@ -1,0 +1,9 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Tricky": { "type": "string", "description": "Ends a comment */ early.\r\nSecond line /* opens */ again." }
+    }
+  }
+}

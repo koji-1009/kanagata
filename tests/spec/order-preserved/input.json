@@ -1,0 +1,17 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/z": { "get": { "responses": { "200": { "description": "ok" } } } },
+    "/a": { "get": { "responses": { "200": { "description": "ok" } } } }
+  },
+  "components": {
+    "schemas": {
+      "Zebra": {
+        "type": "object",
+        "required": ["z", "a"],
+        "properties": { "z": { "type": "string" }, "m": { "type": "string" }, "a": { "type": "string" } }
+      },
+      "Apple": { "type": "string", "enum": ["z", "a", "m"] }
+    }
+  }
+}

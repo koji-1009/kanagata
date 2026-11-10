@@ -1,0 +1,12 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "user": { "type": "object", "properties": { "twin": { "$ref": "#/components/schemas/User" } } },
+      "User": { "type": "integer" },
+      "user-": { "type": "boolean" },
+      "User2": { "type": "string" }
+    }
+  }
+}

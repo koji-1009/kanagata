@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": { "$ref": "#/components/pathItems/Health" }
+  },
+  "components": {
+    "pathItems": {
+      "Health": {
+        "get": { "operationId": "health", "responses": { "200": { "content": { "text/plain": { "schema": { "type": "string" } } } } } }
+      }
+    }
+  }
+}

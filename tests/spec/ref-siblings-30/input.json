@@ -1,0 +1,23 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": { "type": "object", "properties": { "id": { "type": "string" } } },
+      "Ext": {
+        "description": "In 3.0, keywords next to $ref are ignored.",
+        "$ref": "#/components/schemas/Base",
+        "required": ["id"],
+        "properties": { "tag": { "type": "string" } }
+      },
+      "Holder": {
+        "description": "readOnly next to $ref is ignored too: base is sent and returned.",
+        "type": "object",
+        "properties": {
+          "base": { "$ref": "#/components/schemas/Base", "readOnly": true },
+          "both": { "$ref": "#/components/schemas/Base", "allOf": [{ "readOnly": true }] }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/things": {
+      "head": {
+        "responses": {
+          "200": { "description": "exists", "headers": { "x-size": { "schema": { "type": "integer" } } } },
+          "304": { "description": "not modified", "content": {} }
+        }
+      }
+    }
+  }
+}

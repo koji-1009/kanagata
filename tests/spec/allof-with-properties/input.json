@@ -1,0 +1,15 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } },
+      "Named": {
+        "allOf": [{ "$ref": "#/components/schemas/Base" }],
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string" } }
+      }
+    }
+  }
+}

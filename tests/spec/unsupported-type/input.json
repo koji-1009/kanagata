@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "File": { "description": "A type JSON Schema does not have says nothing (Swagger 2.0's file).", "type": "file" }
+    }
+  }
+}

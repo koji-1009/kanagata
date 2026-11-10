@@ -1,0 +1,24 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/items": {
+      "get": {
+        "parameters": [
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageAlias" }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Page": { "name": "page", "in": "query", "schema": { "$ref": "#/components/schemas/PageNumber" } },
+      "PageAlias": { "$ref": "#/components/parameters/Size" },
+      "Size": { "name": "size", "in": "query", "required": true, "schema": { "type": "integer" } }
+    },
+    "schemas": {
+      "PageNumber": { "type": "integer", "minimum": 1 }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+type: object
+required: [id, name]
+properties:
+  id:
+    type: integer
+    readOnly: true
+  name:
+    type: string
+  # Not a component: named after its file, Address.
+  address:
+    $ref: Address.yaml
+  # The file components.schemas.User points to, so it is named User here too.
+  friends:
+    type: array
+    items:
+      $ref: User.yaml
+  # Back into the main document.
+  lastError:
+    $ref: ../input.yaml#/components/schemas/Error

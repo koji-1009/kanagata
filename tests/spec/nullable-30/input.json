@@ -1,0 +1,21 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Name": { "type": "string", "nullable": true },
+      "Tags": { "type": "array", "items": { "type": "string", "nullable": true }, "nullable": true },
+      "Point": {
+        "type": "object",
+        "nullable": true,
+        "required": ["x"],
+        "properties": { "x": { "type": "number" }, "y": { "type": "number", "nullable": true } }
+      },
+      "Choice": { "type": "string", "enum": ["a", "b", null], "nullable": true },
+      "Closed": { "description": "nullable adds null even next to an enum without it, as documents mean it.", "type": "string", "enum": ["a"], "nullable": true },
+      "Fixed": { "type": "string", "const": "a", "nullable": true },
+      "NotNull": { "type": "string", "nullable": false },
+      "MaybeNotNull": { "description": "nullable is the one keyword next to $ref that 3.0 documents rely on.", "$ref": "#/components/schemas/NotNull", "nullable": true }
+    }
+  }
+}

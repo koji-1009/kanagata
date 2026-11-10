@@ -1,0 +1,9 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/a": {
+      "get": { "responses": { "200": { "description": "no id" } } },
+      "put": { "operationId": "", "responses": { "204": { "description": "empty id" } } }
+    }
+  }
+}

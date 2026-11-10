@@ -1,0 +1,22 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Id": { "type": "string", "readOnly": true },
+      "Tag": { "$anchor": "tagdef", "type": "string", "readOnly": true },
+      "Secret": { "type": "string", "writeOnly": true },
+      "U": {
+        "description": "readOnly / writeOnly on the referenced schema apply to the property.",
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Id" },
+          "pw": { "$ref": "#/components/schemas/Secret" },
+          "tag": { "$ref": "#tagdef" },
+          "name": { "type": "string" }
+        }
+      }
+    }
+  }
+}

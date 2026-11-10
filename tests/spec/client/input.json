@@ -1,0 +1,124 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/items": {
+      "post": {
+        "operationId": "createItem",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Item" } } } },
+        "responses": { "201": { "description": "created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Item" } } } } }
+      },
+      "put": {
+        "operationId": "replaceItem",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/Item" } },
+            "text/plain": { "schema": { "type": "string" } }
+          }
+        },
+        "responses": { "204": { "description": "replaced" } }
+      }
+    },
+    "/items/{id}/image": {
+      "put": {
+        "operationId": "uploadImage",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": { "file": { "type": "string", "format": "binary" }, "caption": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "uploaded" } }
+      }
+    },
+    "/orgs/{org}/items": {
+      "parameters": [
+        { "name": "org", "in": "path", "required": true, "schema": { "type": "string" } },
+        { "name": "x-trace", "in": "header", "schema": { "type": "string" } }
+      ],
+      "get": {
+        "operationId": "listOrgItems",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "tags", "in": "query", "schema": { "type": "array", "items": { "type": "string" } } },
+          { "name": "filter", "in": "query", "schema": { "type": "object", "properties": { "q": { "type": "string" } } } },
+          { "name": "x-version", "in": "header", "required": true, "schema": { "type": "string", "enum": ["1", "2"] } }
+        ],
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Item" } } } } } }
+      },
+      "post": {
+        "operationId": "importOrgItems",
+        "parameters": [{ "name": "dry-run", "in": "query", "schema": { "type": "boolean" } }],
+        "responses": { "202": { "description": "accepted" } }
+      }
+    },
+    "/forms": {
+      "post": {
+        "operationId": "submitForm",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "type": "object", "required": ["q"], "properties": { "q": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "204": { "description": "submitted" } }
+      }
+    },
+    "/files/{name}": {
+      "parameters": [{ "name": "name", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "get": {
+        "operationId": "getFile",
+        "responses": { "200": { "description": "the file", "content": { "application/octet-stream": {} } } }
+      },
+      "put": {
+        "operationId": "putFile",
+        "requestBody": { "required": true, "content": { "application/octet-stream": {} } },
+        "responses": { "204": { "description": "stored" } }
+      }
+    },
+    "/events": {
+      "get": {
+        "operationId": "streamEvents",
+        "responses": { "200": { "description": "events", "content": { "text/event-stream": { "schema": { "type": "string" } } } } }
+      }
+    },
+    "/things/{id}": {
+      "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+      "get": {
+        "operationId": "getThing",
+        "responses": {
+          "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Thing" } } } },
+          "2XX": { "description": "other success", "content": { "text/plain": { "schema": { "type": "string" } } } },
+          "404": { "description": "missing", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } } },
+          "4XX": { "description": "client error", "content": { "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } } } }
+        }
+      },
+      "delete": {
+        "operationId": "deleteThing",
+        "responses": {
+          "204": { "description": "deleted" },
+          "default": { "description": "error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } } }
+        }
+      },
+      "head": {
+        "operationId": "headThing",
+        "responses": { "200": { "description": "exists" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Item": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } },
+      "Thing": { "type": "object", "required": ["id"], "properties": { "id": { "type": "integer" } } },
+      "Problem": { "type": "object", "required": ["title"], "properties": { "title": { "type": "string" } } }
+    }
+  }
+}

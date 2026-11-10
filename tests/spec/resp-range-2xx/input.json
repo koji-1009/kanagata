@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/things": {
+      "get": {
+        "responses": {
+          "2XX": { "description": "success", "content": { "application/json": { "schema": { "type": "string" } } } },
+          "4XX": { "description": "client error", "content": { "application/problem+json": { "schema": { "type": "object" } } } }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/things": {
+      "get": {
+        "responses": {
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "410": { "$ref": "#/components/responses/Gone" }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "NotFound": { "description": "missing", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } } },
+      "Gone": { "$ref": "#/components/responses/NotFound" }
+    },
+    "schemas": {
+      "Problem": { "type": "object", "required": ["title"], "properties": { "title": { "type": "string" } } }
+    }
+  }
+}

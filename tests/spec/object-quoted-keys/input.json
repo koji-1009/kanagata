@@ -1,0 +1,25 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Keys": {
+        "type": "object",
+        "required": ["name", "default", "$ref", "_x", "content-type", "", "1abc", "200", "a b", "é", "q\"uote"],
+        "properties": {
+          "name": { "type": "string" },
+          "default": { "type": "string" },
+          "$ref": { "type": "string" },
+          "_x": { "type": "string" },
+          "content-type": { "type": "string" },
+          "": { "type": "string" },
+          "1abc": { "type": "string" },
+          "200": { "type": "string" },
+          "a b": { "type": "string" },
+          "é": { "type": "string" },
+          "q\"uote": { "type": "string" }
+        }
+      }
+    }
+  }
+}

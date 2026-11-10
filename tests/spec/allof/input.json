@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } },
+      "Extra": { "type": "object", "properties": { "note": { "type": "string" } } },
+      "Both": { "allOf": [{ "$ref": "#/components/schemas/Base" }, { "$ref": "#/components/schemas/Extra" }] },
+      "Single": { "allOf": [{ "$ref": "#/components/schemas/Base" }] },
+      "Dup": { "allOf": [{ "$ref": "#/components/schemas/Base" }, { "$ref": "#/components/schemas/Base" }, {}] }
+    }
+  }
+}

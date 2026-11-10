@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/a": {
+      "parameters": [{ "name": "x-id", "in": "header", "required": true, "schema": { "type": "integer" } }],
+      "get": {
+        "description": "Header names are case-insensitive, so X-Id replaces the path-level x-id.",
+        "parameters": [{ "name": "X-Id", "in": "header", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

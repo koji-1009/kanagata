@@ -1,0 +1,15 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "user": { "type": "string" },
+      "user_profile": { "type": "string" },
+      "simple-user": { "type": "string" },
+      "pet.store.v2": { "type": "string" },
+      "petStore": { "type": "string" },
+      "Already": { "type": "string" },
+      "ユーザー": { "type": "string" }
+    }
+  }
+}

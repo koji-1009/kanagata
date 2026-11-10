@@ -1,0 +1,7 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/ping": { "get": { "responses": {} } },
+    "/empty": {}
+  }
+}

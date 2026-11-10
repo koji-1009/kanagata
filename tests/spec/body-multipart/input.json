@@ -1,0 +1,26 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/files": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary" },
+                  "pages": { "type": "array", "items": { "type": "string", "format": "binary" } },
+                  "caption": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "uploaded" } }
+      }
+    }
+  }
+}

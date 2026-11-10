@@ -1,0 +1,17 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/r": {
+      "summary": "ignored",
+      "trace": { "responses": {} },
+      "patch": { "responses": {} },
+      "head": { "responses": {} },
+      "options": { "responses": {} },
+      "delete": { "responses": {} },
+      "post": { "responses": {} },
+      "put": { "responses": {} },
+      "get": { "responses": {} },
+      "x-custom": { "responses": {} }
+    }
+  }
+}

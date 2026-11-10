@@ -1,0 +1,1 @@
+{ "openapi": "3.0.3", "paths": {}, "components": { "schemas": { "Nothing": { "type": "object", "additionalProperties": false } } } }

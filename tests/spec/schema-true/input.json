@@ -1,0 +1,10 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Anything": true,
+      "Box": { "type": "object", "required": ["value"], "properties": { "value": true } }
+    }
+  }
+}

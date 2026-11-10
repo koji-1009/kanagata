@@ -1,0 +1,20 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/report": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "report",
+            "content": {
+              "application/json": { "schema": { "type": "object", "properties": { "total": { "type": "number" } } } },
+              "text/csv": { "schema": { "type": "string" } },
+              "application/pdf": { "schema": { "type": "string", "format": "binary" } },
+              "image/*": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

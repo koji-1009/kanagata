@@ -1,0 +1,48 @@
+# The basic case written in YAML: the declarations are the same.
+openapi: 3.0.3
+paths:
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getUser
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        404:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      responses:
+        "204":
+          description: deleted
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, name, role]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [admin, member]
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string

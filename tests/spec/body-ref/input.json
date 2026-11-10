@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/items": {
+      "post": { "requestBody": { "$ref": "#/components/requestBodies/Item" }, "responses": { "201": { "description": "created" } } }
+    }
+  },
+  "components": {
+    "requestBodies": {
+      "Item": { "required": true, "content": { "application/json": { "schema": { "type": "string" } } } }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+#/components/schemas/Cond/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/Cond/dependentSchemas: dependentSchemas cannot be expressed in TypeScript; ignored
+#/components/schemas/Cond/unevaluatedProperties: unevaluatedProperties cannot be expressed in TypeScript; ignored
+#/components/schemas/Dyn/$dynamicRef: $dynamicRef is not supported; ignored

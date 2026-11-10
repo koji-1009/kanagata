@@ -1,0 +1,21 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["id", "missing"],
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "address": {
+            "type": "object",
+            "required": ["city"],
+            "properties": { "city": { "type": "string" }, "zip": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

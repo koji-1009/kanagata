@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Upload": { "type": "string", "format": "binary" },
+      "Encoded": { "type": "string", "format": "byte" }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Pair": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "integer" }], "items": false, "minItems": 2 },
+      "Open": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": ["number", "null"] }] },
+      "Rest": { "type": "array", "prefixItems": [{ "type": "string" }], "items": { "type": "number" }, "minItems": 1 }
+    }
+  }
+}

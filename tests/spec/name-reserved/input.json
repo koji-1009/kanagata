@@ -1,0 +1,15 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Blob": { "type": "string" },
+      "record": { "type": "object", "properties": { "file": { "type": "string", "format": "binary" }, "rest": { "type": "object" } } },
+      "paths": { "type": "string" },
+      "schemas": { "type": "string" },
+      "Error": { "type": "object", "required": ["message"], "properties": { "message": { "type": "string" } } },
+      "2fa": { "type": "boolean" },
+      "-": { "type": "string" }
+    }
+  }
+}

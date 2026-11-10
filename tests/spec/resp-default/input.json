@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/things": {
+      "delete": {
+        "responses": {
+          "204": { "description": "deleted" },
+          "default": { "description": "error", "content": { "application/json": { "schema": { "type": "object", "properties": { "message": { "type": "string" } } } } } }
+        }
+      }
+    }
+  }
+}

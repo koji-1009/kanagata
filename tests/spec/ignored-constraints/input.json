@@ -1,0 +1,30 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Email": {
+        "type": "string",
+        "title": "Email address",
+        "format": "email",
+        "pattern": "^.+@.+$",
+        "minLength": 3,
+        "maxLength": 254,
+        "default": "a@b.c",
+        "example": "x@y.z",
+        "readOnly": true,
+        "x-internal": true
+      },
+      "Age": { "type": "integer", "minimum": 0, "maximum": 150, "exclusiveMaximum": true, "multipleOf": 1, "writeOnly": true },
+      "Tags": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 5, "uniqueItems": true },
+      "Shape": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": { "kind": { "type": "string" } },
+        "discriminator": { "propertyName": "kind" },
+        "xml": { "name": "shape" },
+        "externalDocs": { "url": "https://example.com" }
+      }
+    }
+  }
+}

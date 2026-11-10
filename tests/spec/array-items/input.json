@@ -1,0 +1,11 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Tags": { "type": "array", "items": { "type": "string" } },
+      "Matrix": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } },
+      "Untyped": { "items": { "type": "boolean" } }
+    }
+  }
+}

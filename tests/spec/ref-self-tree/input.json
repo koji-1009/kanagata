@@ -1,0 +1,17 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Tree": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": { "type": "integer" },
+          "children": { "type": "array", "items": { "$ref": "#/components/schemas/Tree" } },
+          "parent": { "allOf": [{ "$ref": "#/components/schemas/Tree" }], "nullable": true }
+        }
+      }
+    }
+  }
+}

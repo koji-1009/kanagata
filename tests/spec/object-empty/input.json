@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Bag": { "type": "object" },
+      "NoProps": { "type": "object", "properties": {} }
+    }
+  }
+}

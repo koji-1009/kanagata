@@ -1,0 +1,16 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Account": {
+        "description": "A user account.\n\nCreated on sign-up.  ",
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "Unique id." },
+          "blank": { "type": "string", "description": "   " }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Old": { "type": "string", "deprecated": true },
+      "Thing": {
+        "type": "object",
+        "properties": {
+          "login": { "type": "string", "deprecated": true },
+          "handle": { "type": "string", "description": "Use this instead of login.", "deprecated": true },
+          "current": { "type": "string", "deprecated": false }
+        }
+      }
+    }
+  }
+}

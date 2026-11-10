@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/things": {
+      "get": {
+        "responses": {
+          "200": { "description": "ok", "content": { "application/json": { "schema": { "type": "string" } } } },
+          "404": { "description": "missing", "content": { "application/json": { "schema": { "type": "object", "required": ["message"], "properties": { "message": { "type": "string" } } } } } }
+        }
+      }
+    }
+  }
+}

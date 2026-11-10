@@ -1,0 +1,6 @@
+openapi: 3.1.0
+paths: {}
+components:
+  schemas:
+    User:
+      $ref: defs/bad.json#/User

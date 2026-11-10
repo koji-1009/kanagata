@@ -1,0 +1,11 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Id": { "type": "string" },
+      "Alias": { "$ref": "#/components/schemas/Id" },
+      "Holder": { "type": "object", "properties": { "id": { "$ref": "#/components/schemas/Id" } } }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/items": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Response headers are typed; Content-Type is ignored, as OpenAPI requires.",
+            "headers": {
+              "X-Rate-Limit": { "description": "Calls left.", "required": true, "schema": { "type": "integer" } },
+              "Link": { "schema": { "type": "string" } },
+              "Content-Type": { "schema": { "type": "string" } },
+              "X-Trace": { "$ref": "#/components/headers/Trace" },
+              "X-Meta": { "content": { "application/json": { "schema": { "type": "object", "properties": { "a": { "type": "string" } } } } } }
+            },
+            "content": { "application/json": { "schema": { "type": "array", "items": { "type": "string" } } } }
+          },
+          "204": {
+            "description": "Headers without content.",
+            "headers": { "Location": { "required": true, "schema": { "type": "string" } } }
+          },
+          "304": {
+            "description": "Only Content-Type: no headers.",
+            "headers": { "content-type": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "headers": { "Trace": { "schema": { "type": "string" } } }
+  }
+}

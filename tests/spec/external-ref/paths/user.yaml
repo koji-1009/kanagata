@@ -1,0 +1,24 @@
+# A Path Item in its own file: its $refs are relative to this file.
+parameters:
+  - $ref: ../common.json#/IdParam
+get:
+  operationId: getUser
+  responses:
+    "200":
+      description: the user
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/User.yaml
+    "404":
+      $ref: ../common.json#/NotFound
+put:
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/User.yaml
+  responses:
+    "204":
+      description: saved

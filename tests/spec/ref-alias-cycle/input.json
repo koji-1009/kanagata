@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Loop": { "$ref": "#/components/x-loop/a" }
+    },
+    "x-loop": {
+      "a": { "type": "object", "properties": { "next": { "$ref": "#/components/x-loop/b" } } },
+      "b": { "type": "array", "items": { "$ref": "#/components/x-loop/a" } }
+    }
+  }
+}

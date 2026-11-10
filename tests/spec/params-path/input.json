@@ -1,0 +1,14 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/orgs/{org}/repos/{repo}": {
+      "get": {
+        "parameters": [
+          { "name": "org", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "repo", "in": "path", "required": true, "description": "Repository name.", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

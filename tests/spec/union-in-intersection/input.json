@@ -1,0 +1,24 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } },
+      "Extra": { "type": "object", "properties": { "note": { "type": "string" } } },
+      "Mixed": {
+        "allOf": [{ "$ref": "#/components/schemas/Base" }],
+        "oneOf": [{ "$ref": "#/components/schemas/Extra" }, { "type": "string" }]
+      },
+      "Tagged": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string" } },
+        "oneOf": [
+          { "required": ["kind"], "properties": { "kind": { "enum": ["a"] } } },
+          { "properties": { "kind": { "enum": ["b"] } } }
+        ]
+      },
+      "List": { "type": "array", "items": { "allOf": [{ "oneOf": [{ "$ref": "#/components/schemas/Base" }, { "type": "string" }] }, { "$ref": "#/components/schemas/Extra" }] } }
+    }
+  }
+}

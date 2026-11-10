@@ -1,0 +1,23 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "RO": { "type": "object", "readOnly": true, "properties": { "x": { "type": "string" } } },
+      "Holder": {
+        "type": "object",
+        "properties": {
+          "owner": { "allOf": [{ "$ref": "#/components/schemas/RO" }], "description": "Wrapped to add a description." },
+          "note": { "type": "string" }
+        }
+      },
+      "Derived": {
+        "description": "required next to allOf does not bring back a readOnly property when sending.",
+        "allOf": [
+          { "type": "object", "properties": { "id": { "type": "string", "readOnly": true }, "name": { "type": "string" } } }
+        ],
+        "required": ["id", "name"]
+      }
+    }
+  }
+}

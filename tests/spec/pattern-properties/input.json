@@ -1,0 +1,25 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "P": {
+        "description": "Keys matching a pattern are allowed even with additionalProperties: false.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "patternProperties": { "^x-": { "type": "number" } },
+        "additionalProperties": false
+      },
+      "Q": { "type": "object", "patternProperties": { "^n": { "type": "integer" } }, "additionalProperties": false },
+      "M": { "type": "object", "patternProperties": { "^n": { "type": "integer" } }, "additionalProperties": { "type": "boolean" } },
+      "R": { "patternProperties": { "^s": { "type": "string" } } },
+      "Tagged": {
+        "type": "object",
+        "patternProperties": {
+          "^t": { "type": "object", "properties": { "rid": { "type": "string", "readOnly": true }, "v": { "type": "string" } } }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

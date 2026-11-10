@@ -1,0 +1,31 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Node": {
+        "description": "A $ref to an $anchor or $id that names a component schema refers to that type.",
+        "$anchor": "node",
+        "type": "object",
+        "properties": { "next": { "$ref": "#node" } }
+      },
+      "Tag": { "$id": "https://example.com/schemas/tag", "type": "string" },
+      "Post": {
+        "type": "object",
+        "properties": {
+          "tag": { "$ref": "https://example.com/schemas/tag" },
+          "author": { "$ref": "#person" },
+          "node": { "$ref": "#node" },
+          "label": { "$ref": "https://example.com/schemas/labels#/$defs/label" }
+        }
+      }
+    },
+    "x-people": {
+      "Person": { "$anchor": "person", "type": "object", "properties": { "name": { "type": "string" } } }
+    },
+    "x-labels": {
+      "$id": "https://example.com/schemas/labels",
+      "$defs": { "label": { "type": "string", "maxLength": 20 } }
+    }
+  }
+}

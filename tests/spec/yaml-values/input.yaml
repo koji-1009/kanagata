@@ -1,0 +1,26 @@
+openapi: 3.1.0
+paths: {}
+x-empty:
+components:
+  schemas:
+    Numbers:
+      description: |
+        Numbers keep the notation they are written in.
+        YAML-only forms become the number they mean.
+      enum: [1.50, 1e10, -0, 12345678901234567890, 0x1F, 0o17]
+    Strings:
+      enum: ["1.50", yes, null, true, ~]
+    Ordered:
+      description: >-
+        Keys keep their order,
+        integer-like ones too.
+      type: object
+      properties:
+        "200": { type: string }
+        b: { type: string }
+        0: { type: string }
+    Base: &base
+      type: object
+      properties:
+        id: { type: integer }
+    Copy: *base

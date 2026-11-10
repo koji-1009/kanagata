@@ -1,0 +1,27 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/files/{id}": {
+      "put": {
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/octet-stream": {} }
+        },
+        "responses": {
+          "200": {
+            "description": "Binary media types are read as Blob whatever the schema says; JSON, text and wildcards keep the schema.",
+            "content": {
+              "image/png": { "schema": { "type": "string" } },
+              "application/vnd.api+json": { "schema": { "type": "object", "properties": { "id": { "type": "string" } } } },
+              "text/html": { "schema": { "type": "string" } },
+              "application/xml": { "schema": { "type": "string" } },
+              "*/*": { "schema": { "type": "string" } },
+              "Application/PDF; version=1.7": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

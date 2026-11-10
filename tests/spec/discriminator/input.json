@@ -1,0 +1,36 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Pet": {
+        "description": "A discriminator tells readers of a payload where to look; it does not change what the schema accepts, so the type is the oneOf as written. A member that fixes the property (Dog) can be narrowed by it.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/Cat" },
+          { "$ref": "#/components/schemas/Dog" },
+          { "$ref": "#/components/schemas/Lizard" }
+        ],
+        "discriminator": {
+          "propertyName": "petType",
+          "mapping": { "cat": "#/components/schemas/Cat", "kitty": "#/components/schemas/Cat", "dog": "Dog" }
+        }
+      },
+      "Cat": {
+        "type": "object",
+        "required": ["petType"],
+        "properties": { "petType": { "type": "string" }, "meow": { "type": "boolean" } }
+      },
+      "Dog": {
+        "type": "object",
+        "required": ["petType"],
+        "properties": { "petType": { "const": "dog" }, "bark": { "type": "boolean" } }
+      },
+      "Lizard": { "type": "object", "properties": { "petType": { "type": "string" } } },
+      "Content": {
+        "description": "Members need not be objects (GitHub's content-directory is an array).",
+        "anyOf": [{ "$ref": "#/components/schemas/Cat" }, { "type": "array", "items": { "$ref": "#/components/schemas/Cat" } }],
+        "discriminator": { "propertyName": "type" }
+      }
+    }
+  }
+}

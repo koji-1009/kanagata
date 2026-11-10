@@ -1,0 +1,19 @@
+{
+  "Error": {
+    "type": "object",
+    "required": ["message"],
+    "properties": { "message": { "type": "string" } }
+  },
+  "IdParam": {
+    "name": "id",
+    "in": "path",
+    "required": true,
+    "schema": { "type": "integer" }
+  },
+  "NotFound": {
+    "description": "not found",
+    "content": {
+      "application/json": { "schema": { "$ref": "#/Error" } }
+    }
+  }
+}

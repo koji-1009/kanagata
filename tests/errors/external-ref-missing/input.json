@@ -1,0 +1,9 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "User": { "$ref": "common.json#/components/schemas/User" }
+    }
+  }
+}

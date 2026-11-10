@@ -1,0 +1,27 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/avatars": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "description": "3.1 marks file parts with contentMediaType instead of format: binary.",
+                "type": "object",
+                "properties": {
+                  "image": { "type": "string", "contentMediaType": "image/png" },
+                  "thumbnail": { "type": "string", "contentMediaType": "image/png", "contentEncoding": "base64" },
+                  "caption": { "type": "string", "contentMediaType": "text/plain" },
+                  "meta": { "type": "string", "contentMediaType": "application/json" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "stored" } }
+      }
+    }
+  }
+}

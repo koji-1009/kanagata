@@ -1,0 +1,10 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "NotString": { "not": { "type": "string" } },
+      "NonEmpty": { "type": "string", "not": { "const": "" } }
+    }
+  }
+}

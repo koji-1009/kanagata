@@ -1,0 +1,21 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/search": {
+      "get": {
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "content": {
+              "application/json": { "schema": { "type": "object", "properties": { "q": { "type": "string" } } } },
+              "text/plain": { "schema": { "type": "string" } }
+            }
+          },
+          { "name": "raw", "in": "query", "content": { "text/plain": {} } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

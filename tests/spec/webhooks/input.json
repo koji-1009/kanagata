@@ -1,0 +1,38 @@
+{
+  "openapi": "3.1.0",
+  "webhooks": {
+    "x-hook": {
+      "post": { "description": "webhooks is a map of names, not an object with extensions: x- is a name like any other.", "responses": { "204": { "description": "Received." } } }
+    },
+    "newPet": {
+      "post": {
+        "operationId": "onNewPet",
+        "requestBody": {
+          "description": "The API sends this, so it is the read view (readOnly kept, writeOnly left out).",
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "The receiver sends this, so it is the write view.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } }
+          }
+        }
+      }
+    },
+    "petGone": {
+      "post": { "responses": { "204": { "description": "Received." } } }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Pet": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "readOnly": true },
+          "secret": { "type": "string", "writeOnly": true },
+          "name": { "type": "string" }
+        }
+      }
+    }
+  }
+}

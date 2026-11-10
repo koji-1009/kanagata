@@ -1,0 +1,15 @@
+openapi: 3.1.0
+paths: {}
+components:
+  schemas:
+    Order: { type: string }
+    Box:
+      description: >-
+        A schema in another file that no component names is named after its file or the
+        last token of the pointer into it; a taken name gets a number. The same file is
+        one type however often it is used.
+      properties:
+        a: { $ref: defs/Order.yaml }
+        b: { $ref: defs/Order.yaml }
+        c: { $ref: "defs/common.json#/Line%20Item" }
+        d: { $ref: defs/order-status.yml }

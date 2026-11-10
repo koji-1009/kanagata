@@ -1,0 +1,14 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "x-internal": { "owner": "team" },
+    "/a": {
+      "get": {
+        "responses": {
+          "200": { "description": "ok" },
+          "x-note": "Specification extensions are not paths or status codes."
+        }
+      }
+    }
+  }
+}

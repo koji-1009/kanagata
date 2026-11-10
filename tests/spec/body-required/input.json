@@ -1,0 +1,20 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/items": {
+      "post": {
+        "requestBody": {
+          "description": "The item to create.",
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Item" } } }
+        },
+        "responses": { "201": { "description": "created" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Item": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }
+    }
+  }
+}

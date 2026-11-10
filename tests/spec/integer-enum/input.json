@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Whole": { "description": "integer admits only whole numbers.", "type": "integer", "enum": [1, 1.5, 2, 2.0] },
+      "Any": { "type": "number", "enum": [1, 1.5] },
+      "Mixed": { "type": ["integer", "string"], "enum": [1, 2.5, "a"] },
+      "Count": { "type": "integer" },
+      "IntOrNum": { "type": ["integer", "number"] }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "User": { "type": "object", "required": ["id"], "properties": { "id": { "type": "integer" } } },
+      "MaybeUser": { "allOf": [{ "$ref": "#/components/schemas/User" }], "nullable": true },
+      "Holder": {
+        "type": "object",
+        "properties": {
+          "owner": { "allOf": [{ "$ref": "#/components/schemas/User" }], "nullable": true },
+          "either": { "oneOf": [{ "$ref": "#/components/schemas/User" }, { "type": "string" }], "nullable": true }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Cat": { "type": "object", "required": ["meow"], "properties": { "meow": { "type": "boolean" } } },
+      "Dog": { "type": "object", "required": ["bark"], "properties": { "bark": { "type": "boolean" } } },
+      "Pet": {
+        "oneOf": [{ "$ref": "#/components/schemas/Cat" }, { "$ref": "#/components/schemas/Dog" }],
+        "discriminator": { "propertyName": "kind" }
+      },
+      "IdOrName": { "oneOf": [{ "type": "integer" }, { "type": "string" }] }
+    }
+  }
+}

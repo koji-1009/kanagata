@@ -1,0 +1,18 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Name": { "type": ["string", "null"] },
+      "Tags": { "type": ["array", "null"], "items": { "type": ["string", "null"] } },
+      "Point": {
+        "type": ["object", "null"],
+        "required": ["x"],
+        "properties": { "x": { "type": "number" }, "y": { "type": ["number", "null"] } }
+      },
+      "Choice": { "type": ["string", "null"], "enum": ["a", "b", null] },
+      "NotNull": { "type": ["string"] },
+      "Legacy": { "description": "3.1 has no nullable keyword: it constrains nothing.", "type": "string", "nullable": true }
+    }
+  }
+}

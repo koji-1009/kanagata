@@ -1,0 +1,24 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/count": {
+      "put": {
+        "requestBody": {
+          "required": true,
+          "content": { "text/plain": { "schema": { "type": "integer" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Text and XML bodies are read and sent as text, whatever the schema describes.",
+            "content": {
+              "application/xml": { "schema": { "type": "object", "properties": { "n": { "type": "integer" } } } },
+              "application/atom+xml": { "schema": { "type": "string" } },
+              "text/csv": {},
+              "*/*": { "schema": { "type": "integer" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

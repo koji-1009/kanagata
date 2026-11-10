@@ -1,0 +1,26 @@
+{
+	// src/client.ts and the generated declarations as a strict user project would compile
+	// them (bundler style, DOM types). Based on `tsc --init` (TypeScript 7.0); no
+	// skipLibCheck, because checking the expected .d.ts files is the point.
+	"compilerOptions": {
+		"module": "preserve",
+		"target": "esnext",
+		"lib": ["esnext", "dom", "dom.iterable"],
+		"types": [],
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
+		"erasableSyntaxOnly": true,
+
+		"noUncheckedIndexedAccess": true,
+		"exactOptionalPropertyTypes": true,
+		"noImplicitOverride": true,
+		"noPropertyAccessFromIndexSignature": true,
+
+		"strict": true,
+		"verbatimModuleSyntax": true,
+		"isolatedModules": true,
+		"noUncheckedSideEffectImports": true,
+		"moduleDetection": "force"
+	},
+	"include": ["types.test.ts", "../../src/client.ts", "../spec/*/expected.d.ts"]
+}

@@ -1,0 +1,25 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Labels": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "integer" }, "note": { "type": "string" } },
+        "additionalProperties": { "type": "string" }
+      },
+      "Loose": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "integer" } },
+        "additionalProperties": true
+      },
+      "Closed": {
+        "type": "object",
+        "properties": { "id": { "type": "integer" } },
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/users": {
+      "post": {
+        "operationId": "createUser",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Requests use the write view of User, responses the read view.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "patch": {
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "id": { "type": "integer", "readOnly": true }, "nick": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inline schemas follow the same rule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "secret": { "type": "string", "writeOnly": true }, "nick": { "type": "string" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "description": "A user.",
+        "type": "object",
+        "required": ["id", "name", "password"],
+        "properties": {
+          "id": { "type": "integer", "readOnly": true },
+          "name": { "type": "string" },
+          "password": { "type": "string", "writeOnly": true },
+          "team": { "$ref": "#/components/schemas/Team" }
+        }
+      },
+      "Team": {
+        "type": "object",
+        "properties": {
+          "slug": { "type": "string", "readOnly": true },
+          "members": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
+        }
+      },
+      "Tag": { "type": "object", "properties": { "label": { "type": "string" } } },
+      "UserInput": { "type": "string" }
+    }
+  }
+}

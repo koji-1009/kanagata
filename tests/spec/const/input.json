@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Kind": { "const": "user" },
+      "Version": { "const": 1.50 },
+      "Off": { "const": false },
+      "Empty": { "const": null },
+      "Shape": { "const": { "a": [1, "x", null], "b": {} } }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/me": {
+      "get": {
+        "parameters": [
+          { "name": "x-version", "in": "header", "required": true, "schema": { "type": "string", "enum": ["1", "2"] } },
+          { "name": "Accept", "in": "header", "required": true, "schema": { "type": "string" } },
+          { "name": "content-type", "in": "header", "schema": { "type": "string" } },
+          { "name": "Authorization", "in": "header", "required": true, "schema": { "type": "string" } },
+          { "name": "session", "in": "cookie", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

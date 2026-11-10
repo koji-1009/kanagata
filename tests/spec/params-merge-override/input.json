@@ -1,0 +1,21 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/items/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+        { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+        { "name": "x-trace", "in": "header", "schema": { "type": "string" } }
+      ],
+      "get": {
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "required": true, "schema": { "type": "integer" } },
+          { "name": "limit", "in": "header", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      },
+      "delete": { "responses": { "204": { "description": "deleted" } } }
+    }
+  }
+}

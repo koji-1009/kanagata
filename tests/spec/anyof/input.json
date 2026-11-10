@@ -1,0 +1,15 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Value": { "anyOf": [{ "type": "integer" }, { "type": "string" }, { "type": "integer" }] },
+      "Anything": { "anyOf": [{ "type": "string" }, {}] },
+      "Contact": {
+        "type": "object",
+        "properties": { "email": { "type": "string" }, "phone": { "type": "string" } },
+        "anyOf": [{ "required": ["email"] }, { "required": ["phone"] }]
+      }
+    }
+  }
+}

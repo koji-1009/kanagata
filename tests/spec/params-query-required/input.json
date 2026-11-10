@@ -1,0 +1,14 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/search": {
+      "get": {
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

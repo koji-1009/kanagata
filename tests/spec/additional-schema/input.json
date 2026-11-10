@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Counts": { "type": "object", "additionalProperties": { "type": "integer" } },
+      "Groups": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } }
+    }
+  }
+}

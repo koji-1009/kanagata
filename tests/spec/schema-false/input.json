@@ -1,0 +1,10 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Nothing": false,
+      "NoExtras": { "type": "object", "properties": { "a": { "type": "string" }, "gone": false } }
+    }
+  }
+}

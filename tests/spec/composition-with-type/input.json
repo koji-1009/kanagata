@@ -1,0 +1,11 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "S": { "description": "type next to oneOf still applies.", "type": "string", "oneOf": [{ "minLength": 1 }, { "format": "email" }] },
+      "N": { "type": ["string", "null"], "anyOf": [{ "maxLength": 3 }] },
+      "O": { "type": "object", "properties": { "a": { "type": "string" } }, "allOf": [{ "required": ["a"] }] }
+    }
+  }
+}

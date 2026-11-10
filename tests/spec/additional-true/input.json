@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Open": { "type": "object", "additionalProperties": true },
+      "EmptySchema": { "type": "object", "additionalProperties": {} }
+    }
+  }
+}

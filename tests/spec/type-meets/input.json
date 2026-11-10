@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "TypedEnum": { "description": "type next to enum: the values both allow.", "type": "string", "enum": ["a", 1] },
+      "NullableNarrowed": { "description": "type: [string, null] with type: string is string.", "allOf": [{ "type": ["string", "null"] }, { "type": "string" }] },
+      "EnumsMeet": { "description": "Two enums allow the values in both.", "allOf": [{ "enum": ["a", "b"] }, { "enum": ["b", "c"] }] },
+      "Contradiction": { "description": "No value is both: never.", "type": "string", "enum": [1, 2] },
+      "NotAnObject": { "description": "Object keywords make an object, which a string is not.", "type": "string", "allOf": [{ "properties": { "a": { "type": "string" } } }] }
+    }
+  }
+}
