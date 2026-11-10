@@ -181,10 +181,90 @@ interface ParamPaths {
 	};
 }
 
+interface FormParamPaths {
+	"/multipart": {
+		post: {
+			requestBody: {
+				content: { "multipart/form-data; charset=utf-8": { a: string } };
+			};
+			responses: { 204: Record<never, never> };
+		};
+	};
+	"/urlencoded": {
+		post: {
+			requestBody: {
+				content: {
+					"application/x-www-form-urlencoded; charset=utf-8": { a: string };
+				};
+			};
+			responses: { 204: Record<never, never> };
+		};
+	};
+}
+
 export async function mediaTypeParameters(): Promise<void> {
 	const p = createClient<ParamPaths>({ baseUrl: "https://api.test" });
 	// A JSON media type with parameters is still JSON: contentType may be left out.
 	await p.post("/p", { body: { a: 1 } });
+	// So is a form media type with parameters, for a FormData or URLSearchParams.
+	const f = createClient<FormParamPaths>({ baseUrl: "https://api.test" });
+	await f.post("/multipart", { body: new FormData() });
+	await f.post("/urlencoded", { body: new URLSearchParams() });
+	await f.post("/multipart", {
+		body: { a: "x" },
+		contentType: "multipart/form-data; charset=utf-8",
+	});
+	// @ts-expect-error an object for a form needs contentType, or it would be sent as JSON
+	await f.post("/urlencoded", { body: { a: "x" } });
+}
+
+interface AnyBodyPaths {
+	"/any": {
+		post: {
+			requestBody: { content: { "application/json": unknown } };
+			responses: { 204: Record<never, never> };
+		};
+	};
+}
+
+export async function requiredBodyOfAnyValue(): Promise<void> {
+	const a = createClient<AnyBodyPaths>({ baseUrl: "https://api.test" });
+	await a.post("/any", { body: null });
+	await a.post("/any", { body: 0 });
+	// @ts-expect-error an undefined body is no body, and this one is required
+	await a.post("/any", { body: undefined });
+	// @ts-expect-error a required body cannot be omitted
+	await a.post("/any", {});
+}
+
+interface UnionPaths {
+	"/a": {
+		get: {
+			parameters: { query?: { q?: string } };
+			responses: { 200: { content: { "application/json": string } } };
+		};
+	};
+	"/b/{id}": {
+		get: {
+			parameters: { path: { id: string } };
+			responses: { 200: { content: { "application/json": number } } };
+		};
+	};
+}
+
+export async function unionOfPaths(path: "/a" | "/b/{id}"): Promise<void> {
+	const u = createClient<UnionPaths>({ baseUrl: "https://api.test" });
+	// One init serves whichever path is called, so it holds what every one needs.
+	// @ts-expect-error "/b/{id}" needs its path parameter
+	await u.get(path);
+	// @ts-expect-error "/b/{id}" needs its path parameter
+	await u.get(path, {});
+	const res = await u.get(path, { path: { id: "1" }, query: { q: "x" } });
+	expectType<Equal<typeof res.data, string | number>>();
+	// @ts-expect-error unknown keys are still rejected
+	await u.get(path, { path: { id: "1" }, other: 1 });
+	// A single path needs only its own.
+	await u.get("/a");
 }
 
 interface PlusJsonPaths {
@@ -250,6 +330,22 @@ export async function binary(): Promise<void> {
 	await api.put("/files/{name}", {
 		path: { name: "a" },
 		body: new Blob([]),
+		contentType: "application/octet-stream",
+	});
+	// Every raw body the client sends as it is.
+	await api.put("/files/{name}", {
+		path: { name: "a" },
+		body: new Uint8Array([1]),
+		contentType: "application/octet-stream",
+	});
+	await api.put("/files/{name}", {
+		path: { name: "a" },
+		body: new ArrayBuffer(1),
+		contentType: "application/octet-stream",
+	});
+	await api.put("/files/{name}", {
+		path: { name: "a" },
+		body: new ReadableStream<Uint8Array>(),
 		contentType: "application/octet-stream",
 	});
 	await api.put("/files/{name}", {

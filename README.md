@@ -77,7 +77,7 @@ await api.put("/files/{name}", {
 const events = await api.get("/events", { parseAs: "stream" }); // events.data: ReadableStream | null
 ```
 
-`api.get`, `api.post`, … (one per HTTP method) take the path template and an object of options, which is optional when nothing in it is required.
+`api.get`, `api.post`, … (one per HTTP method) take the path template and an object of options, which is optional when nothing in it is required. A required body cannot be `undefined`, even when its schema admits any value. A union of path templates takes options that hold what every one of them needs.
 
 ### Config (`createClient`)
 
@@ -118,7 +118,8 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 - **Headers:** the config's `headers`, then the call's header parameters, then the call's `headers`; a later one replaces an earlier one of the same name. Cookies go in the `cookie` header (which browsers do not let fetch set) and replace one from the config. A `Date` is sent as its ISO string.
 - **content-type** comes from the body, never from the config's `headers`; one in the call's `headers` replaces it, except for multipart, whose boundary fetch sets.
 - **Request bodies:** a value is sent as JSON (strings included), URL-encoded, or as `FormData`, by its media type; text and binary bodies as they are.
-  - `contentType` may be left out for `application/json` (which is then sent) and for a `FormData` or `URLSearchParams`. Other JSON types (`application/merge-patch+json`) must be named.
+  - `contentType` may be left out for `application/json` (which is then sent) and for a `FormData` or `URLSearchParams`, with or without media type parameters. Other JSON types (`application/merge-patch+json`) must be named.
+  - A binary body is a `Blob`, `ArrayBuffer`, typed array or `ReadableStream`.
   - A wildcard (`*/*`, `application/*`) sets no content-type: a string, `Blob` or other raw body carries its own, and any other value goes as JSON.
   - A URL-encoded or multipart body must be an object, and a URL-encoded one cannot hold a `Blob`; otherwise a TypeError.
   - Multipart fields: an array repeats the field, a `Blob` is a file, a `Date` its ISO string, another object JSON.

@@ -27,10 +27,8 @@ type Op<P, Path, M extends Method> = Get<Get<P, Path>, M>;
 /** Union of every media type in `content`; `undefined` without content. */
 type Content<B> = B extends { content: infer C } ? C[keyof C] : undefined;
 
-/** application/json, with or without parameters: what a body is sent as when contentType is left out. */
-type IsPlainJson<K> = K extends
-	| "application/json"
-	| `application/json;${string}`
+/** Whether media type K is M, with or without parameters. */
+type IsMedia<K, M extends string> = K extends M | `${M};${string}`
 	? true
 	: false;
 
@@ -55,21 +53,40 @@ type JsonContent<B> = B extends { content: infer C }
 	? { [K in keyof C]: KeepsSchema<K> extends true ? C[K] : unknown }[keyof C]
 	: undefined;
 
+/** The raw bodies the client sends as they are (`isRawBody`) for a binary media type. */
+type RawBinary =
+	| Blob
+	| ArrayBuffer
+	| ArrayBufferView<ArrayBuffer>
+	| ReadableStream<Uint8Array>;
+
+/**
+ * A body of schema type T: any raw binary body where a Blob is (binary media types are
+ * Blob), and never undefined, which is no body.
+ */
+type BodyOf<T> = unknown extends T
+	? NonNullable<unknown> | null
+	: Blob extends T
+		? T | RawBinary
+		: T;
+
 /**
  * How a body of media type K is passed. contentType picks the media type and so the
  * encoding; it may be left out for application/json, which is what is sent then, and
  * for a FormData or URLSearchParams, which carry their own.
  */
 type BodyVariant<K, T> =
-	IsPlainJson<K> extends true
-		? { contentType?: K; body: T }
-		: K extends "multipart/form-data"
-			? { contentType: K; body: T } | { contentType?: K; body: FormData }
-			: K extends "application/x-www-form-urlencoded"
+	IsMedia<K, "application/json"> extends true
+		? { contentType?: K; body: BodyOf<T> }
+		: IsMedia<K, "multipart/form-data"> extends true
+			?
+					| { contentType: K; body: BodyOf<T> }
+					| { contentType?: K; body: FormData }
+			: IsMedia<K, "application/x-www-form-urlencoded"> extends true
 				?
-						| { contentType: K; body: T }
+						| { contentType: K; body: BodyOf<T> }
 						| { contentType?: K; body: URLSearchParams }
-				: { contentType: K; body: T };
+				: { contentType: K; body: BodyOf<T> };
 
 type BodyVariants<B> = B extends { content: infer C }
 	? { [K in keyof C & string]: BodyVariant<K, C[K]> }[keyof C & string]
@@ -115,12 +132,26 @@ export interface RequestOptions extends FetchOptions {
 	objectFormat?: ObjectFormat;
 }
 
-type Init<O, A> = Params<O> & Body<O> & RequestOptions & { parseAs?: A };
+/** What a call's options must hold for operation O: its parameters and body. */
+type Needs<O> = Params<O> & Body<O>;
+
+/**
+ * For a union of operations (a union of paths), what every one of them needs: one init
+ * serves whichever is called. For one operation, its own needs.
+ */
+type NeedsAll<O> = Get<
+	(O extends unknown ? (n: { needs: Needs<O> }) => void : never) extends (
+		n: infer I,
+	) => void
+		? I
+		: never,
+	"needs"
+>;
+
+type Init<N, A> = N & RequestOptions & { parseAs?: A };
 
 /** The second argument is optional when nothing in it is required. */
-type Args<O, A> = Empty extends Params<O> & Body<O>
-	? [init?: Init<O, A>]
-	: [init: Init<O, A>];
+type Args<N, A> = Empty extends N ? [init?: Init<N, A>] : [init: Init<N, A>];
 
 /** "2XX" and default have no single status. */
 type Status<S> = S extends number ? S : number;
@@ -229,7 +260,7 @@ type Call<P, M extends Method> = <
 	A extends ParseAs | undefined = undefined,
 >(
 	path: Path,
-	...args: Args<Op<P, Path, M>, A>
+	...args: Args<NeedsAll<Op<P, Path, M>>, A>
 ) => Promise<Result<Op<P, Path, M>, A, M>>;
 
 export type Client<P> = { [M in Method]: Call<P, M> };
