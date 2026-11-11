@@ -104,7 +104,7 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 
 ### Result
 
-`{ status, ok, data, response }`, a union over the statuses the operation documents.
+`{ status, ok, data, response }`, a union over the statuses the operation documents. Its type is exported as `Result<Operation, ParseAs, Method>`: `Result<paths["/users/{id}"]["get"], undefined, "get">` is what `api.get("/users/{id}", …)` resolves to, as is `Awaited<ReturnType<typeof api.get<"/users/{id}">>>`.
 
 - **`data`** is parsed by the response's content-type: JSON, text, or `Blob` for binary types. An empty body gives `undefined`. fetch gives HEAD responses and 204, 205 and 304 no body, so their `data` is typed `undefined` whatever the document declares. A status that declares `content` but sends none also gives `undefined`; check for it in `onData`.
   - The content-type the server sends decides, not the document: content typed by a wildcard (`*/*`) is typed by its schema but read as whatever arrives, and a response without a content-type is text (`parseAs: "blob"` keeps its bytes).

@@ -6,6 +6,7 @@ import {
 	createClient,
 	type Method,
 	type ParseAs,
+	type Result,
 } from "../../src/client.ts";
 import type * as AnyOf from "../spec/anyof/expected";
 import type * as Basic from "../spec/basic/expected";
@@ -57,6 +58,21 @@ export async function narrowing(): Promise<void> {
 		expectType<Equal<typeof res.ok, false>>();
 	}
 	expectType<Equal<typeof res.response, Response>>();
+}
+
+export async function resultType(): Promise<void> {
+	// README: Result<operation, parseAs, method> is what a call resolves to.
+	const res = await api.get("/things/{id}", { path: { id: 1 } });
+	type Thing = Api.paths["/things/{id}"]["get"];
+	expectType<Equal<typeof res, Result<Thing, undefined, "get">>>();
+	expectType<
+		Equal<typeof res, Awaited<ReturnType<typeof api.get<"/things/{id}">>>>
+	>();
+	const text = await api.get("/things/{id}", {
+		path: { id: 1 },
+		parseAs: "text",
+	});
+	expectType<Equal<typeof text, Result<Thing, "text", "get">>>();
 }
 
 export async function statusRanges(): Promise<void> {
