@@ -133,8 +133,16 @@ export interface RequestOptions extends FetchOptions {
 	objectFormat?: ObjectFormat;
 }
 
-/** What a call's options must hold for operation O: its parameters and body. */
-type Needs<O> = Params<O> & Body<O>;
+/**
+ * Where operation O is sent: an operation that declares servers is served by one of
+ * them, named as the call's baseUrl; any other by the client's baseUrl.
+ */
+type Server<O> = O extends { servers: infer S extends readonly unknown[] }
+	? { baseUrl: S[number] }
+	: { baseUrl?: never };
+
+/** What a call's options must hold for operation O: its parameters, body and server. */
+type Needs<O> = Params<O> & Body<O> & Server<O>;
 
 /**
  * For a union of operations (a union of paths), what every one of them needs: one init
@@ -269,6 +277,7 @@ type Call<P, M extends Method> = <
 export type Client<P> = { [M in Exclude<Method, "trace">]: Call<P, M> };
 
 interface AnyInit extends RequestOptions {
+	baseUrl?: string;
 	path?: Record<string, unknown>;
 	query?: Record<string, unknown>;
 	header?: Record<string, unknown>;
@@ -363,7 +372,7 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 		init: AnyInit = {},
 	): Promise<AnyResult> {
 		// The base keeps its own query; paths go after its path, queries after its query.
-		const base = resolveBase(config.baseUrl);
+		const base = resolveBase(init.baseUrl ?? config.baseUrl);
 		const formats: Formats = {
 			array: init.arrayFormat ?? config.arrayFormat ?? "repeat",
 			object: init.objectFormat ?? config.objectFormat ?? "deepObject",

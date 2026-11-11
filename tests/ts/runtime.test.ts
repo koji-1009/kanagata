@@ -44,6 +44,7 @@ function recorder(
 // The runtime does not depend on the schema type, so these tests call it through the
 // untyped shape it has at runtime: any path, any init. Types are tested in types.test.ts.
 interface LooseInit extends RequestOptions {
+	baseUrl?: string;
 	path?: Record<string, unknown>;
 	query?: Record<string, unknown>;
 	header?: Record<string, unknown>;
@@ -321,6 +322,21 @@ test("a baseUrl with a query keeps it, and the path goes before it", async () =>
 		"/x",
 	);
 	assert.equal(rec.request(1).url, "https://api.test/x?key=k");
+});
+
+test("a call's baseUrl (an operation's own server) replaces the client's", async () => {
+	const rec = recorder();
+	await client(rec).post("/repos/{id}/assets", {
+		baseUrl: "https://uploads.test/?key=k",
+		path: { id: 1 },
+		query: { name: "a.zip" },
+	});
+	await client(rec).get("/r");
+	assert.equal(
+		rec.request(0).url,
+		"https://uploads.test/repos/1/assets?key=k&name=a.zip",
+	);
+	assert.equal(rec.request(1).url, "https://api.test/v1/r");
 });
 
 test("a relative baseUrl resolves against the page on every call, as fetch does", async () => {

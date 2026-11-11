@@ -93,14 +93,15 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 
 ### Call options
 
-| Key                                 | Meaning                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------- |
-| `path`, `query`, `header`, `cookie` | the parameters the operation declares                                                 |
-| `body`, `contentType`               | the request body and which of the operation's media types it is                       |
-| `parseAs`                           | `json`, `text`, `blob`, `arrayBuffer` or `stream`: read the response this way         |
-| `headers`                           | headers for this call                                                                 |
-| `arrayFormat`, `objectFormat`       | override the client's                                                                 |
-| fetch options                       | as in the config; a call's win. The client sets `method`, `headers` and `body` itself |
+| Key                                 | Meaning                                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------- |
+| `baseUrl`                           | required for an operation that declares `servers`: one of them, used in place of the config's |
+| `path`, `query`, `header`, `cookie` | the parameters the operation declares                                                         |
+| `body`, `contentType`               | the request body and which of the operation's media types it is                               |
+| `parseAs`                           | `json`, `text`, `blob`, `arrayBuffer` or `stream`: read the response this way                 |
+| `headers`                           | headers for this call                                                                         |
+| `arrayFormat`, `objectFormat`       | override the client's                                                                         |
+| fetch options                       | as in the config; a call's win. The client sets `method`, `headers` and `body` itself         |
 
 ### Result
 
@@ -116,7 +117,7 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 
 ### Details
 
-- **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. `""` is the origin of the page's base URL. Its own query is kept, before the call's.
+- **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. `""` is the origin of the page's base URL. Its own query is kept, before the call's. An operation that declares `servers` (or whose path item does) is served there, not by the document's servers, so its call names one of them as `baseUrl`; other operations take the config's and cannot be given one.
 - **Headers:** the config's `headers`, then the call's header parameters, then its cookie parameters, then its `headers`; a later one replaces an earlier one of the same name. Cookie parameters go in the `cookie` header, which browsers do not let fetch set. A `Date` is sent as its ISO string.
 - **content-type** comes from the body, never from the config's `headers` (with or without a body); one in the call's `headers` replaces it, except for a multipart body made from an object or a `FormData`, which needs its boundary.
 - **Request bodies:** a value is sent as JSON (strings included), URL-encoded, or as `FormData`, by its media type; text and binary bodies as they are.
@@ -166,6 +167,7 @@ try {
 - A schema with a `readOnly` / `writeOnly` property (on it or on a schema it references) gets a second type for requests, `UserInput`.
 - `description` and `deprecated` become JSDoc.
 - Header parameters named `Accept`, `Content-Type` or `Authorization`, and a response header `Content-Type`, are ignored, as OpenAPI requires.
+- An operation's `servers`, or its path item's, is `servers: ["https://uploads.example.com"]` in its type; a URL with variables (`{region}`) is `string`. A webhook has none, since the API sends its request.
 - A `requestBody` on a GET or HEAD operation is left out: OpenAPI 3.0 has consumers ignore it, and fetch cannot send one. A webhook keeps it, since the API sends that request.
 
 ### `$ref`

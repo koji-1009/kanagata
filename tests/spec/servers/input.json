@@ -1,0 +1,43 @@
+{
+  "openapi": "3.1.0",
+  "servers": [{ "url": "https://api.example.com" }],
+  "paths": {
+    "/uploads": {
+      "servers": [{ "url": "https://uploads.example.com" }, { "url": "https://uploads-eu.example.com" }],
+      "post": {
+        "operationId": "upload",
+        "responses": { "204": { "description": "ok" } }
+      },
+      "put": {
+        "servers": [{ "url": "https://files.example.com/" }],
+        "responses": { "204": { "description": "ok" } }
+      }
+    },
+    "/regional": {
+      "get": {
+        "servers": [
+          { "url": "https://{region}.example.com", "variables": { "region": { "default": "us" } } },
+          { "url": "/local" }
+        ],
+        "responses": { "204": { "description": "ok" } }
+      }
+    },
+    "/plain": {
+      "get": {
+        "servers": [],
+        "responses": { "204": { "description": "ok" } }
+      },
+      "delete": {
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
+  "webhooks": {
+    "ping": {
+      "post": {
+        "servers": [{ "url": "https://ignored.example.com" }],
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  }
+}

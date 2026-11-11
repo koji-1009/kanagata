@@ -12,6 +12,7 @@ import type * as Api from "../spec/client/expected";
 import type * as Cookies from "../spec/params-header-cookie/expected";
 import type * as ReadWrite from "../spec/read-write-only/expected";
 import type * as NoResponses from "../spec/responses-missing/expected";
+import type * as Servers from "../spec/servers/expected";
 
 type Equal<A, B> =
 	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
@@ -237,6 +238,60 @@ export async function requiredBodyOfAnyValue(): Promise<void> {
 	await a.post("/any", { body: undefined });
 	// @ts-expect-error a required body cannot be omitted
 	await a.post("/any", {});
+}
+
+interface ServerPaths {
+	"/assets": {
+		post: {
+			servers: [
+				"https://uploads.example.com",
+				"https://uploads-eu.example.com",
+			];
+			responses: { 204: Record<never, never> };
+		};
+	};
+	"/items": {
+		get: { responses: { 204: Record<never, never> } };
+		post: { responses: { 204: Record<never, never> } };
+	};
+}
+
+export async function operationServers(): Promise<void> {
+	const s = createClient<ServerPaths>({ baseUrl: "https://api.example.com" });
+	// An operation that declares servers is served there, not by the client's baseUrl.
+	await s.post("/assets", { baseUrl: "https://uploads.example.com" });
+	await s.post("/assets", { baseUrl: "https://uploads-eu.example.com" });
+	// @ts-expect-error its server must be given
+	await s.post("/assets");
+	// @ts-expect-error only a server it declares
+	await s.post("/assets", { baseUrl: "https://api.example.com" });
+	// Other operations go to the client's baseUrl.
+	await s.get("/items");
+	// @ts-expect-error an operation without servers takes no baseUrl
+	await s.get("/items", { baseUrl: "https://uploads.example.com" });
+}
+
+export async function generatedServers(): Promise<void> {
+	// The servers the declarations give, as the generator writes them.
+	const g = createClient<Servers.paths>({ baseUrl: "https://api.example.com" });
+	await g.post("/uploads", { baseUrl: "https://uploads-eu.example.com" });
+	await g.put("/uploads", { baseUrl: "https://files.example.com/" });
+	// @ts-expect-error the operation's own servers replace its path item's
+	await g.put("/uploads", { baseUrl: "https://uploads.example.com" });
+	// A URL with variables is any string.
+	await g.get("/regional", { baseUrl: "https://eu.example.com" });
+	await g.get("/plain");
+}
+
+export async function unionAcrossServers(
+	path: "/assets" | "/items",
+): Promise<void> {
+	const s = createClient<ServerPaths>({ baseUrl: "https://api.example.com" });
+	// No one init serves both: /assets needs its server, which is wrong for /items.
+	// @ts-expect-error
+	await s.post(path, { baseUrl: "https://uploads.example.com" });
+	// @ts-expect-error
+	await s.post(path);
 }
 
 interface UnionPaths {

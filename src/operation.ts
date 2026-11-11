@@ -6,12 +6,14 @@ import { type Ctx, child, DiagError } from "./pointer.ts";
 import { doc, schema } from "./schema.ts";
 import {
 	BLOB,
+	lit,
 	object,
 	opRef,
 	type Prop,
 	prop,
 	STRING,
 	type Ty,
+	tuple,
 	UNKNOWN,
 	type View,
 } from "./ty.ts";
@@ -118,6 +120,12 @@ function operation(
 	const fields: Prop[] = [];
 	const received: View = sent === "write" ? "read" : "write";
 
+	// The servers that serve this operation, in place of the document's: its own, or its
+	// path item's. A webhook's request is sent by the API, so it has none to choose.
+	const servers =
+		sent === "write" ? (serverUrls(o) ?? serverUrls(item)) : undefined;
+	if (servers !== undefined) fields.push(prop("servers", tuple(servers)));
+
 	// Path-level parameters first; an operation parameter with the same in + name replaces it.
 	const params: Param[] = [];
 	collectParams(cx, params, item, itemAt);
@@ -178,6 +186,19 @@ function operation(
 	fields.push(prop("responses", object(responses)));
 
 	return object(fields);
+}
+
+/**
+ * The URLs of a non-empty `servers`, as literals; a URL with variables (`{region}`) is
+ * any string, since TypeScript cannot check the template.
+ */
+function serverUrls(owner: JsonObject): Ty[] | undefined {
+	const servers = owner.get("servers");
+	if (!Array.isArray(servers) || servers.length === 0) return undefined;
+	return servers.map((s) => {
+		const url = (s as JsonObject).str("url") as string;
+		return url.includes("{") ? STRING : lit(JSON.stringify(url));
+	});
 }
 
 function collectParams(
