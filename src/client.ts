@@ -8,7 +8,8 @@ export type Method =
 	| "options"
 	| "head"
 	| "patch"
-	| "trace";
+	| "trace"
+	| "query";
 
 // Derived from fetch itself, so this file type-checks with Node's types as well as the DOM's.
 type HeadersInit = NonNullable<ConstructorParameters<typeof Headers>[0]>;
@@ -17,12 +18,37 @@ type BodyInit = NonNullable<RequestInit["body"]>;
 type Get<T, K> = K extends keyof T ? T[K] : never;
 
 /** Paths that have method M. */
-type PathsOf<P, M extends Method> = {
+type PathsOf<P, M extends string> = {
 	[K in keyof P]: M extends keyof P[K] ? K : never;
 }[keyof P] &
 	string;
 
-type Op<P, Path, M extends Method> = Get<Get<P, Path>, M>;
+type Op<P, Path, M extends string> = Get<Get<P, Path>, M>;
+
+/**
+ * The methods of P's path items beyond OpenAPI's fixed fields: the keys of their
+ * `additionalOperations` (OpenAPI 3.2), as written, which is how they are sent.
+ */
+type OtherMethod<P> = Exclude<{ [K in keyof P]: keyof P[K] }[keyof P], Method> &
+	string;
+
+/**
+ * The methods fetch sends as written: not CONNECT, TRACE and TRACK, which it rejects, nor
+ * DELETE, GET, HEAD, OPTIONS, POST and PUT in another case, which it sends in upper case.
+ */
+type Sendable<M extends string> = M extends unknown
+	? Uppercase<M> extends "CONNECT" | "TRACE" | "TRACK"
+		? never
+		: Uppercase<M> extends
+					| "DELETE"
+					| "GET"
+					| "HEAD"
+					| "OPTIONS"
+					| "POST"
+					| "PUT"
+			? never
+			: M
+	: never;
 
 /** Union of every media type in `content`; `undefined` without content. */
 type Content<B> = B extends { content: infer C } ? C[keyof C] : undefined;
@@ -206,7 +232,7 @@ type Undocumented = { content: Record<string, unknown> };
 export type Result<
 	O,
 	A extends ParseAs | undefined = undefined,
-	M extends Method = Method,
+	M extends string = Method,
 > = O extends {
 	responses: infer R;
 }
@@ -234,7 +260,7 @@ export type Result<
  */
 export type ResultOf<
 	P,
-	M extends Method,
+	M extends string,
 	Path extends PathsOf<P, M>,
 	A extends ParseAs | undefined = undefined,
 > = Result<Op<P, Path, M>, A, M>;
@@ -267,9 +293,12 @@ export interface ClientConfig extends FetchOptions {
 	onData?: (data: unknown, call: DataCall) => MaybePromise<unknown>;
 }
 
-/** Which call a body answers. `path` is the template as written, such as `/users/{id}`. */
+/**
+ * Which call a body answers. `method` is the client function's name (`get`), or the
+ * method given to `request` (`COPY`); `path` is the template as written, such as `/users/{id}`.
+ */
 export interface DataCall {
-	method: Method;
+	method: string;
 	path: string;
 	status: number;
 	parseAs: ParseAs | undefined;
@@ -285,13 +314,30 @@ type Call<P, M extends Method> = <
 	...args: Args<NeedsAll<Op<P, Path, M>>, A>
 ) => Promise<Result<Op<P, Path, M>, A, M>>;
 
-/** A function per method fetch sends: every one but TRACE, which fetch rejects. */
-export type Client<P> = { [M in Exclude<Method, "trace">]: Call<P, M> };
+/** A call by a method of `additionalOperations`, named first: `request("COPY", path, init)`. */
+type OtherCall<P> = <
+	M extends Sendable<OtherMethod<P>>,
+	Path extends PathsOf<P, M>,
+	A extends ParseAs | undefined = undefined,
+>(
+	method: M,
+	path: Path,
+	...args: Args<NeedsAll<Op<P, Path, M>>, A>
+) => Promise<Result<Op<P, Path, M>, A, M>>;
+
+/**
+ * A function per method fetch sends: every fixed one but TRACE, which fetch rejects, and
+ * `request` for the methods of `additionalOperations`.
+ */
+export type Client<P> = { [M in Exclude<Method, "trace">]: Call<P, M> } & {
+	request: OtherCall<P>;
+};
 
 interface AnyInit extends RequestOptions {
 	baseUrl?: string;
 	path?: Record<string, unknown>;
 	query?: Record<string, unknown>;
+	querystring?: unknown;
 	header?: Record<string, unknown>;
 	cookie?: Record<string, unknown>;
 	body?: unknown;
@@ -316,6 +362,7 @@ const OWN_KEYS = new Set([
 	"onData",
 	"path",
 	"query",
+	"querystring",
 	"header",
 	"cookie",
 	"body",
@@ -343,6 +390,7 @@ export const METHODS: readonly Method[] = [
 	"head",
 	"patch",
 	"trace",
+	"query",
 ];
 
 /**
@@ -379,7 +427,7 @@ function resolveBase(baseUrl: string): URL {
  */
 export function createClient<P>(config: ClientConfig): Client<P> {
 	async function send(
-		method: Method,
+		method: string,
 		path: string,
 		init: AnyInit = {},
 	): Promise<AnyResult> {
@@ -389,7 +437,11 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 			array: init.arrayFormat ?? config.arrayFormat ?? "repeat",
 			object: init.objectFormat ?? config.objectFormat ?? "deepObject",
 		};
-		const query = [base.search.slice(1), urlEncode(init.query ?? {}, formats)]
+		const query = [
+			base.search.slice(1),
+			urlEncode(init.query ?? {}, formats),
+			queryString(init.querystring, formats),
+		]
 			.filter((q) => q !== "")
 			.join("&");
 		const url = `${base.origin}${base.pathname.replace(/\/+$/, "")}${fillPath(path, init.path)}${query === "" ? "" : `?${query}`}`;
@@ -414,7 +466,10 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 		const requestInit: RequestInit & { duplex?: "half" } = {
 			...fetchOptions(config),
 			...fetchOptions(init),
-			method: method.toUpperCase(),
+			// A method of additionalOperations is sent as written; the fixed ones in upper case.
+			method: (METHODS as readonly string[]).includes(method)
+				? method.toUpperCase()
+				: method,
 			headers,
 		};
 		if (init.body !== undefined) {
@@ -446,12 +501,29 @@ export function createClient<P>(config: ClientConfig): Client<P> {
 
 	const client: Partial<
 		Record<Method, (path: string, init?: AnyInit) => Promise<AnyResult>>
-	> = {};
+	> & {
+		request?: (
+			method: string,
+			path: string,
+			init?: AnyInit,
+		) => Promise<AnyResult>;
+	} = {};
 	for (const method of METHODS) {
 		if (method !== "trace")
 			client[method] = (path, init) => send(method, path, init);
 	}
+	client.request = send;
 	return client as unknown as Client<P>;
+}
+
+/**
+ * A querystring parameter (OpenAPI 3.2), the whole query: an object is URL-encoded as
+ * a query is; a string, the text of another media type, is percent-encoded as one value.
+ */
+function queryString(value: unknown, formats: Formats): string {
+	if (value == null) return "";
+	if (typeof value === "string") return encodeURIComponent(value);
+	return urlEncode(value as Record<string, unknown>, formats);
 }
 
 /**

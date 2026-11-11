@@ -125,6 +125,10 @@ export class Ctx {
 	readonly root: Value;
 	/** The document's URL: from its Location, or a placeholder when it has none. */
 	readonly documentUrl: string;
+	/** The document's base URI: its `$self` (3.2), resolved against its URL, or the URL. */
+	readonly documentBase: string;
+	/** Whether the document is OpenAPI 3.2, whose fields (`$self`, `query`, …) are read. */
+	readonly v32: boolean;
 	readonly #load: ((url: string) => Value) | undefined;
 	/** `$ref`s being expanded inline, for cycle detection. */
 	readonly #stack: string[] = [];
@@ -189,7 +193,18 @@ export class Ctx {
 				? DOCUMENT
 				: withoutFragment(new URL(location.url));
 		this.#load = location?.load;
-		this.base = this.documentUrl;
+		this.v32 = str(root, "openapi")?.startsWith("3.2.") === true;
+		const self = this.v32 ? get(root, "$self") : undefined;
+		if (
+			self !== undefined &&
+			(typeof self !== "string" || !URL.canParse(self, this.documentUrl))
+		)
+			throw new DiagError("#/$self", "$self must be a URI reference");
+		this.documentBase =
+			self === undefined
+				? this.documentUrl
+				: withoutFragment(new URL(self, this.documentUrl));
+		this.base = this.documentBase;
 	}
 
 	warn(at: string, msg: string): void {
@@ -241,7 +256,7 @@ export class Ctx {
 
 	/** Whether `$ref`s resolve against the document itself (not another file, nor inside a schema with `$id`). */
 	get inDocument(): boolean {
-		return this.base === this.documentUrl;
+		return this.base === this.documentBase;
 	}
 
 	/**
@@ -250,7 +265,7 @@ export class Ctx {
 	 */
 	where(resource: string, fragment?: string): string {
 		const hash = fragment === undefined ? "" : `#${fragment}`;
-		if (resource === this.documentUrl) return hash;
+		if (resource === this.documentBase) return hash;
 		const url = new URL(resource);
 		const doc = new URL(this.documentUrl);
 		if (url.protocol !== "file:" || doc.protocol !== "file:")
@@ -290,11 +305,13 @@ export class Ctx {
 		at: string,
 	): { value: Value; base: string; uri: string; where: string } {
 		const url = new URL(r, this.base);
-		const resource = withoutFragment(url);
 		const fragment = url.hash.slice(1);
+		// A reference by the URL the document was read from still means the document.
+		const named = withoutFragment(url);
+		const resource = named === this.documentUrl ? this.documentBase : named;
 		const index = this.#ids();
 		const doc =
-			resource === this.documentUrl
+			resource === this.documentBase
 				? this.root
 				: (index.ids.get(resource) ?? this.#read(resource, r, at));
 		const value =
@@ -311,7 +328,10 @@ export class Ctx {
 		};
 	}
 
-	/** Loads another document, once, and indexes its `$id`s and `$anchor`s. */
+	/**
+	 * Loads another document, once, and indexes its `$id`s and `$anchor`s. It is known by
+	 * the URL it is read from: kanagata reads files, so another document's `$self` is not read.
+	 */
 	#read(resource: string, r: string, at: string): Value {
 		if (this.#load === undefined)
 			throw new DiagError(
@@ -357,7 +377,7 @@ export class Ctx {
 	#ids(): Index {
 		if (this.#index !== undefined) return this.#index;
 		const index: Index = { ids: new Map(), anchors: new Map() };
-		indexIds(index, this.root, this.documentUrl);
+		indexIds(index, this.root, this.documentBase);
 		this.#index = index;
 		return index;
 	}
@@ -394,7 +414,7 @@ export class Ctx {
 					continue;
 				// A target that does not resolve is reported where the component is converted.
 				const target = this.withBase(
-					this.documentUrl,
+					this.documentBase,
 					() => this.tryLocate(r)?.value,
 				);
 				if (target !== undefined && !aliases.has(target))

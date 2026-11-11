@@ -98,7 +98,7 @@ test("error kinds and messages", () => {
 	assert.equal(input.kind, "input");
 	assert.deepEqual(input.diag, {
 		at: "#/openapi",
-		msg: 'unsupported OpenAPI version "2.0" (3.0.x or 3.1.x required)',
+		msg: 'unsupported OpenAPI version "2.0" (3.0.x, 3.1.x or 3.2.x required)',
 	});
 });
 

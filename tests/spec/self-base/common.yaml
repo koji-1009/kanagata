@@ -1,0 +1,13 @@
+openapi: 3.2.0
+# Another file is known by where it is read, not by its $self: kanagata reads files, so
+# detail.yaml is the file next to this one, not https://example.com/detail.yaml.
+$self: https://example.com/common.yaml
+components:
+  schemas:
+    Error:
+      type: object
+      required: [code]
+      properties:
+        code: { $ref: "#/components/schemas/Code" }
+        detail: { $ref: "detail.yaml" }
+    Code: { type: string }

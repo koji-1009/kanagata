@@ -4,7 +4,7 @@ How to change kanagata without breaking README.md, which is the user-facing cont
 
 ## Scope
 
-kanagata makes two things from an OpenAPI 3.0 / 3.1 document, and only these:
+kanagata makes two things from an OpenAPI 3.0 / 3.1 / 3.2 document, and only these:
 
 - `kanagata generate`: one `.d.ts` of TypeScript types.
 - `kanagata/client` (`src/client.ts`): one function over `fetch`, typed by those types; `kanagata init` copies it into a project.

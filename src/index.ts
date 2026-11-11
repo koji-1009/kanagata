@@ -1,4 +1,4 @@
-// Generate TypeScript declarations from OpenAPI 3.0 / 3.1 (JSON or YAML).
+// Generate TypeScript declarations from OpenAPI 3.0 / 3.1 / 3.2 (JSON or YAML).
 
 import { type Decl, render } from "./emit.ts";
 import { GenerateError } from "./error.ts";
@@ -61,7 +61,8 @@ export function generate(src: string, source?: Source): Generated {
 	const cx: Ctx = new Ctx(
 		root,
 		new Set(schemas.map(([k]) => k)),
-		(root.get("openapi") as string).startsWith("3.1."),
+		// 3.1 and 3.2 Schema Objects are JSON Schema 2020-12.
+		!(root.get("openapi") as string).startsWith("3.0."),
 		source && {
 			url: source.url,
 			load: (url) => loadText(cx, url, source.read(url)),
@@ -211,10 +212,11 @@ function differingViews(components: readonly Component[]): Set<string> {
 function checkVersion(root: JsonObject): void {
 	const v = root.get("openapi");
 	if (typeof v === "string") {
-		if (v.startsWith("3.0.") || v.startsWith("3.1.")) return;
+		if (v.startsWith("3.0.") || v.startsWith("3.1.") || v.startsWith("3.2."))
+			return;
 		throw new DiagError(
 			"#/openapi",
-			`unsupported OpenAPI version ${JSON.stringify(v)} (3.0.x or 3.1.x required)`,
+			`unsupported OpenAPI version ${JSON.stringify(v)} (3.0.x, 3.1.x or 3.2.x required)`,
 		);
 	}
 	if (v !== undefined)

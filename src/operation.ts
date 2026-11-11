@@ -18,14 +18,14 @@ import {
 	type View,
 } from "./ty.ts";
 
-const LOCATIONS = ["path", "query", "header", "cookie"];
+const LOCATIONS = ["path", "query", "querystring", "header", "cookie"];
 
 /** Header parameters OpenAPI says to ignore, in lower case. */
 const RESERVED_HEADERS = ["accept", "content-type", "authorization"];
 
 export interface Paths {
 	paths: Prop[];
-	/** Present only when the document has `webhooks` (3.1). */
+	/** Present only when the document has `webhooks` (3.1 and later). */
 	webhooks?: Prop[];
 	operations: Prop[];
 }
@@ -72,10 +72,7 @@ function pathItems(
 		const methods = cx.derefIn(rawItem, itemAt, (value) => {
 			const item = value as JsonObject;
 			const methods: Prop[] = [];
-			for (const method of METHODS) {
-				const op = item.get(method) as JsonObject | undefined;
-				if (op === undefined) continue;
-				const opAt = child(itemAt, method);
+			for (const [method, op, opAt] of itemOperations(cx, item, itemAt)) {
 				// A webhook is called by the API: it sends the request and reads the response.
 				const sent: View = key === "webhooks" ? "read" : "write";
 				// fetch cannot send a body with GET or HEAD (OpenAPI 3.0 has consumers ignore
@@ -95,6 +92,44 @@ function pathItems(
 			return methods;
 		});
 		out.push(prop(path, object(methods)));
+	}
+	return out;
+}
+
+/**
+ * A Path Item's operations, keyed by method: its fixed fields in OpenAPI's order, then its
+ * `additionalOperations`, whose keys are methods as they are sent (`COPY`). `query` and
+ * `additionalOperations` are OpenAPI 3.2 fields.
+ */
+function itemOperations(
+	cx: Ctx,
+	item: JsonObject,
+	itemAt: string,
+): [method: string, op: JsonObject, at: string][] {
+	const out: [string, JsonObject, string][] = [];
+	for (const method of METHODS) {
+		if (method === "query" && !cx.v32) continue;
+		const op = item.get(method) as JsonObject | undefined;
+		if (op !== undefined) out.push([method, op, child(itemAt, method)]);
+	}
+	const more = cx.v32
+		? (item.get("additionalOperations") as JsonObject | undefined)
+		: undefined;
+	const moreAt = child(itemAt, "additionalOperations");
+	for (const [method, op] of more?.entries ?? []) {
+		const at = child(moreAt, method);
+		// OpenAPI forbids the method a fixed field sends (`POST` for `post`); the field's own
+		// name would be that field in the declarations. Methods are case-sensitive, so
+		// `Patch` is another method.
+		const field = METHODS.find(
+			(m) => method === m || method === m.toUpperCase(),
+		);
+		if (field !== undefined)
+			throw new DiagError(
+				at,
+				`${method} is the Path Item's ${field} field, so additionalOperations must not have it`,
+			);
+		out.push([method, op as JsonObject, at]);
 	}
 	return out;
 }
@@ -132,14 +167,20 @@ function operation(
 	collectParams(cx, params, o, at);
 	const groups: Prop[] = [];
 	for (const loc of LOCATIONS) {
+		// `in: querystring` is OpenAPI 3.2.
+		if (loc === "querystring" && !cx.v32) continue;
 		const props: Prop[] = [];
 		for (const [p, pAt, base] of params) {
 			if (p.str("in") !== loc) continue;
 			const optional = loc !== "path" && p.get("required") !== true;
+			const whole = loc === "querystring";
 			const ty = cx.inMode(sent, () =>
-				cx.withBase(base, () => paramType(cx, p, pAt)),
+				cx.withBase(base, () => paramType(cx, p, pAt, whole)),
 			);
-			props.push(documented(p.str("name") as string, ty, optional, doc(p)));
+			// The whole query string (3.2) is one value; its name is not sent.
+			if (whole) groups.push(documented(loc, ty, optional, doc(p)));
+			else
+				props.push(documented(p.str("name") as string, ty, optional, doc(p)));
 		}
 		if (props.length === 0) continue;
 		groups.push({
@@ -222,9 +263,11 @@ function collectParam(cx: Ctx, out: Param[], value: Value, pAt: string): void {
 	const name = p.str("name") as string;
 	const loc = p.str("in") as string;
 	if (loc === "header" && RESERVED_HEADERS.includes(asciiLower(name))) return;
-	// Header names are case-insensitive, so `X-Id` replaces `x-id`.
+	// Header names are case-insensitive, so `X-Id` replaces `x-id`; an operation has one
+	// querystring, whose name is not sent.
 	const same = (n: string) =>
-		loc === "header" ? asciiLower(n) === asciiLower(name) : n === name;
+		loc === "querystring" ||
+		(loc === "header" ? asciiLower(n) === asciiLower(name) : n === name);
 	// Collected parameters all have a name.
 	const slot = out.findIndex(
 		([q]) => q.str("in") === loc && same(q.str("name") as string),
@@ -240,18 +283,42 @@ function asciiLower(s: string): string {
 	return s.replace(/[A-Z]/g, (c) => c.toLowerCase());
 }
 
-/** The type of a parameter or header: its `schema`, or the schema of its one `content` media type. */
-function paramType(cx: Ctx, p: JsonObject, at: string): Ty {
+/**
+ * The type of a parameter or header: its `schema`, or the schema of its one `content`
+ * media type. A querystring (`whole`) is that schema for application/x-www-form-urlencoded,
+ * which the client URL-encodes; for any other media type it is the serialized text, a string.
+ */
+function paramType(cx: Ctx, p: JsonObject, at: string, whole = false): Ty {
 	const s = p.get("schema");
 	if (s !== undefined) return schema(cx, s, child(at, "schema"));
-	const [[mt, m]] = (p.get("content") as JsonObject).entries as [
-		[string, JsonObject],
+	const [[mt, raw]] = (p.get("content") as JsonObject).entries as [
+		[string, Value],
 	];
-	return schema(
-		cx,
-		m.get("schema") as Value,
-		child(child(child(at, "content"), mt), "schema"),
-	);
+	const mAt = child(child(at, "content"), mt);
+	return mediaType(cx, raw, mAt, (m) => {
+		const ty = schema(cx, m.get("schema") as Value, child(mAt, "schema"));
+		const urlEncoded = essence(mt) === "application/x-www-form-urlencoded";
+		return whole && !urlEncoded ? STRING : ty;
+	});
+}
+
+/** The media type without parameters, in lower case, as the client compares it. */
+function essence(mt: string): string {
+	return (mt.split(";")[0] as string).trim().toLowerCase();
+}
+
+/**
+ * Runs `f` on a Media Type Object, which may be a `$ref` in OpenAPI 3.2
+ * (`components.mediaTypes`); before 3.2, `$ref` is no field of it.
+ */
+function mediaType<T>(
+	cx: Ctx,
+	raw: Value,
+	at: string,
+	f: (m: JsonObject) => T,
+): T {
+	if (!cx.v32) return f(raw as JsonObject);
+	return cx.derefIn(raw, at, (m) => f(m as JsonObject));
 }
 
 /** `{ Name: T }` for a response's `headers`; Content-Type is ignored, as OpenAPI requires. */
@@ -284,19 +351,23 @@ function headers(cx: Ctx, response: Value, at: string): Ty | undefined {
  * `{ "<media type>": T }` for a non-empty `content`, keeping every media type.
  * A binary media type is `Blob` and a text one `string` whatever its schema says, as is
  * a form in a response (read view): that is what the client reads and sends. The schema
- * is still converted so its errors are reported.
+ * is still converted so its errors are reported, and so is `itemSchema` (3.2): the client
+ * reads a sequential media type (`application/jsonl`, `text/event-stream`) whole, as these
+ * rules say, not item by item.
  */
 function content(cx: Ctx, owner: Value, at: string): Ty | undefined {
 	const media = (owner as JsonObject).get("content") as JsonObject | undefined;
 	if (media === undefined || media.entries.length === 0) return undefined;
 	const base = child(at, "content");
 	return object(
-		media.entries.map(([mt, m]) => {
-			const s = (m as JsonObject).get("schema");
-			const ty =
-				s === undefined
-					? UNKNOWN
-					: schema(cx, s, child(child(base, mt), "schema"));
+		media.entries.map(([mt, raw]) => {
+			const mAt = child(base, mt);
+			const ty = mediaType(cx, raw, mAt, (m) => {
+				const items = cx.v32 ? m.get("itemSchema") : undefined;
+				if (items !== undefined) schema(cx, items, child(mAt, "itemSchema"));
+				const s = m.get("schema");
+				return s === undefined ? UNKNOWN : schema(cx, s, child(mAt, "schema"));
+			});
 			const text = isTextMedia(mt) || (cx.mode === "read" && isFormMedia(mt));
 			return prop(mt, isBinaryMedia(mt) ? BLOB : text ? STRING : ty);
 		}),

@@ -1,0 +1,30 @@
+{
+  "openapi": "3.1.0",
+  "$self": "https://[",
+  "paths": {
+    "/r": {
+      "query": { "responses": {} },
+      "additionalOperations": { "COPY": { "responses": {} } },
+      "get": {
+        "description": "OpenAPI 3.2 fields are no fields of a 3.1 document: $self, query, additionalOperations, in: querystring, a $ref as a Media Type Object, itemSchema.",
+        "parameters": [
+          { "name": "q", "in": "querystring", "content": { "text/plain": { "schema": { "type": "string" } } } },
+          { "name": "f", "in": "query", "content": { "application/json": { "$ref": "#/components/schemas/Filter" } } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "$ref": "#/components/schemas/Filter" },
+              "text/event-stream": { "itemSchema": { "not": {} } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Filter": { "type": "object" }
+    }
+  }
+}

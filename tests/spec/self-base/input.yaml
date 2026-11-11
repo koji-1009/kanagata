@@ -1,0 +1,33 @@
+openapi: 3.2.0
+# The base URI is $self, resolved against where the document was read: v1/openapi.yaml
+# next to it, so `openapi.yaml` is this document and `../common.yaml` the file beside it.
+$self: v1/openapi.yaml
+paths:
+  /users/{id}:
+    get:
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          headers:
+            X-Code:
+              schema: { $ref: "../common.yaml#/components/schemas/Code" }
+          content:
+            application/json:
+              schema: { $ref: "openapi.yaml#/components/schemas/User" }
+        "404":
+          content:
+            application/json:
+              schema: { $ref: "../common.yaml#/components/schemas/Error" }
+        "409":
+          content:
+            application/json:
+              # This document by the URL it is read from.
+              schema: { $ref: "../input.yaml#/components/schemas/User" }
+components:
+  schemas:
+    User:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }
