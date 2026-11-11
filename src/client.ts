@@ -110,11 +110,12 @@ export type ParseAs = "json" | "text" | "blob" | "arrayBuffer" | "stream";
 
 /**
  * Arrays in queries and URL-encoded bodies: `ids=1&ids=2` (repeat, default),
- * `ids[]=1&ids[]=2` (brackets), `ids=1,2` (comma), `ids=1%202` (space), `ids=1|2` (pipe).
+ * `ids%5B%5D=1&ids%5B%5D=2` (brackets), `ids=1,2` (comma), `ids=1%202` (space),
+ * `ids=1%7C2` (pipe).
  */
 export type ArrayFormat = "repeat" | "brackets" | "comma" | "space" | "pipe";
 
-/** Objects in queries and URL-encoded bodies: `a[b]=1` (deepObject, default) or `a={"b":1}` (json). */
+/** Objects in queries and URL-encoded bodies: `a%5Bb%5D=1` (deepObject, default) or `a={"b":1}` (json). */
 export type ObjectFormat = "deepObject" | "json";
 
 /**
@@ -532,7 +533,10 @@ interface Formats {
 	object: ObjectFormat;
 }
 
-/** `a=1&b[c]=2`: a query string, or a URL-encoded body. undefined and null are left out. */
+/**
+ * `a=1&b%5Bc%5D=2`: a query string, or a URL-encoded body. The delimiters `[`, `]`
+ * and `|` are percent-encoded, as OpenAPI requires. undefined and null are left out.
+ */
 function urlEncode(fields: Record<string, unknown>, formats: Formats): string {
 	const parts: string[] = [];
 	for (const [name, value] of Object.entries(fields))
@@ -543,7 +547,7 @@ function urlEncode(fields: Record<string, unknown>, formats: Formats): string {
 const JOINERS: Partial<Record<ArrayFormat, string>> = {
 	comma: ",",
 	space: "%20",
-	pipe: "|",
+	pipe: "%7C",
 };
 
 function serialize(
@@ -573,7 +577,7 @@ function serialize(
 			if (items.length > 0) parts.push(`${key}=${items.join(joiner)}`);
 			return;
 		}
-		const itemKey = formats.array === "brackets" ? `${key}[]` : key;
+		const itemKey = formats.array === "brackets" ? `${key}%5B%5D` : key;
 		for (const item of items) parts.push(`${itemKey}=${item}`);
 	} else if (typeof value === "object" && !(value instanceof Date)) {
 		if (formats.object === "json") {
@@ -581,7 +585,12 @@ function serialize(
 			return;
 		}
 		for (const [name, item] of Object.entries(value)) {
-			serialize(parts, `${key}[${encodeURIComponent(name)}]`, item, formats);
+			serialize(
+				parts,
+				`${key}%5B${encodeURIComponent(name)}%5D`,
+				item,
+				formats,
+			);
 		}
 	} else {
 		parts.push(`${key}=${encodeURIComponent(scalar(value))}`);

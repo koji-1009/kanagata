@@ -170,10 +170,10 @@ test("query arrays in brackets format", async () => {
 	await client(rec, { arrayFormat: "brackets" }).get("/q", {
 		query: { ids: [1, 2] },
 	});
-	assert.equal(new URL(rec.request(0).url).search, "?ids[]=1&ids[]=2");
+	assert.equal(new URL(rec.request(0).url).search, "?ids%5B%5D=1&ids%5B%5D=2");
 });
 
-test("nested objects use deepObject and dates use ISO strings", async () => {
+test("nested objects use deepObject, its brackets percent-encoded, and dates use ISO strings", async () => {
 	const rec = recorder();
 	const when = new Date("2026-11-09T00:00:00Z");
 	await client(rec).get("/q", {
@@ -181,7 +181,8 @@ test("nested objects use deepObject and dates use ISO strings", async () => {
 	});
 	assert.equal(
 		new URL(rec.request(0).url).search,
-		"?filter[name]=n&filter[tag]=a&filter[tag]=b&since=2026-11-09T00%3A00%3A00.000Z",
+		// OpenAPI requires [ and ] percent-encoded (3.1.1, Appendix E).
+		"?filter%5Bname%5D=n&filter%5Btag%5D=a&filter%5Btag%5D=b&since=2026-11-09T00%3A00%3A00.000Z",
 	);
 });
 
@@ -203,7 +204,8 @@ test("query arrays joined by comma, space or pipe; per-call arrayFormat wins", a
 	assert.deepEqual(search, [
 		"?ids=1,a%20b,3&when=2026-11-10T00%3A00%3A00.000Z",
 		"?ids=1%20a%20b%203&when=2026-11-10T00%3A00%3A00.000Z",
-		"?ids=1|a%20b|3&when=2026-11-10T00%3A00%3A00.000Z",
+		// | is percent-encoded too, as OpenAPI's pipeDelimited example has it.
+		"?ids=1%7Ca%20b%7C3&when=2026-11-10T00%3A00%3A00.000Z",
 		"?ids=1&ids=2",
 	]);
 });
@@ -283,7 +285,7 @@ test("objects and arrays inside query arrays are JSON in every arrayFormat", asy
 		[
 			"?f=%7B%22a%22%3A1%7D,%5B2%2C3%5D,4",
 			"?f=%7B%22a%22%3A1%7D&f=%5B2%2C3%5D&f=4",
-			"?f[]=%7B%22a%22%3A1%7D&f[]=%5B2%2C3%5D&f[]=4",
+			"?f%5B%5D=%7B%22a%22%3A1%7D&f%5B%5D=%5B2%2C3%5D&f%5B%5D=4",
 		],
 	);
 	// So in URL-encoded bodies, which are serialized the same way.
@@ -426,7 +428,7 @@ test("contentType: an object body is URL-encoded", async () => {
 	);
 	assert.equal(
 		await req.text(),
-		"q=a%20b&n=1&tags=x&tags=y&when=2026-11-10T00%3A00%3A00.000Z&meta[k]=1",
+		"q=a%20b&n=1&tags=x&tags=y&when=2026-11-10T00%3A00%3A00.000Z&meta%5Bk%5D=1",
 	);
 	await assert.rejects(
 		client(rec).post("/f", {
@@ -457,10 +459,10 @@ test("URL-encoded bodies follow arrayFormat and objectFormat, like queries", asy
 		objectFormat: "deepObject",
 	});
 	assert.deepEqual(await Promise.all(rec.requests.map((r) => r.text())), [
-		"address[city]=Tokyo&address[lines]=1&address[lines]=2&expand=a&expand=b",
-		"address[city]=Tokyo&address[lines][]=1&address[lines][]=2&expand[]=a&expand[]=b",
+		"address%5Bcity%5D=Tokyo&address%5Blines%5D=1&address%5Blines%5D=2&expand=a&expand=b",
+		"address%5Bcity%5D=Tokyo&address%5Blines%5D%5B%5D=1&address%5Blines%5D%5B%5D=2&expand%5B%5D=a&expand%5B%5D=b",
 		"address=%7B%22city%22%3A%22Tokyo%22%2C%22lines%22%3A%5B%221%22%2C%222%22%5D%7D&expand=a&expand=b",
-		"address[city]=Tokyo&address[lines]=1&address[lines]=2&expand=a&expand=b",
+		"address%5Bcity%5D=Tokyo&address%5Blines%5D=1&address%5Blines%5D=2&expand=a&expand=b",
 	]);
 });
 
