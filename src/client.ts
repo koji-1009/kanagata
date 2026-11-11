@@ -624,6 +624,8 @@ function simple(value: unknown): string[] {
  * `.`, `..`). Thrown before anything is sent; a TypeError, which fetch's network errors are too.
  */
 export class PathParameterError extends TypeError {
+	// A string, not the class's name, which a minifier may shorten.
+	override readonly name = "PathParameterError";
 	/** The parameter's name in the path template. */
 	readonly parameter: string;
 	readonly value: unknown;
@@ -817,6 +819,7 @@ async function readData(
 
 /** A body that is not valid JSON where its content-type (or parseAs) says JSON, such as an HTML error page. */
 export class ResponseBodyError extends Error {
+	override readonly name = "ResponseBodyError";
 	readonly response: Response;
 	readonly text: string;
 

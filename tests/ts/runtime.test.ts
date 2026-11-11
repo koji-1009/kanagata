@@ -193,6 +193,7 @@ test("a missing path parameter throws PathParameterError, a TypeError", async ()
 		await assert.rejects(client(rec).get("/files/{name}", init), (e) => {
 			assert.ok(e instanceof PathParameterError);
 			assert.ok(e instanceof TypeError);
+			assert.equal(e.name, "PathParameterError");
 			assert.equal(e.message, "missing path parameter: name");
 			assert.equal(e.parameter, "name");
 			assert.equal(e.value, init?.path.name);
@@ -211,6 +212,7 @@ test("a path parameter that would change the path throws PathParameterError, a T
 			(e) => {
 				assert.ok(e instanceof PathParameterError);
 				assert.ok(e instanceof TypeError);
+				assert.equal(e.name, "PathParameterError");
 				assert.equal(
 					e.message,
 					`path parameter name would change the path: ${JSON.stringify(name)}`,
@@ -1059,6 +1061,7 @@ test("a body that does not parse as its content-type says throws with the respon
 	);
 	await assert.rejects(api.get("/r"), (e: unknown) => {
 		assert.ok(e instanceof ResponseBodyError);
+		assert.equal(e.name, "ResponseBodyError");
 		assert.equal(e.response.status, 502);
 		assert.equal(e.text, "<html>bad gateway</html>");
 		return true;
