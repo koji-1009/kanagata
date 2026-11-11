@@ -1,6 +1,7 @@
 name: release
 
-# Publishes to npm with trusted publishing (OIDC): no token, provenance added by pnpm.
+# Stages the release on npm with trusted publishing (OIDC): no token, with provenance.
+# A maintainer approves it with 2FA (`pnpm stage approve` or npmjs.com) to make it public.
 on:
   push:
     tags: ["v*"]
@@ -15,4 +16,4 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
       - run: pnpm test
-      - run: pnpm publish
+      - run: pnpm stage publish --provenance
