@@ -1,5 +1,5 @@
 // Type tests for client.ts, checked by `tsc -p tests/ts`. Nothing here runs.
-// The schemas are the hand-written expectations in tests/spec/basic and tests/spec/client.
+// The schemas are the hand-written expectations in tests/spec.
 
 import {
 	type Client,
@@ -7,10 +7,16 @@ import {
 	type Method,
 	type ParseAs,
 } from "../../src/client.ts";
+import type * as AnyOf from "../spec/anyof/expected";
 import type * as Basic from "../spec/basic/expected";
 import type * as Api from "../spec/client/expected";
+import type * as Composition from "../spec/composition-with-type/expected";
+import type * as Missing from "../spec/object-required-optional/expected";
 import type * as Cookies from "../spec/params-header-cookie/expected";
+import type * as Derived from "../spec/read-write-allof/expected";
 import type * as ReadWrite from "../spec/read-write-only/expected";
+import type * as RefSiblings from "../spec/ref-siblings-31/expected";
+import type * as AnyRef from "../spec/required-any-ref/expected";
 import type * as NoResponses from "../spec/responses-missing/expected";
 import type * as Servers from "../spec/servers/expected";
 
@@ -623,4 +629,51 @@ export async function parameters(): Promise<void> {
 		headers: { authorization: "Bearer t" },
 		signal: AbortSignal.timeout(1000),
 	});
+}
+
+export function requiredOfAnyValue(
+	o: Composition.O,
+	p: Composition.P,
+	ext: RefSiblings.Ext,
+	derived: Derived.DerivedInput,
+): void {
+	// A key another member requires reads as the type its property schema gives.
+	expectType<Equal<typeof o.a, string>>();
+	expectType<Equal<typeof p.a, string>>();
+	expectType<Equal<typeof ext.id, string>>();
+	expectType<Equal<typeof derived.name, string>>();
+	// @ts-expect-error a is required
+	const missing: Composition.O = {};
+	// @ts-expect-error a must be a string
+	const wrong: Composition.O = { a: 1 };
+	// One of the anyOf members must hold.
+	const phone: AnyOf.Contact = { phone: "1" };
+	// @ts-expect-error neither email nor phone
+	const neither: AnyOf.Contact = {};
+	// Without a property schema, or with one that admits anything, the key admits any
+	// value but must be present.
+	const any: Missing.User = { id: 1, missing: null, anything: [1] };
+	// @ts-expect-error missing is required
+	const absent: Missing.User = { id: 1, anything: 1 };
+	// @ts-expect-error a required key cannot be undefined, which JSON cannot carry
+	const undef: Missing.User = { id: 1, missing: 1, anything: undefined };
+	void [missing, wrong, phone, neither, any, absent, undef];
+}
+
+export function requiredRefOfAnyValue(
+	narrowed: AnyRef.Narrowed,
+	box: AnyRef.Box,
+): void {
+	// A $ref to a schema of any value is any value too: any JSON value, not undefined.
+	type AnyJson = NonNullable<unknown> | null;
+	expectType<Equal<typeof narrowed.a, string>>();
+	expectType<Equal<typeof box.a, AnyJson>>();
+	expectType<Equal<typeof box.b, AnyJson>>();
+	expectType<Equal<typeof box.n, AnyJson>>();
+	expectType<Equal<typeof box.both, AnyJson>>();
+	const ok: AnyRef.Box = { a: 1, b: [], c: "c", n: null, both: "x" };
+	// @ts-expect-error a required key cannot be undefined
+	const undef: AnyRef.Box = { a: undefined, b: 1, c: "c", n: null, both: 1 };
+	void ok;
+	void undef;
 }

@@ -12,5 +12,5 @@ export interface schemas {
 export type Anything = unknown;
 
 export type Box = {
-  value: unknown;
+  value: {} | null;
 };

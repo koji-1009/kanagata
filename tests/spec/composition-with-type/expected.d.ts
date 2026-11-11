@@ -8,6 +8,7 @@ export interface schemas {
   S: S;
   N: N;
   O: O;
+  P: P;
 }
 
 /** type next to oneOf still applies. */
@@ -16,7 +17,13 @@ export type S = string;
 export type N = string | null;
 
 export type O = {
-  a: unknown;
+  a: {} | null;
+} & {
+  a?: string;
+};
+
+export type P = {
+  a: {} | null;
 } & {
   a?: string;
 };

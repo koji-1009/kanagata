@@ -32,6 +32,9 @@ export class Out {
 			case "boolean":
 				this.buf += t.kind;
 				break;
+			case "nonNullish":
+				this.buf += "{}";
+				break;
 			case "integer":
 				this.buf += "number";
 				break;

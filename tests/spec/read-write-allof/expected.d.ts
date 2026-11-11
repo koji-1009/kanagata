@@ -29,13 +29,13 @@ export type Derived = {
   id?: string;
   name?: string;
 } & {
-  id: unknown;
-  name: unknown;
+  id: {} | null;
+  name: {} | null;
 };
 
 /** required next to allOf does not bring back a readOnly property when sending. */
 export type DerivedInput = {
   name?: string;
 } & {
-  name: unknown;
+  name: {} | null;
 };

@@ -5,6 +5,8 @@ export interface Prop {
 	ty: Ty;
 	optional: boolean;
 	doc?: string;
+	/** A key a JSON object must have: its value is a JSON value, never `undefined` (see `presentKeys`). */
+	present?: true;
 }
 
 /** Which view of a component schema a reference means: as returned, or as sent. */
@@ -12,6 +14,8 @@ export type View = "read" | "write";
 
 export type Ty =
 	| { kind: "unknown" }
+	/** `{}`: any value but `null` and `undefined`. */
+	| { kind: "nonNullish" }
 	| { kind: "never" }
 	| { kind: "null" }
 	| { kind: "undefined" }
@@ -43,6 +47,7 @@ export type Ty =
 	| { kind: "inter"; items: Ty[] };
 
 export const UNKNOWN: Ty = { kind: "unknown" };
+export const NON_NULLISH: Ty = { kind: "nonNullish" };
 export const NEVER: Ty = { kind: "never" };
 export const NULL: Ty = { kind: "null" };
 export const UNDEFINED: Ty = { kind: "undefined" };
@@ -52,6 +57,8 @@ export const INTEGER: Ty = { kind: "integer" };
 export const BOOLEAN: Ty = { kind: "boolean" };
 export const BLOB: Ty = { kind: "blob" };
 export const RECORD: Ty = { kind: "record" };
+/** `{} | null`: any JSON value. */
+export const ANY_JSON: Ty = { kind: "union", items: [NON_NULLISH, NULL] };
 
 export const lit = (text: string): Ty => ({ kind: "lit", text });
 export const ref = (schema: string, view: View = "read"): Ty => ({
@@ -92,6 +99,7 @@ export function equal(a: Ty, b: Ty, views = true): boolean {
 				p.key === q.key &&
 				p.optional === q.optional &&
 				p.doc === q.doc &&
+				p.present === q.present &&
 				eq(p.ty, q.ty)
 			);
 		});
@@ -158,6 +166,65 @@ export function refs(t: Ty, out = new Set<string>()): Set<string> {
 			break;
 	}
 	return out;
+}
+
+/**
+ * Whether a type admits any value: `unknown`, a union with a member that does, an
+ * intersection of such types, or a reference to a component whose type (`resolve`) does.
+ */
+export function admitsAny(
+	t: Ty,
+	resolve: (r: { schema: string; view: View }) => boolean,
+): boolean {
+	switch (t.kind) {
+		case "unknown":
+			return true;
+		case "ref":
+			return resolve(t);
+		case "union":
+			return t.items.some((i) => admitsAny(i, resolve));
+		case "inter":
+			return t.items.every((i) => admitsAny(i, resolve));
+		default:
+			return false;
+	}
+}
+
+/**
+ * Adds `{} | null` to each key a JSON object must have (`Prop.present`) whose type
+ * admits any value (`any`): such a type admits `undefined` in TypeScript, which would
+ * stay in the type another member gives (`{ a?: string } & { a: unknown }` reads `a`
+ * as `string | undefined`), while JSON has no `undefined`. `unknown` becomes `{} | null`.
+ */
+export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
+	const go = (u: Ty) => presentKeys(u, any);
+	const props = (ps: Prop[]) =>
+		ps.map((p) => {
+			const ty = go(p.ty);
+			return { ...p, ty: p.present && any(ty) ? inter([ty, ANY_JSON]) : ty };
+		});
+	switch (t.kind) {
+		case "array":
+			return { kind: "array", elem: go(t.elem) };
+		case "tuple":
+			return t.rest === undefined
+				? { kind: "tuple", items: t.items.map(go), min: t.min }
+				: {
+						kind: "tuple",
+						items: t.items.map(go),
+						min: t.min,
+						rest: go(t.rest),
+					};
+		case "object":
+			return { kind: "object", props: props(t.props) };
+		case "map":
+			return { kind: "map", props: props(t.props), index: go(t.index) };
+		case "union":
+		case "inter":
+			return { kind: t.kind, items: t.items.map(go) };
+		default:
+			return t;
+	}
 }
 
 /**

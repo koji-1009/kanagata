@@ -18,7 +18,7 @@ export type Contact = {
   email?: string;
   phone?: string;
 } & ({
-  email: unknown;
+  email: {} | null;
 } | {
-  phone: unknown;
+  phone: {} | null;
 });

@@ -15,5 +15,8 @@ export type User = {
     city: string;
     zip?: string;
   };
-  missing: unknown;
+  /** Any value, as when no property schema is given. */
+  anything: {} | null;
+  extra?: unknown;
+  missing: {} | null;
 };

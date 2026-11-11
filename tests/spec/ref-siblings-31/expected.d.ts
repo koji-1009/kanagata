@@ -17,7 +17,7 @@ export type Base = {
 /** In 3.1, keywords next to $ref apply too. */
 export type Ext = Base & {
   tag?: string;
-  id: unknown;
+  id: {} | null;
 };
 
 /** Only an annotation next to $ref. */

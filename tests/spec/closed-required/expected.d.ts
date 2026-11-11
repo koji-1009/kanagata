@@ -20,17 +20,17 @@ export type Campaign = {
   name?: string;
   code?: string;
 } & {
-  code: unknown;
+  code: {} | null;
 };
 
 export type Secret = {
-  secret: unknown;
+  secret: {} | null;
 };
 
 export type ThroughRef = {
   a?: string;
 } & {
-  a: unknown;
+  a: {} | null;
 };
 
 export type AllOfUndeclared = never;
@@ -38,13 +38,13 @@ export type AllOfUndeclared = never;
 export type Open = {
   code?: string;
 } & ({
-  code: unknown;
+  code: {} | null;
 } | {
-  secret: unknown;
+  secret: {} | null;
 });
 
 export type Patterned = {
   code?: string;
-  "x-id": unknown;
+  "x-id": {} | null;
   [key: string]: unknown;
 };

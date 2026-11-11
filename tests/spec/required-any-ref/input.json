@@ -1,0 +1,44 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/boxes": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/Anything" } } }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Anything" } } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Anything": true,
+      "Alias": { "$ref": "#/components/schemas/Anything" },
+      "Name": { "type": "string" },
+      "Box": {
+        "type": "object",
+        "required": ["a", "b", "c", "n", "both"],
+        "properties": {
+          "a": { "$ref": "#/components/schemas/Anything" },
+          "b": { "$ref": "#/components/schemas/Alias" },
+          "c": { "$ref": "#/components/schemas/Name" },
+          "n": { "anyOf": [{ "$ref": "#/components/schemas/Anything" }, { "type": "null" }] },
+          "both": { "allOf": [{ "$ref": "#/components/schemas/Anything" }, { "$ref": "#/components/schemas/Alias" }] },
+          "d": { "$ref": "#/components/schemas/Anything" }
+        }
+      },
+      "Narrowed": {
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "allOf": [{ "properties": { "a": { "$ref": "#/components/schemas/Anything" } }, "required": ["a"] }]
+      }
+    }
+  }
+}

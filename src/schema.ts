@@ -377,6 +377,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 			ty: schema(cx, s, child(base, key)),
 			optional: !required.includes(key),
 		};
+		if (!p.optional) p.present = true;
 		const d = doc(s);
 		if (d !== undefined) p.doc = d;
 		props.push(p);
@@ -394,7 +395,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	// A required key without a property schema must be present with any value.
 	for (const name of required) {
 		if (!left.has(name) && !props.some((p) => p.key === name))
-			props.push(prop(name, UNKNOWN));
+			props.push({ ...prop(name, UNKNOWN), present: true });
 	}
 
 	const ap = v.get("additionalProperties");

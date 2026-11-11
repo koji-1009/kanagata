@@ -7,7 +7,17 @@ import { get, JsonObject, parse, type Value } from "./json.ts";
 import { paths } from "./operation.ts";
 import { Ctx, child, type Diag, DiagError, type Hoisted } from "./pointer.ts";
 import { doc, schema } from "./schema.ts";
-import { equal, type Prop, prop, ref, refs, type Ty, type View } from "./ty.ts";
+import {
+	admitsAny,
+	equal,
+	type Prop,
+	presentKeys,
+	prop,
+	ref,
+	refs,
+	type Ty,
+	type View,
+} from "./ty.ts";
 import { parseYaml } from "./yaml.ts";
 
 export { GenerateError } from "./error.ts";
@@ -105,6 +115,9 @@ export function generate(src: string, source?: Source): Generated {
 		(view === "write" ? writeName.get(key) : undefined) ??
 		(readName.get(key) as string);
 
+	// Whether a type admits any value can depend on the components it refers to, so keys
+	// a JSON object must have get `{} | null` once all of them are converted.
+	const present = presentIn(components);
 	const decls: Decl[] = [];
 	const index: Prop[] = [];
 	for (const c of components) {
@@ -112,12 +125,18 @@ export function generate(src: string, source?: Source): Generated {
 		const decl = (n: string, ty: Ty): Decl =>
 			d === undefined ? { name: n, ty } : { name: n, ty, doc: d };
 		index.push(prop(c.key, ref(c.key)));
-		decls.push(decl(c.name, c.read));
+		decls.push(decl(c.name, present(c.read)));
 		const w = writeName.get(c.key);
-		if (w !== undefined) decls.push(decl(w, c.write));
+		if (w !== undefined) decls.push(decl(w, present(c.write)));
 	}
+	const props = (ps: Prop[]) => ps.map((q) => ({ ...q, ty: present(q.ty) }));
+	const ops = {
+		paths: props(p.paths),
+		operations: props(p.operations),
+		...(p.webhooks === undefined ? {} : { webhooks: props(p.webhooks) }),
+	};
 
-	const code = render({ ...p, schemas: index, decls }, name);
+	const code = render({ ...ops, schemas: index, decls }, name);
 	return { code, warnings: [...read, ...cx.warnings] };
 }
 
@@ -147,6 +166,25 @@ interface Converted {
 
 interface Component extends Converted {
 	name: string;
+}
+
+/** `presentKeys`, with references resolved to the components' types in their view. */
+function presentIn(components: readonly Component[]): (t: Ty) => Ty {
+	const byKey = new Map(components.map((c) => [c.key, c]));
+	const known = new Map<string, boolean>();
+	const any = (t: Ty): boolean =>
+		admitsAny(t, ({ schema, view }) => {
+			const id = `${view} ${schema}`;
+			const seen = known.get(id);
+			if (seen !== undefined) return seen;
+			// A component that reaches itself is an object, array or tuple, not any value.
+			known.set(id, false);
+			const c = byKey.get(schema) as Component;
+			const result = any(view === "write" ? c.write : c.read);
+			known.set(id, result);
+			return result;
+		});
+	return (t) => presentKeys(t, any);
 }
 
 /**
