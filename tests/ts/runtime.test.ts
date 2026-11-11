@@ -10,6 +10,7 @@ import {
 	type DataCall,
 	type Method,
 	type ParseAs,
+	PathParameterError,
 	type RequestOptions,
 	ResponseBodyError,
 } from "../../src/client.ts";
@@ -186,25 +187,37 @@ test("path parameter arrays and objects use the simple style", async () => {
 	assert.equal(new URL(rec.request(0).url).pathname, "/v1/a/1,x%20y/b/x,1,y,2");
 });
 
-test("a missing path parameter throws TypeError", async () => {
+test("a missing path parameter throws PathParameterError, a TypeError", async () => {
 	const rec = recorder();
-	await assert.rejects(
-		client(rec).get("/files/{name}", { path: {} }),
-		TypeError,
-	);
-	await assert.rejects(client(rec).get("/files/{name}"), TypeError);
+	for (const init of [{ path: {} }, { path: { name: null } }, undefined]) {
+		await assert.rejects(client(rec).get("/files/{name}", init), (e) => {
+			assert.ok(e instanceof PathParameterError);
+			assert.ok(e instanceof TypeError);
+			assert.equal(e.message, "missing path parameter: name");
+			assert.equal(e.parameter, "name");
+			assert.equal(e.value, init?.path.name);
+			return true;
+		});
+	}
 	assert.equal(rec.requests.length, 0);
 });
 
-test("a path parameter that would change the path throws TypeError", async () => {
+test("a path parameter that would change the path throws PathParameterError, a TypeError", async () => {
 	const rec = recorder();
 	// The URL parser resolves `.` and `..` segments (encoded or not), and `""` empties one.
 	for (const name of [".", "..", "", []]) {
 		await assert.rejects(
 			client(rec).get("/files/{name}/meta", { path: { name } }),
-			{
-				name: "TypeError",
-				message: `path parameter name would change the path: ${JSON.stringify(name)}`,
+			(e) => {
+				assert.ok(e instanceof PathParameterError);
+				assert.ok(e instanceof TypeError);
+				assert.equal(
+					e.message,
+					`path parameter name would change the path: ${JSON.stringify(name)}`,
+				);
+				assert.equal(e.parameter, "name");
+				assert.equal(e.value, name);
+				return true;
 			},
 		);
 	}

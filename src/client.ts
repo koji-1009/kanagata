@@ -619,16 +619,39 @@ function simple(value: unknown): string[] {
 	return parts.map(scalar);
 }
 
+/**
+ * A path parameter the URL cannot carry: missing, or one that would change the path (`""`,
+ * `.`, `..`). Thrown before anything is sent; a TypeError, which fetch's network errors are too.
+ */
+export class PathParameterError extends TypeError {
+	/** The parameter's name in the path template. */
+	readonly parameter: string;
+	readonly value: unknown;
+
+	constructor(message: string, parameter: string, value: unknown) {
+		super(message);
+		this.parameter = parameter;
+		this.value = value;
+	}
+}
+
 /** Path parameters in the simple style, each part encoded. */
 function fillPath(path: string, params: Record<string, unknown> = {}): string {
 	return path.replace(/\{([^}]+)\}/g, (_, name: string) => {
 		const value = params[name];
-		if (value == null) throw new TypeError(`missing path parameter: ${name}`);
+		if (value == null)
+			throw new PathParameterError(
+				`missing path parameter: ${name}`,
+				name,
+				value,
+			);
 		const segment = simple(value).map(encodeURIComponent).join(",");
 		// URLs resolve `.` and `..` segments, so these would reach another endpoint.
 		if (segment === "" || segment === "." || segment === "..")
-			throw new TypeError(
+			throw new PathParameterError(
 				`path parameter ${name} would change the path: ${JSON.stringify(value)}`,
+				name,
+				value,
 			);
 		return segment;
 	});
