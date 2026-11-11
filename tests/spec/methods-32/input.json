@@ -1,0 +1,31 @@
+{
+  "openapi": "3.2.0",
+  "paths": {
+    "/r": {
+      "additionalOperations": {
+        "COPY": { "responses": { "204": { "description": "copied" } } },
+        "LINK": {
+          "operationId": "linkR",
+          "requestBody": { "required": true, "content": { "text/plain": { "schema": { "type": "string" } } } },
+          "responses": {}
+        },
+        "Patch": { "description": "Methods are case-sensitive: this is not PATCH.", "responses": {} }
+      },
+      "query": {
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "q": { "type": "string" } } } } }
+        },
+        "responses": {
+          "200": { "description": "ok", "content": { "application/json": { "schema": { "type": "array", "items": { "type": "string" } } } } }
+        }
+      },
+      "get": { "responses": {} }
+    }
+  },
+  "webhooks": {
+    "sync": {
+      "additionalOperations": { "PURGE": { "responses": { "204": { "description": "done" } } } }
+    }
+  }
+}

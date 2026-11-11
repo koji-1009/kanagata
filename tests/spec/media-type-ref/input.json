@@ -1,0 +1,44 @@
+{
+  "openapi": "3.2.0",
+  "paths": {
+    "/items": {
+      "post": {
+        "parameters": [
+          { "name": "filter", "in": "query", "content": { "application/json": { "$ref": "#/components/mediaTypes/Filter" } } }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "$ref": "#/components/mediaTypes/Item" } } },
+        "responses": {
+          "201": {
+            "headers": { "X-Filter": { "content": { "application/json": { "$ref": "#/components/mediaTypes/Filter" } } } },
+            "content": { "application/json": { "$ref": "#/components/mediaTypes/Item" } }
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": { "itemSchema": { "type": "object", "properties": { "data": { "not": {} } } } },
+              "application/jsonl": { "itemSchema": { "$ref": "#/components/schemas/Item" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Item": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string" }, "id": { "type": "integer", "readOnly": true } }
+      }
+    },
+    "mediaTypes": {
+      "Item": { "schema": { "$ref": "#/components/schemas/Item" } },
+      "Filter": { "schema": { "type": "object", "properties": { "q": { "type": "string" } } } }
+    }
+  }
+}

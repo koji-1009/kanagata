@@ -21,7 +21,7 @@ export interface Io {
 /** An I/O failure; the message says what went wrong without naming the file (`no such file or directory`). */
 export class IoError extends Error {}
 
-const HELP = `kanagata - TypeScript types from OpenAPI 3.0 / 3.1 (JSON or YAML), and a typed fetch client
+const HELP = `kanagata - TypeScript types from OpenAPI 3.0 / 3.1 / 3.2 (JSON or YAML), and a typed fetch client
 
 Usage:
   kanagata generate <openapi.json|yaml> [-o <out.d.ts>] [--check]

@@ -1,6 +1,6 @@
 # kanagata
 
-TypeScript types from an OpenAPI 3.0 / 3.1 document (JSON or YAML), and a typed `fetch` client for them.
+TypeScript types from an OpenAPI 3.0 / 3.1 / 3.2 document (JSON or YAML), and a typed `fetch` client for them.
 
 - `kanagata generate` writes one `.d.ts` file.
 - `createClient` from `kanagata/client` is one function over `fetch`, with no imports: the path, query, header and cookie parameters and the body are checked against the operation, and the result is a union per status code.
@@ -76,7 +76,9 @@ await api.put("/files/{name}", {
 const events = await api.get("/events", { parseAs: "stream" }); // events.data: ReadableStream | null
 ```
 
-`api.get`, `api.post`, … (one per HTTP method but `trace`, which fetch rejects; the declarations still type trace operations) take the path template and an object of options, which is optional when nothing in it is required. A required body cannot be `undefined`, even when its schema admits any value. A union of path templates takes options that hold what every one of them needs.
+`api.get`, `api.post`, … (one per HTTP method of the Path Item, `query` included, but `trace`, which fetch rejects; the declarations still type trace operations) take the path template and an object of options, which is optional when nothing in it is required. A required body cannot be `undefined`, even when its schema admits any value. A union of path templates takes options that hold what every one of them needs.
+
+A method of `additionalOperations` (3.2) is called through `api.request`, named as the document writes it, which is how it is sent: `api.request("COPY", "/files/{name}", { path: { name: "a.png" } })`. fetch rejects CONNECT, TRACE and TRACK, and sends DELETE, GET, HEAD, OPTIONS, POST and PUT in upper case whatever their case (`Post` as POST), so `request` does not take them.
 
 ### Config (`createClient`)
 
@@ -96,6 +98,7 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 | ----------------------------------- | --------------------------------------------------------------------------------------------- |
 | `baseUrl`                           | required for an operation that declares `servers`: one of them, used in place of the config's |
 | `path`, `query`, `header`, `cookie` | the parameters the operation declares                                                         |
+| `querystring`                       | the operation's `in: querystring` parameter (3.2), the whole query; see Details               |
 | `body`, `contentType`               | the request body and which of the operation's media types it is                               |
 | `parseAs`                           | `json`, `text`, `blob`, `arrayBuffer` or `stream`: read the response this way                 |
 | `headers`                           | headers for this call                                                                         |
@@ -104,7 +107,7 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 
 ### Result
 
-`{ status, ok, data, response }`, a union over the statuses the operation documents. `ResultOf<paths, "get", "/users/{id}">` is its type for `api.get("/users/{id}", …)`, and `ResultOf<paths, "get", "/users/{id}", "text">` with `parseAs: "text"`. `Result<Operation, ParseAs, Method>` is the same by operation; without the method, a HEAD result keeps the declared body.
+`{ status, ok, data, response }`, a union over the statuses the operation documents. `ResultOf<paths, "get", "/users/{id}">` is its type for `api.get("/users/{id}", …)`, `ResultOf<paths, "COPY", "/files/{name}">` for `api.request("COPY", "/files/{name}", …)`, and `ResultOf<paths, "get", "/users/{id}", "text">` with `parseAs: "text"`. `Result<Operation, ParseAs, Method>` is the same by operation; without the method, a HEAD result keeps the declared body.
 
 - **`data`** is parsed by the response's content-type: JSON, text, or `Blob` for binary types. An empty body gives `undefined`. fetch gives HEAD responses and 204, 205 and 304 no body, so their `data` is typed `undefined` whatever the document declares. A status that declares `content` but sends none also gives `undefined`; check for it in `onData`.
   - The content-type the server sends decides, not the document: content typed by a wildcard (`*/*`) is typed by its schema but read as whatever arrives, and a response without a content-type is text (`parseAs: "blob"` keeps its bytes).
@@ -127,9 +130,10 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
   - Multipart fields: an array repeats the field, a `Blob` is a file, a `Date` its ISO string, another object JSON. Another multipart type (`multipart/mixed`, `multipart/related`) gets the same named parts under its own type.
   - A raw body (string, `Blob`, `URLSearchParams`, …) is sent as it is for form media types too.
 - **Parameters:** the delimiters `[`, `]` and `|` are percent-encoded, as OpenAPI requires (`filter%5Bname%5D=n`, `ids=1%7C2`). An object or array inside an array is JSON, in every `arrayFormat`. Path, header and cookie parameters take the same values: arrays `1,2`, objects `x,1,y,2`. Undefined and null are left out, and so is an empty array. A path parameter of `""`, `.` or `..` throws, since the URL would reach another endpoint.
+- **`querystring`** is the whole query, after any other: for `application/x-www-form-urlencoded` an object, encoded as `query` is (`foo=a%20%2B%20b&bar=true`); for any other media type the text that media type serializes to (`JSON.stringify(value)` for JSON), percent-encoded as one value (`%7B%22n%22%3A1%7D`), as OpenAPI 3.2's examples show.
 - **Errors:** HTTP error statuses never throw; network failures are fetch's own errors. A body that is not valid JSON where its content-type or `parseAs: "json"` says JSON (HTML sent as JSON) throws `ResponseBodyError`, which carries the response and the text. An error thrown by `config.headers`, `config.fetch` or `onData` rejects the call as it is.
 - **`config.fetch`** receives the built `Request`; what it returns is read. A request body can be sent once, so a retrying wrapper sends a `request.clone()` taken before the first attempt.
-- **`onData`'s `call`** has `method`, `path` (the template, `/users/{id}`), `status`, `parseAs`, `request` and `response`. Plug a zod or valibot schema in here; `data` stays typed by the OpenAPI schema.
+- **`onData`'s `call`** has `method` (the function's name, `get`, or the method given to `request`, `COPY`), `path` (the template, `/users/{id}`), `status`, `parseAs`, `request` and `response`. Plug a zod or valibot schema in here; `data` stays typed by the OpenAPI schema.
 
 ### Owning the client
 
@@ -162,7 +166,8 @@ try {
 ## Output
 
 - Every schema in `components.schemas` is a named type (`export type User = { … }`), referenced by name. Names are PascalCase, with `_` before one that would start with a digit; a taken or reserved name gets a number (`User2`). `export interface schemas` maps each original name to its type.
-- Operations are `paths[path][method]`, `webhooks[name][method]` (3.1; every key is a name, `x-` ones included), and `operations[operationId]`.
+- Operations are `paths[path][method]`, `webhooks[name][method]` (3.1 and 3.2; every key is a name, `x-` ones included), and `operations[operationId]`. The methods are the Path Item's fields in OpenAPI's order (`get` … `trace`, then `query`), then the keys of `additionalOperations` (3.2) as written (`COPY`). A key that is a fixed field's method (`POST`), which OpenAPI forbids, or its name (`post`) is an error; methods are case-sensitive, so `Patch` is another method. The fields OpenAPI 3.2 adds (`$self`, `query`, `additionalOperations`, `in: querystring`, a `$ref` as a media type, `itemSchema`) are read in 3.2 documents only.
+- An `in: querystring` parameter (3.2) is `parameters.querystring`, without its name, which is not sent: the schema of its media type for `application/x-www-form-urlencoded`, `string` (the serialized text) for any other.
 - A schema with a `readOnly` / `writeOnly` property (on it or on a schema it references) gets a second type for requests, `UserInput`.
 - `description` and `deprecated` become JSDoc.
 - Header parameters named `Accept`, `Content-Type` or `Authorization`, and a response header `Content-Type`, are ignored, as OpenAPI requires.
@@ -171,8 +176,10 @@ try {
 
 ### `$ref`
 
-- Resolved as JSON Schema 2020-12 does: JSON Pointers, `$anchor`s (`#node`), and the `$id`s the document declares, relative to the nearest `$id` (3.1).
-- Other files (`schemas/User.yaml`, `common.json#/Error`) resolve relative to the file the `$ref` is in; each is read once, JSON or YAML by its content. URLs are not fetched.
+- Resolved as JSON Schema 2020-12 does: JSON Pointers, `$anchor`s (`#node`), and the `$id`s the document declares, relative to the nearest `$id` (3.1 and 3.2).
+- The document's `$self` (3.2), resolved against where it was read, is its base URI: relative `$ref`s in it resolve against `$self`, and a `$ref` to `$self` means the document (so does one to the URL it was read from). A `$self` that is not a URI reference is an error. With `$self: https://api.example.com/openapi.yaml`, `schemas/User.yaml` is `https://api.example.com/schemas/User.yaml`, which is not read (below).
+- Parameters, request bodies, responses, headers, path items and media types (3.2) may be `$ref`s.
+- Other files (`schemas/User.yaml`, `common.json#/Error`) resolve against the base URI where the `$ref` is: the file it is in, or the document's `$self`. Each is read once, JSON or YAML by its content, and known by where it is read: another file's `$self` is not read. URLs are not fetched.
 - A schema in another file is a named type. A component that is only a `$ref` to it (with at most `title` and `description`) gives the name (`User: { $ref: schemas/User.yaml }`); otherwise it is named after the file (`Order.yaml` → `Order`) or the pointer's last token (`common.json#/Error` → `Error`), numbered when taken, and listed in `schemas`.
 - A component that is only a `$ref` within the document names its target the same way; other targets within the document are expanded where they are used.
 - A schema may refer to itself through an object, array or tuple (`next?: Node`). A cycle among `$ref`s expanded inline becomes `unknown`, with a warning.
@@ -188,7 +195,7 @@ Types follow what the schema accepts, not another generator's output.
 | `const`, `enum`                                                                                                     | literal types; objects and arrays become exact object and tuple types                                                                                                 |
 | `allOf`, `oneOf` / `anyOf`, sibling `type` / object keywords                                                        | all intersected: `A & B & (C \| D)`                                                                                                                                   |
 | `discriminator`                                                                                                     | not read (it must not change what is accepted, OAS 3.0.4 / 3.1.1); members narrow where they fix the property (`const`, `enum`)                                       |
-| keywords next to `$ref`                                                                                             | intersected in 3.1; ignored in 3.0 (`readOnly` / `writeOnly` too) except `nullable` and `description`                                                                 |
+| keywords next to `$ref`                                                                                             | intersected in 3.1 and 3.2; ignored in 3.0 (`readOnly` / `writeOnly` too) except `nullable` and `description`                                                         |
 | `type: [...]`, `nullable: true` (3.0)                                                                               | union, with `null`                                                                                                                                                    |
 | `type` with `const` / `enum`, and these with each other                                                             | the values all allow: `type: string, enum: ["a", 1]` is `"a"`; a contradiction is `never`                                                                             |
 | `type: integer`                                                                                                     | `number`; non-integer `enum` / `const` values are dropped                                                                                                             |
@@ -212,6 +219,8 @@ Content by media type:
 | forms (`application/x-www-form-urlencoded`, `multipart/*`) | request: its schema; response: `string` |
 | any other (binary), not a wildcard                         | `Blob`                                  |
 
+A sequential media type's `itemSchema` (3.2) is checked like a schema but types nothing: the client reads the content whole, by the rules above (`application/jsonl` is `Blob`, `text/event-stream` `string`). Read it item by item with `parseAs: "stream"`.
+
 ### `nullable` (3.0)
 
 `nullable: true` adds `null` even without `type` (`{ nullable: true, allOf: [{ $ref: … }] }`) and next to an `enum` that does not list `null`. OpenAPI 3.0.3 says neither takes effect, but documents use both to mean "this schema or null" (Stripe and GitHub among them) and their servers return `null`, so kanagata follows the intent.
@@ -220,7 +229,7 @@ Content by media type:
 
 - Runtime validation (use `onData`), middleware (wrap `config.fetch`), per-operation functions, framework bindings, mocks.
 - Per-parameter `style` / `explode` / `encoding`: a server parses every query and form the same way, so one `arrayFormat` / `objectFormat` per client (or per call) matches it.
-- Fetching `$ref`s over the network; Swagger 2.0.
+- Fetching `$ref`s over the network; finding another file by its `$self` (3.2), since files are read by where they are; Swagger 2.0.
 - Pathological inputs: a schema that is directly itself (`A: { $ref: A }`), looping `$ref`s or YAML aliases, nesting thousands of levels deep, or exponential expansion may crash (exit code 3) or not finish.
 
 ## Development

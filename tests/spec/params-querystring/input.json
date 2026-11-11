@@ -1,0 +1,70 @@
+{
+  "openapi": "3.2.0",
+  "paths": {
+    "/search": {
+      "parameters": [
+        { "name": "old", "in": "querystring", "content": { "text/plain": { "schema": { "type": "string" } } } }
+      ],
+      "get": {
+        "parameters": [
+          {
+            "name": "selector",
+            "in": "querystring",
+            "required": true,
+            "description": "Replaces the path item's querystring, whatever its name.",
+            "content": {
+              "application/x-www-form-urlencoded": {
+                "schema": { "type": "object", "properties": { "foo": { "type": "string" }, "bar": { "type": "boolean" } } }
+              }
+            }
+          },
+          { "name": "x-id", "in": "header", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      },
+      "post": { "responses": { "204": { "description": "ok" } } }
+    },
+    "/json": {
+      "get": {
+        "parameters": [
+          {
+            "name": "json",
+            "in": "querystring",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "numbers": { "type": "array", "items": { "type": "integer" } } } }
+              }
+            }
+          }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/multipart": {
+      "get": {
+        "parameters": [
+          {
+            "name": "parts",
+            "in": "querystring",
+            "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "a": { "type": "string" } } } } }
+          }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/form-params": {
+      "get": {
+        "parameters": [
+          {
+            "name": "form",
+            "in": "querystring",
+            "content": {
+              "Application/X-WWW-Form-URLEncoded; charset=utf-8": { "schema": { "type": "object", "properties": { "a": { "type": "string" } } } }
+            }
+          }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

@@ -46,6 +46,7 @@ interface LooseInit extends RequestOptions {
 	baseUrl?: string;
 	path?: Record<string, unknown>;
 	query?: Record<string, unknown>;
+	querystring?: unknown;
 	header?: Record<string, unknown>;
 	cookie?: Record<string, unknown>;
 	body?: unknown;
@@ -61,7 +62,13 @@ interface LooseResult {
 type LooseClient = Record<
 	Exclude<Method, "trace">,
 	(path: string, init?: LooseInit) => Promise<LooseResult>
->;
+> & {
+	request: (
+		method: string,
+		path: string,
+		init?: LooseInit,
+	) => Promise<LooseResult>;
+};
 
 function loose(config: ClientConfig): LooseClient {
 	return createClient<unknown>(config) as unknown as LooseClient;
@@ -71,10 +78,10 @@ function client(rec: Recorder, extra: Partial<ClientConfig> = {}): LooseClient {
 	return loose({ baseUrl: "https://api.test/v1/", fetch: rec.fetch, ...extra });
 }
 
-test("the client has a function per method fetch sends, which leaves out TRACE", async () => {
+test("the client has a function per method fetch sends, which leaves out TRACE, and request for the others", async () => {
 	const rec = recorder();
 	const api = client(rec);
-	assert.deepEqual(Object.keys(api), [
+	const fixed = [
 		"get",
 		"put",
 		"post",
@@ -82,14 +89,81 @@ test("the client has a function per method fetch sends, which leaves out TRACE",
 		"options",
 		"head",
 		"patch",
-	]);
-	for (const method of Object.keys(api) as (keyof LooseClient)[])
-		await api[method]("/m");
+		"query",
+	] as const;
+	assert.deepEqual(Object.keys(api), [...fixed, "request"]);
+	for (const method of fixed) await api[method]("/m");
 	assert.deepEqual(
 		rec.requests.map((r) => r.method),
-		["GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+		["GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD", "PATCH", "QUERY"],
 	);
 	assert.throws(() => new Request("https://api.test", { method: "TRACE" }));
+});
+
+test("request sends a method of additionalOperations as written, with its options", async () => {
+	const rec = recorder();
+	await client(rec).request("COPY", "/files/{name}", {
+		path: { name: "a b" },
+		header: { destination: "/b" },
+		body: "x",
+		contentType: "text/plain",
+	});
+	const req = rec.request(0);
+	assert.equal(req.method, "COPY");
+	assert.equal(req.url, "https://api.test/v1/files/a%20b");
+	assert.equal(req.headers.get("destination"), "/b");
+	assert.equal(await req.text(), "x");
+	// fetch normalizes only the methods it knows; another is sent in its own case.
+	const calls: string[] = [];
+	await client(rec, {
+		onData: (data, call) => {
+			calls.push(call.method);
+			return data;
+		},
+	}).request("Purge", "/m");
+	assert.equal(rec.request(1).method, "Purge");
+	assert.deepEqual(calls, ["Purge"]);
+});
+
+test("a QUERY request has a body", async () => {
+	const rec = recorder();
+	await client(rec).query("/search", { body: { q: "x" } });
+	assert.equal(rec.request(0).method, "QUERY");
+	assert.equal(await rec.request(0).text(), '{"q":"x"}');
+});
+
+test("querystring is the whole query: an object URL-encoded as a query, a string percent-encoded as one value", async () => {
+	const rec = recorder();
+	const api = client(rec);
+	// OpenAPI 3.2's examples: a form, JSON text, a JSONPath.
+	await api.get("/foo", { querystring: { foo: "a + b", bar: true } });
+	await api.get("/foo", {
+		querystring: JSON.stringify({ numbers: [1, 2], flag: null }),
+	});
+	await api.get("/foo", { querystring: "$.a.b[1:1]" });
+	await api.get("/foo", {
+		querystring: { ids: [1, 2] },
+		arrayFormat: "comma",
+	});
+	await api.get("/foo", { querystring: undefined });
+	await api.get("/foo", { querystring: "" });
+	assert.deepEqual(
+		rec.requests.map((r) => new URL(r.url).search),
+		[
+			"?foo=a%20%2B%20b&bar=true",
+			"?%7B%22numbers%22%3A%5B1%2C2%5D%2C%22flag%22%3Anull%7D",
+			"?%24.a.b%5B1%3A1%5D",
+			"?ids=1,2",
+			"",
+			"",
+		],
+	);
+	// After the base URL's own query.
+	await loose({
+		baseUrl: "https://api.test/v1?key=k",
+		fetch: rec.fetch,
+	}).get("/foo", { querystring: "s" });
+	assert.equal(rec.request(6).url, "https://api.test/v1/foo?key=k&s");
 });
 
 test("path parameters are substituted and encoded", async () => {

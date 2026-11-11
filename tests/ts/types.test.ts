@@ -4,7 +4,6 @@
 import {
 	type Client,
 	createClient,
-	type Method,
 	type ParseAs,
 	type Result,
 	type ResultOf,
@@ -13,8 +12,10 @@ import type * as AnyOf from "../spec/anyof/expected";
 import type * as Basic from "../spec/basic/expected";
 import type * as Api from "../spec/client/expected";
 import type * as Composition from "../spec/composition-with-type/expected";
+import type * as Methods32 from "../spec/methods-32/expected";
 import type * as Missing from "../spec/object-required-optional/expected";
 import type * as Cookies from "../spec/params-header-cookie/expected";
+import type * as Querystring from "../spec/params-querystring/expected";
 import type * as Derived from "../spec/read-write-allof/expected";
 import type * as ReadWrite from "../spec/read-write-only/expected";
 import type * as RefSiblings from "../spec/ref-siblings-31/expected";
@@ -46,6 +47,64 @@ export async function paths(): Promise<void> {
 	await basic.get("/users/{id}", { path: { id: "1" } });
 	// @ts-expect-error unknown parameter
 	await basic.get("/users/{id}", { path: { id: 1, extra: true } });
+}
+
+export async function methods32(): Promise<void> {
+	const m = createClient<Methods32.paths>({ baseUrl: "https://api.test" });
+	// QUERY is a fixed method with a body (OpenAPI 3.2).
+	const found = await m.query("/r", { body: { q: "x" } });
+	if (found.status === 200) expectType<Equal<typeof found.data, string[]>>();
+	// @ts-expect-error its body is required
+	await m.query("/r");
+	expectType<Equal<typeof found, ResultOf<Methods32.paths, "query", "/r">>>();
+
+	// additionalOperations go through request, by the method as written.
+	const copied = await m.request("COPY", "/r");
+	expectType<Equal<typeof copied.status, 204>>();
+	expectType<Equal<typeof copied, ResultOf<Methods32.paths, "COPY", "/r">>>();
+	await m.request("LINK", "/r", { body: "x", contentType: "text/plain" });
+	// @ts-expect-error LINK's body is required
+	await m.request("LINK", "/r");
+	// @ts-expect-error the method as written, not in another case
+	await m.request("copy", "/r");
+	// @ts-expect-error a fixed method has its own function
+	await m.request("get", "/r");
+	// @ts-expect-error a webhook's method is not a path's
+	await m.request("PURGE", "/r");
+
+	// fetch rejects CONNECT, TRACE and TRACK, and sends Post as POST, so request does not
+	// take them; Patch it sends as written.
+	type Op = { responses: Record<never, never> };
+	const t = createClient<{
+		"/t": { CONNECT: Op; Track: Op; Post: Op; Patch: Op; MOVE: Op };
+	}>({ baseUrl: "https://api.test" });
+	await t.request("MOVE", "/t");
+	await t.request("Patch", "/t");
+	// @ts-expect-error fetch rejects CONNECT
+	await t.request("CONNECT", "/t");
+	// @ts-expect-error fetch rejects TRACK, in any case
+	await t.request("Track", "/t");
+	// @ts-expect-error fetch would send POST
+	await t.request("Post", "/t");
+	await m.request("Patch", "/r");
+	// Without additionalOperations, request takes no method.
+	// @ts-expect-error no method
+	await basic.request("GET", "/users/{id}");
+}
+
+export async function querystring(): Promise<void> {
+	const q = createClient<Querystring.paths>({ baseUrl: "https://api.test" });
+	await q.get("/search", { querystring: { foo: "a + b", bar: true } });
+	// @ts-expect-error a required querystring
+	await q.get("/search");
+	// @ts-expect-error a form querystring is an object by its schema
+	await q.get("/search", { querystring: "foo=1" });
+	// Another media type is its serialized text.
+	await q.get("/json", { querystring: JSON.stringify({ numbers: [1] }) });
+	await q.get("/json");
+	// @ts-expect-error JSON text, not the value
+	await q.get("/json", { querystring: { numbers: [1] } });
+	await q.post("/search", { querystring: "$.a" });
 }
 
 export async function narrowing(): Promise<void> {
@@ -600,7 +659,8 @@ export function config(): void {
 		},
 		onData: (data, call) => {
 			expectType<Equal<typeof data, unknown>>();
-			expectType<Equal<typeof call.method, Method>>();
+			// A fixed method's function name, or a method of additionalOperations.
+			expectType<Equal<typeof call.method, string>>();
 			expectType<Equal<typeof call.path, string>>();
 			expectType<Equal<typeof call.status, number>>();
 			expectType<Equal<typeof call.parseAs, ParseAs | undefined>>();
