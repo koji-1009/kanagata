@@ -1,8 +1,8 @@
 // Specification runner.
 //
 // tests/spec/<name>/: input.json or input.yaml → expected.d.ts (and expected.warn, one warning per
-// line as `location: message`; absent means no warnings). Each input is generated
-// twice to check determinism.
+// line as `location: message`; absent means no warnings), generated with the options
+// in options.json (absent means none). Each input is generated twice to check determinism.
 //
 // tests/errors/<name>/: input.json or input.yaml → the CLI's stderr (expected.err)
 // and exit code (expected.code).
@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { type Io, run } from "../src/cli.ts";
-import { generate } from "../src/index.ts";
+import { generate, type Options } from "../src/index.ts";
 import { nodeIo } from "../src/node-io.ts";
 
 const TESTS = import.meta.dirname;
@@ -46,7 +46,11 @@ for (const dir of cases("spec")) {
 			url: pathToFileURL(join(dir, input)).href,
 			read: (url: string) => readFileSync(fileURLToPath(url), "utf8"),
 		};
-		const generated = generate(src, source);
+		const optionsFile = join(dir, "options.json");
+		const options: Options = existsSync(optionsFile)
+			? JSON.parse(readFileSync(optionsFile, "utf8"))
+			: {};
+		const generated = generate(src, source, options);
 		assert.equal(
 			generated.code,
 			readFileSync(join(dir, "expected.d.ts"), "utf8"),
@@ -61,7 +65,7 @@ for (const dir of cases("spec")) {
 			"expected.warn",
 		);
 		assert.equal(
-			generate(src, source).code,
+			generate(src, source, options).code,
 			generated.code,
 			"output is not deterministic",
 		);

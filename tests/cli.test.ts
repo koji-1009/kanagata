@@ -100,6 +100,17 @@ test("generate to a file, then --check it", () => {
 	);
 });
 
+test("--strict-nullable-enum keeps null out of an enum that does not list it", () => {
+	const dir = join(SPEC, "nullable-enum-strict");
+	const src = readFileSync(join(dir, "input.json"), "utf8");
+	const { io, out } = memoryIo({ "api.json": src });
+	assert.equal(run(["generate", "api.json", "--strict-nullable-enum"], io), 0);
+	assert.equal(out.stdout, readFileSync(join(dir, "expected.d.ts"), "utf8"));
+	out.stdout = "";
+	assert.equal(run(["generate", "api.json"], io), 0);
+	assert.match(out.stdout, /export type Closed = "a" \| "b" \| null;/);
+});
+
 test("warnings go to stderr, the declarations still to stdout", () => {
 	const src = readFileSync(join(SPEC, "unsupported-not", "input.json"), "utf8");
 	const { io, out } = memoryIo({ "api.json": src });
@@ -240,6 +251,10 @@ test("usage errors exit 2", () => {
 		[["generate", "a.json", "--force"], "unknown option: --force\n"],
 		[["generate", "a.json", "-o"], "-o needs a path\n"],
 		[["init", "--check"], "unknown option: --check\n"],
+		[
+			["init", "--strict-nullable-enum"],
+			"unknown option: --strict-nullable-enum\n",
+		],
 		[["init", "extra"], "unexpected argument: extra\n"],
 		[["frobnicate"], "unknown command: frobnicate (see kanagata --help)\n"],
 	];
