@@ -236,7 +236,7 @@ export interface ClientConfig extends FetchOptions {
 	 * Replaces the global fetch. It is called with the built Request and returns the
 	 * Response to read: wrap the global fetch here for auth, retries, logging or tests.
 	 */
-	fetch?: typeof fetch;
+	fetch?: (request: Request) => Promise<Response>;
 	/**
 	 * Headers for every request; a function (sync or async) is called on every request.
 	 * A call's header and cookie parameters and `headers` replace them by name. A

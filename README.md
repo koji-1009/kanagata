@@ -61,8 +61,7 @@ kanagata init -o src/api/client.ts                             # copy the client
 ```ts
 const api = createClient<paths>({
 	baseUrl: "https://api.example.com",
-	fetch: (input, init) => {
-		const request = new Request(input, init);
+	fetch: (request) => {
 		request.headers.set("authorization", `Bearer ${token}`); // keeps the other headers
 		return fetch(request);
 	},
@@ -81,15 +80,15 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 
 ### Config (`createClient`)
 
-| Key            | Meaning                                                                                                |
-| -------------- | ------------------------------------------------------------------------------------------------------ |
-| `baseUrl`      | absolute (`https://api.example.com/v1`) or relative (`/api`, `""`); see below                          |
-| `fetch`        | replaces the global `fetch`; wrap it for auth, retries, logging, tests                                 |
-| `headers`      | an object, or a function (sync or async) called on every request                                       |
-| `arrayFormat`  | arrays in queries and URL-encoded bodies: `repeat` (default), `brackets`, `comma`, `space`, `pipe`     |
-| `objectFormat` | objects in queries and URL-encoded bodies: `deepObject` (default), `json`                              |
-| `onData`       | `(data, call) => value` (sync or async): receives every parsed body; return the value to use, or throw |
-| fetch options  | `credentials`, `cache`, `mode`, `redirect`, `keepalive`, `signal`, …                                   |
+| Key            | Meaning                                                                                                    |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| `baseUrl`      | absolute (`https://api.example.com/v1`) or relative (`/api`, `""`); see below                              |
+| `fetch`        | `(request) => Promise<Response>` in place of the global `fetch`; wrap it for auth, retries, logging, tests |
+| `headers`      | an object, or a function (sync or async) called on every request                                           |
+| `arrayFormat`  | arrays in queries and URL-encoded bodies: `repeat` (default), `brackets`, `comma`, `space`, `pipe`         |
+| `objectFormat` | objects in queries and URL-encoded bodies: `deepObject` (default), `json`                                  |
+| `onData`       | `(data, call) => value` (sync or async): receives every parsed body; return the value to use, or throw     |
+| fetch options  | `credentials`, `cache`, `mode`, `redirect`, `keepalive`, `signal`, …                                       |
 
 ### Call options
 

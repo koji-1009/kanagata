@@ -560,8 +560,9 @@ export function config(): void {
 	createClient<Api.paths>({
 		baseUrl: "https://api.test",
 		arrayFormat: "pipe",
-		fetch: (input, init) => {
-			const request = new Request(input, init);
+		// config.fetch is called with the built Request only.
+		fetch: (request) => {
+			expectType<Equal<typeof request, Request>>();
 			request.headers.set("authorization", "Bearer t");
 			return fetch(request);
 		},
@@ -573,6 +574,12 @@ export function config(): void {
 			expectType<Equal<typeof call.parseAs, ParseAs | undefined>>();
 			return data;
 		},
+	});
+	// The global fetch and a test double fit too.
+	createClient<Api.paths>({ baseUrl: "https://api.test", fetch });
+	createClient<Api.paths>({
+		baseUrl: "https://api.test",
+		fetch: async () => new Response("{}"),
 	});
 }
 

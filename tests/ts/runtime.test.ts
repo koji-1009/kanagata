@@ -18,7 +18,7 @@ interface Recorder {
 	requests: Request[];
 	/** The i-th request sent; fails the test if there was none. */
 	request(i: number): Request;
-	fetch: typeof fetch;
+	fetch: NonNullable<ClientConfig["fetch"]>;
 }
 
 function recorder(
@@ -33,8 +33,7 @@ function recorder(
 			assert.ok(req, `request ${i} was not sent`);
 			return req;
 		},
-		fetch: async (input, init) => {
-			const req = new Request(input, init);
+		fetch: async (req) => {
 			requests.push(req);
 			return respond(req);
 		},
@@ -838,7 +837,7 @@ test("the global fetch is used when config.fetch is not given", async (t) => {
 	t.after(() => {
 		globalThis.fetch = original;
 	});
-	globalThis.fetch = rec.fetch;
+	globalThis.fetch = (input, init) => rec.fetch(new Request(input, init));
 	await loose({ baseUrl: "https://api.test" }).get("/r");
 	assert.equal(rec.request(0).url, "https://api.test/r");
 });
@@ -944,8 +943,7 @@ test("a fetch that wraps another sees the built request, and its response is rea
 	);
 	const token = "t";
 	const api = client(rec, {
-		fetch: (input, init) => {
-			const request = new Request(input, init);
+		fetch: (request) => {
 			request.headers.set("authorization", `Bearer ${token}`); // keeps the other headers
 			return rec.fetch(request);
 		},
