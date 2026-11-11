@@ -29,7 +29,7 @@ The exports of `src/index.ts` and `src/client.ts` are public API under semver.
 ## Commands
 
 ```sh
-pnpm install    # Node from .node-version (26); pnpm from packageManager
+pnpm install    # Node from .node-version (26; engines and CI also cover 24); pnpm from packageManager
 pnpm test       # typecheck, Biome, tests at 100% coverage, client type tests
 pnpm format     # Biome format and safe fixes
 pnpm test:real  # GitHub, Stripe, Petstore at pinned commits: generate (JSON = YAML), tsc, built client

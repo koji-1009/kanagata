@@ -30,7 +30,7 @@ Run `generate` again after upgrading kanagata: the types and the client come fro
 
 ## Install
 
-- The CLI needs Node 26 or later (`engines`). Its one dependency is [`yaml`](https://github.com/eemeli/yaml), which has none.
+- The CLI needs Node 24 or later (`engines`). Its one dependency is [`yaml`](https://github.com/eemeli/yaml), which has none.
 - The client needs only the Fetch API (with `URL`, `FormData`, `Blob`, `ReadableStream`) and ES2022.
 - The package is ES modules only.
 - A dev dependency is enough when the app is bundled. Put kanagata in `dependencies` when `kanagata/client` is loaded from `node_modules` at run time: a Node server installed without dev dependencies, or a library you publish.
