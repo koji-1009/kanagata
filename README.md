@@ -180,26 +180,26 @@ try {
 
 Types follow what the schema accepts, not another generator's output.
 
-| Schema                                                                           | TypeScript                                                                                                                      |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `true`, `{}`                                                                     | `unknown`                                                                                                                       |
-| `false`                                                                          | `never`                                                                                                                         |
-| `const`, `enum`                                                                  | literal types; objects and arrays become exact object and tuple types                                                           |
-| `allOf`, `oneOf` / `anyOf`, sibling `type` / object keywords                     | all intersected: `A & B & (C \| D)`                                                                                             |
-| `discriminator`                                                                  | not read (it must not change what is accepted, OAS 3.0.4 / 3.1.1); members narrow where they fix the property (`const`, `enum`) |
-| keywords next to `$ref`                                                          | intersected in 3.1; ignored in 3.0 (`readOnly` / `writeOnly` too) except `nullable` and `description`                           |
-| `type: [...]`, `nullable: true` (3.0)                                            | union, with `null`                                                                                                              |
-| `type` with `const` / `enum`, and these with each other                          | the values all allow: `type: string, enum: ["a", 1]` is `"a"`; a contradiction is `never`                                       |
-| `type: integer`                                                                  | `number`; non-integer `enum` / `const` values are dropped                                                                       |
-| `format: binary`; binary `contentMediaType` without `contentEncoding`            | `Blob`                                                                                                                          |
-| `prefixItems`                                                                    | tuple; items past `minItems` are optional, `items` gives the rest                                                               |
-| `required` key without a property schema                                         | `key: unknown`                                                                                                                  |
-| `additionalProperties`, `patternProperties`                                      | an index signature that also admits the declared properties (TypeScript cannot check the pattern)                               |
-| `additionalProperties: false` with no properties, `const: {}`                    | `{ [key: string]: never }`                                                                                                      |
-| object without properties                                                        | `Record<string, unknown>`                                                                                                       |
-| object keywords without `type`                                                   | an object (non-objects are never meant), so `{ type: "string", allOf: [{ properties: … }] }` is `never`                         |
-| `readOnly` / `writeOnly` property                                                | left out of what is sent / what is returned                                                                                     |
-| `not`, `if` / `then` / `else`, `dependentSchemas`, `unevaluated*`, `$dynamicRef` | ignored, with a warning                                                                                                         |
+| Schema                                                                            | TypeScript                                                                                                                      |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `true`, `{}`                                                                      | `unknown`                                                                                                                       |
+| `false`                                                                           | `never`                                                                                                                         |
+| `const`, `enum`                                                                   | literal types; objects and arrays become exact object and tuple types                                                           |
+| `allOf`, `oneOf` / `anyOf`, sibling `type` / object keywords                      | all intersected: `A & B & (C \| D)`                                                                                             |
+| `discriminator`                                                                   | not read (it must not change what is accepted, OAS 3.0.4 / 3.1.1); members narrow where they fix the property (`const`, `enum`) |
+| keywords next to `$ref`                                                           | intersected in 3.1; ignored in 3.0 (`readOnly` / `writeOnly` too) except `nullable` and `description`                           |
+| `type: [...]`, `nullable: true` (3.0)                                             | union, with `null`                                                                                                              |
+| `type` with `const` / `enum`, and these with each other                           | the values all allow: `type: string, enum: ["a", 1]` is `"a"`; a contradiction is `never`                                       |
+| `type: integer`                                                                   | `number`; non-integer `enum` / `const` values are dropped                                                                       |
+| `format: binary`; binary `contentMediaType` without `contentEncoding`             | `Blob`                                                                                                                          |
+| `prefixItems`                                                                     | tuple; items past `minItems` are optional, `items` gives the rest                                                               |
+| `required` key without a property schema                                          | `key: unknown`                                                                                                                  |
+| `additionalProperties`, `patternProperties`                                       | an index signature that also admits the declared properties (TypeScript cannot check the pattern)                               |
+| `additionalProperties: false` with no properties, `const: {}`, `maxProperties: 0` | `{ [key: string]: never }`; with `maxProperties: 0` and a required key, `never`                                                 |
+| object without properties                                                         | `Record<string, unknown>`                                                                                                       |
+| object keywords without `type`                                                    | an object (non-objects are never meant), so `{ type: "string", allOf: [{ properties: … }] }` is `never`                         |
+| `readOnly` / `writeOnly` property                                                 | left out of what is sent / what is returned                                                                                     |
+| `not`, `if` / `then` / `else`, `dependentSchemas`, `unevaluated*`, `$dynamicRef`  | ignored, with a warning                                                                                                         |
 
 Content by media type:
 

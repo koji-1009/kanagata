@@ -1,0 +1,15 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Empty": { "type": "object", "maxProperties": 0 },
+      "EmptyDeclared": { "type": "object", "properties": { "a": { "type": "string" } }, "maxProperties": 0 },
+      "EmptyRequired": { "type": "object", "required": ["a"], "properties": { "a": { "type": "string" } }, "maxProperties": 0 },
+      "Path": { "type": "object", "required": ["path"], "properties": { "path": { "type": "string" } } },
+      "Conditions": { "oneOf": [{ "$ref": "#/components/schemas/Empty" }, { "$ref": "#/components/schemas/Path" }] },
+      "OneKey": { "type": "object", "maxProperties": 1 },
+      "Untyped": { "maxProperties": 0 }
+    }
+  }
+}

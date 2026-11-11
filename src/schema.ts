@@ -342,6 +342,12 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (d !== undefined) p.doc = d;
 		props.push(p);
 	}
+	// maxProperties 0 admits no keys: the empty object, or nothing if one is required.
+	const max = v.get("maxProperties");
+	if (max instanceof JsonNumber && Number(max.text) === 0)
+		return required.some((n) => !left.has(n))
+			? NEVER
+			: { kind: "map", props: [], index: NEVER };
 	// A required key without a property schema must be present with any value.
 	for (const name of required) {
 		if (!left.has(name) && !props.some((p) => p.key === name))
