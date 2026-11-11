@@ -227,6 +227,18 @@ export type Result<
 			}[keyof R]
 	: never;
 
+/**
+ * What `client[M](path, { parseAs: A })` resolves to, named in the order of the call:
+ * `ResultOf<paths, "get", "/users/{id}">`. `Result` of the path's operation, with the
+ * method given once (so HEAD has no body, as in the call).
+ */
+export type ResultOf<
+	P,
+	M extends Method,
+	Path extends PathsOf<P, M>,
+	A extends ParseAs | undefined = undefined,
+> = Result<Op<P, Path, M>, A, M>;
+
 type MaybePromise<T> = T | Promise<T>;
 
 export interface ClientConfig extends FetchOptions {

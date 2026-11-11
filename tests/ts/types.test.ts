@@ -7,6 +7,7 @@ import {
 	type Method,
 	type ParseAs,
 	type Result,
+	type ResultOf,
 } from "../../src/client.ts";
 import type * as AnyOf from "../spec/anyof/expected";
 import type * as Basic from "../spec/basic/expected";
@@ -61,7 +62,8 @@ export async function narrowing(): Promise<void> {
 }
 
 export async function resultType(): Promise<void> {
-	// README: Result<operation, parseAs, method> is what a call resolves to.
+	// README: Result<operation, parseAs, method> is what a call resolves to, as is the
+	// call's return type.
 	const res = await api.get("/things/{id}", { path: { id: 1 } });
 	type Thing = Api.paths["/things/{id}"]["get"];
 	expectType<Equal<typeof res, Result<Thing, undefined, "get">>>();
@@ -73,6 +75,20 @@ export async function resultType(): Promise<void> {
 		parseAs: "text",
 	});
 	expectType<Equal<typeof text, Result<Thing, "text", "get">>>();
+
+	// ResultOf names the method once, in the order of the call: api.get(path, { parseAs }).
+	expectType<Equal<typeof res, ResultOf<Api.paths, "get", "/things/{id}">>>();
+	expectType<
+		Equal<typeof text, ResultOf<Api.paths, "get", "/things/{id}", "text">>
+	>();
+	// So HEAD has no body, as in the call; Result without its method keeps the declared one.
+	const n = createClient<NoBodyPaths>({ baseUrl: "https://api.test" });
+	const head = await n.head("/n");
+	expectType<Equal<typeof head, ResultOf<NoBodyPaths, "head", "/n">>>();
+	expectType<Equal<Result<NoBodyPaths["/n"]["head"]>["data"], { a: number }>>();
+	// @ts-expect-error a path without the method
+	type Missing = ResultOf<Api.paths, "trace", "/things/{id}">;
+	void (null as unknown as Missing);
 }
 
 export async function statusRanges(): Promise<void> {
