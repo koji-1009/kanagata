@@ -13,6 +13,7 @@
       },
       "Choice": { "type": "string", "enum": ["a", "b", null], "nullable": true },
       "Closed": { "description": "nullable adds null even next to an enum without it, as documents mean it.", "type": "string", "enum": ["a"], "nullable": true },
+      "Untyped": { "enum": ["a"], "nullable": true },
       "Fixed": { "type": "string", "const": "a", "nullable": true },
       "NotNull": { "type": "string", "nullable": false },
       "MaybeNotNull": { "description": "nullable is the one keyword next to $ref that 3.0 documents rely on.", "$ref": "#/components/schemas/NotNull", "nullable": true }

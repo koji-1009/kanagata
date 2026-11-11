@@ -92,7 +92,8 @@ export function doc(v: Value): string | undefined {
 
 /**
  * `nullable: true` (3.0 only; 3.1 has no such keyword) adds `null` to whatever the rest
- * of the schema gives, as documents mean it (see README).
+ * of the schema gives, as documents mean it (see README); with `strictNullableEnum`,
+ * an `enum` or `const` that does not list `null` keeps it out, as OAS 3.0.3 says.
  */
 function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const nullable = !cx.refSiblings && v.get("nullable") === true;
@@ -138,7 +139,16 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (Array.isArray(members))
 			out.push(union(admitted(members, list(cx, members, child(at, key)))));
 	}
-	return nullable ? union([inter(out), NULL]) : inter(out);
+	const addsNull = nullable && (!cx.strictNullableEnum || valuesAdmitNull(v));
+	return addsNull ? union([inter(out), NULL]) : inter(out);
+}
+
+/** Whether the schema's own `enum` and `const`, where present, admit `null`. */
+function valuesAdmitNull(v: JsonObject): boolean {
+	const e = v.get("enum");
+	if (Array.isArray(e) && !e.includes(null)) return false;
+	const c = v.get("const");
+	return c === undefined || c === null;
 }
 
 /**

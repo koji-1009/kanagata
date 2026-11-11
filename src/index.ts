@@ -37,6 +37,15 @@ export interface Source {
 	read: (url: string) => string;
 }
 
+/** How the document is read. */
+export interface Options {
+	/**
+	 * In 3.0, keep `null` out of an `enum` or `const` that does not list it, even with
+	 * `nullable: true`, as OpenAPI 3.0.3 says. Off by default: documents mean "or null".
+	 */
+	strictNullableEnum?: boolean;
+}
+
 /** Text that starts with `{` (or is blank) is JSON; anything else is YAML. */
 function parseText(src: string, warnings: Diag[]): Value {
 	return /^﻿?\s*(\{|$)/.test(src) ? parse(src) : parseYaml(src, warnings);
@@ -46,7 +55,11 @@ function parseText(src: string, warnings: Diag[]): Value {
  * Converts an OpenAPI document (JSON or YAML) to a `.d.ts` file. With a `source`,
  * `$ref`s to other files are read through it. Throws GenerateError.
  */
-export function generate(src: string, source?: Source): Generated {
+export function generate(
+	src: string,
+	source?: Source,
+	options: Options = {},
+): Generated {
 	const read: Diag[] = [];
 	const root = parseText(src, read);
 	if (!(root instanceof JsonObject))
@@ -67,6 +80,7 @@ export function generate(src: string, source?: Source): Generated {
 			url: source.url,
 			load: (url) => loadText(cx, url, source.read(url)),
 		},
+		options.strictNullableEnum === true,
 	);
 
 	const p = paths(cx, root);

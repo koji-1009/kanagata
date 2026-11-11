@@ -10,6 +10,7 @@ export interface schemas {
   Point: Point;
   Choice: Choice;
   Closed: Closed;
+  Untyped: Untyped;
   Fixed: Fixed;
   NotNull: NotNull;
   MaybeNotNull: MaybeNotNull;
@@ -28,6 +29,8 @@ export type Choice = "a" | "b" | null;
 
 /** nullable adds null even next to an enum without it, as documents mean it. */
 export type Closed = "a" | null;
+
+export type Untyped = "a" | null;
 
 export type Fixed = "a" | null;
 

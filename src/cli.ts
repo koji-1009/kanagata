@@ -25,6 +25,7 @@ const HELP = `kanagata - TypeScript types from OpenAPI 3.0 / 3.1 / 3.2 (JSON or 
 
 Usage:
   kanagata generate <openapi.json|yaml> [-o <out.d.ts>] [--check]
+                    [--strict-nullable-enum]
   kanagata init [-o <client.ts>] [--force]
 
 Commands:
@@ -34,6 +35,9 @@ Commands:
 Options:
   -o <path>      Output file (generate: stdout, init: ./client.ts)
   --check        Exit with 1 if the -o file differs from the generated output
+  --strict-nullable-enum
+                 In 3.0, keep null out of an enum or const that does not
+                 list it, even with nullable: true (as OpenAPI 3.0.3 says)
   --force        Let init overwrite an existing file
   -h, --help     Show this help
   -V, --version  Show the version
@@ -122,6 +126,7 @@ interface Flags {
 	output?: string;
 	check: boolean;
 	force: boolean;
+	strictNullableEnum: boolean;
 	help: boolean;
 }
 
@@ -129,7 +134,13 @@ function parseFlags(
 	args: readonly string[],
 	allowed: readonly string[],
 ): Flags {
-	const f: Flags = { positional: [], check: false, force: false, help: false };
+	const f: Flags = {
+		positional: [],
+		check: false,
+		force: false,
+		strictNullableEnum: false,
+		help: false,
+	};
 	const rest = args[Symbol.iterator]();
 	for (const a of rest) {
 		const isOption = a.startsWith("-") && a !== "-";
@@ -142,6 +153,7 @@ function parseFlags(
 			f.output = path.value;
 		} else if (a === "--check") f.check = true;
 		else if (a === "--force") f.force = true;
+		else if (a === "--strict-nullable-enum") f.strictNullableEnum = true;
 		else if (isHelp) f.help = true;
 		else f.positional.push(a);
 	}
@@ -154,7 +166,7 @@ function generateCommand(
 	out: (text: string) => void,
 	err: (line: string) => void,
 ): number {
-	const f = parseFlags(args, ["-o", "--check"]);
+	const f = parseFlags(args, ["-o", "--check", "--strict-nullable-enum"]);
 	if (f.help) {
 		out(HELP);
 		return 0;
@@ -175,6 +187,7 @@ function generateCommand(
 	const generated = generate(
 		src,
 		input === "-" ? undefined : fileSource(input, io),
+		{ strictNullableEnum: f.strictNullableEnum },
 	);
 	for (const w of generated.warnings) err(`${w.at}: warning: ${w.msg}`);
 
