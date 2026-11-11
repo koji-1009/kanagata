@@ -622,11 +622,10 @@ function simple(value: unknown): string[] {
 /**
  * A path parameter the URL cannot carry: missing, or one that would change the path (`""`,
  * `.`, `..`). Thrown before anything is sent; a TypeError, which fetch's network errors are too.
+ * `parameter` is its name in the path template (`id` in `/users/{id}`), `value` what was given.
  */
 export class PathParameterError extends TypeError {
-	// A string, not the class's name, which a minifier may shorten.
 	override readonly name = "PathParameterError";
-	/** The parameter's name in the path template. */
 	readonly parameter: string;
 	readonly value: unknown;
 
