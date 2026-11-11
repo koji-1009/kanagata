@@ -100,6 +100,10 @@ test("error kinds and messages", () => {
 		at: "#/openapi",
 		msg: 'unsupported OpenAPI version "2.0" (3.0.x, 3.1.x or 3.2.x required)',
 	});
+
+	// Every kind is named GenerateError, which is what logs and String() show.
+	for (const e of [json, yaml, input]) assert.equal(e.name, "GenerateError");
+	assert.equal(String(json), "GenerateError: 1:2: unexpected end of input");
 });
 
 test("$refs within the document: pointers, anchors, ids; anything else is external", () => {
