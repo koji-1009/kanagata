@@ -2,9 +2,11 @@
 // The schemas are the hand-written expectations in tests/spec.
 
 import {
+	type ArgsOf,
 	type Client,
 	createClient,
 	type ParseAs,
+	type PathsOf,
 	type Result,
 	type ResultOf,
 } from "../../src/client.ts";
@@ -148,6 +150,53 @@ export async function resultType(): Promise<void> {
 	// @ts-expect-error a path without the method
 	type Missing = ResultOf<Api.paths, "trace", "/things/{id}">;
 	void (null as unknown as Missing);
+}
+
+export async function wrapping(): Promise<void> {
+	// README: PathsOf, ArgsOf and ResultOf type a function that wraps a call, with no assertion.
+	// TypeScript cannot infer parseAs through the spread, so the call names Path and A.
+	async function get<
+		Path extends PathsOf<Api.paths, "get">,
+		A extends ParseAs | undefined = undefined,
+	>(
+		path: Path,
+		...args: ArgsOf<Api.paths, "get", Path, A>
+	): Promise<ResultOf<Api.paths, "get", Path, A>> {
+		const res = await api.get<Path, A>(path, ...args);
+		void res.status;
+		return res;
+	}
+	const res = await get("/things/{id}", { path: { id: 1 } });
+	expectType<Equal<typeof res, ResultOf<Api.paths, "get", "/things/{id}">>>();
+	const text = await get("/things/{id}", { path: { id: 1 }, parseAs: "text" });
+	expectType<
+		Equal<typeof text, ResultOf<Api.paths, "get", "/things/{id}", "text">>
+	>();
+	// The options are optional when nothing in them is required, as in the call.
+	await get("/events");
+	// @ts-expect-error path parameters are required
+	await get("/things/{id}");
+	// @ts-expect-error wrong parameter type
+	await get("/things/{id}", { path: { id: "1" } });
+	// @ts-expect-error a path without get
+	await get("/forms");
+
+	// A method of additionalOperations, as request takes it.
+	const m = createClient<Methods32.paths>({ baseUrl: "https://api.test" });
+	async function request<
+		M extends "COPY" | "LINK",
+		Path extends PathsOf<Methods32.paths, M>,
+	>(
+		method: M,
+		path: Path,
+		...args: ArgsOf<Methods32.paths, M, Path>
+	): Promise<ResultOf<Methods32.paths, M, Path>> {
+		return m.request(method, path, ...args);
+	}
+	const copied = await request("COPY", "/r");
+	expectType<Equal<typeof copied, ResultOf<Methods32.paths, "COPY", "/r">>>();
+	// @ts-expect-error LINK's body is required
+	await request("LINK", "/r");
 }
 
 export async function statusRanges(): Promise<void> {

@@ -17,8 +17,8 @@ type BodyInit = NonNullable<RequestInit["body"]>;
 
 type Get<T, K> = K extends keyof T ? T[K] : never;
 
-/** Paths that have method M. */
-type PathsOf<P, M extends string> = {
+/** The path templates of P that have method M: `PathsOf<paths, "get">`. */
+export type PathsOf<P, M extends string> = {
 	[K in keyof P]: M extends keyof P[K] ? K : never;
 }[keyof P] &
 	string;
@@ -185,8 +185,21 @@ type NeedsAll<O> = Get<
 
 type Init<N, A> = N & RequestOptions & { parseAs?: A };
 
-/** The second argument is optional when nothing in it is required. */
-type Args<N, A> = Empty extends N ? [init?: Init<N, A>] : [init: Init<N, A>];
+/**
+ * The arguments after the path of `client[M](path, …)`: the options, optional when nothing
+ * in them is required. With `PathsOf` and `ResultOf`, it types a function that wraps a call:
+ * `(path: Path, ...args: ArgsOf<paths, "get", Path, A>) => api.get<Path, A>(path, ...args)`;
+ * TypeScript cannot infer A through the spread, so the call names it.
+ */
+export type ArgsOf<
+	P,
+	M extends string,
+	Path extends PathsOf<P, M>,
+	A extends ParseAs | undefined = undefined,
+> =
+	Empty extends NeedsAll<Op<P, Path, M>>
+		? [init?: Init<NeedsAll<Op<P, Path, M>>, A>]
+		: [init: Init<NeedsAll<Op<P, Path, M>>, A>];
 
 /** "2XX" and default have no single status. */
 type Status<S> = S extends number ? S : number;
@@ -311,8 +324,8 @@ type Call<P, M extends Method> = <
 	A extends ParseAs | undefined = undefined,
 >(
 	path: Path,
-	...args: Args<NeedsAll<Op<P, Path, M>>, A>
-) => Promise<Result<Op<P, Path, M>, A, M>>;
+	...args: ArgsOf<P, M, Path, A>
+) => Promise<ResultOf<P, M, Path, A>>;
 
 /** A call by a method of `additionalOperations`, named first: `request("COPY", path, init)`. */
 type OtherCall<P> = <
@@ -322,8 +335,8 @@ type OtherCall<P> = <
 >(
 	method: M,
 	path: Path,
-	...args: Args<NeedsAll<Op<P, Path, M>>, A>
-) => Promise<Result<Op<P, Path, M>, A, M>>;
+	...args: ArgsOf<P, M, Path, A>
+) => Promise<ResultOf<P, M, Path, A>>;
 
 /**
  * A function per method fetch sends: every fixed one but TRACE, which fetch rejects, and

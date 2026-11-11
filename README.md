@@ -117,6 +117,28 @@ A method of `additionalOperations` (3.2) is called through `api.request`, named 
 - **Undocumented statuses:** list them with `default` or a range (`4XX`, `5XX`) in the document and they are typed. A status outside the document is still returned, in the branch the types call unreachable. An operation that documents no responses gives `status: number`, `ok: boolean` and `data: unknown`.
 - **Response headers** are typed in the declarations (`responses[200].headers`); read them from `res.response.headers`.
 
+### Wrapping a call
+
+`PathsOf<paths, "get">` (the path templates with that method), `ArgsOf<paths, "get", Path, ParseAs>` (the arguments after the path) and `ResultOf` type a function that wraps a call, with no assertion. TypeScript cannot infer `parseAs` through the spread, so the call names its type arguments:
+
+```ts
+import type { ArgsOf, ParseAs, PathsOf, ResultOf } from "kanagata/client";
+
+async function get<
+	Path extends PathsOf<paths, "get">,
+	A extends ParseAs | undefined = undefined,
+>(
+	path: Path,
+	...args: ArgsOf<paths, "get", Path, A>
+): Promise<ResultOf<paths, "get", Path, A>> {
+	const res = await api.get<Path, A>(path, ...args);
+	log(path, res.status);
+	return res;
+}
+```
+
+For `api.request`, the method takes the place of `"get"`: `ArgsOf<paths, "COPY", Path>`.
+
 ### Details
 
 - **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. `""` is the origin of the page's base URL. Its own query is kept, before the call's. An operation that declares `servers` (or whose path item does) is served there, not by the document's servers, so its call names one of them as `baseUrl`; other operations take the config's and cannot be given one.
