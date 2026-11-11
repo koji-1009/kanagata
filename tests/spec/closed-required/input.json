@@ -1,0 +1,45 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "RequiresUndeclared": {
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "required": ["a", "b"],
+        "additionalProperties": false
+      },
+      "Campaign": {
+        "type": "object",
+        "properties": { "name": { "type": "string" }, "code": { "type": "string" } },
+        "additionalProperties": false,
+        "oneOf": [{ "required": ["code"] }, { "required": ["secret"] }]
+      },
+      "Secret": { "required": ["secret"] },
+      "ThroughRef": {
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "additionalProperties": false,
+        "anyOf": [{ "$ref": "#/components/schemas/Secret" }, { "required": ["a"] }]
+      },
+      "AllOfUndeclared": {
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "additionalProperties": false,
+        "allOf": [{ "required": ["z"] }]
+      },
+      "Open": {
+        "type": "object",
+        "properties": { "code": { "type": "string" } },
+        "oneOf": [{ "required": ["code"] }, { "required": ["secret"] }]
+      },
+      "Patterned": {
+        "type": "object",
+        "properties": { "code": { "type": "string" } },
+        "patternProperties": { "^x-": { "type": "string" } },
+        "additionalProperties": false,
+        "required": ["x-id"]
+      }
+    }
+  }
+}

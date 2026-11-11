@@ -109,6 +109,16 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (c !== undefined) out.push(literal(c));
 	const e = v.get("enum");
 	if (Array.isArray(e)) out.push(union(e.map(literal)));
+	// A member that requires a key this closed object forbids admits no value.
+	const closed = closedKeys(v);
+	const admitted = (members: Value[], tys: Ty[]) =>
+		closed === undefined
+			? tys
+			: tys.map((t, i) =>
+					requiredKeys(cx, members[i] as Value).some((k) => !closed.has(k))
+						? NEVER
+						: t,
+				);
 	const allOf = v.get("allOf");
 	if (Array.isArray(allOf)) {
 		// Every member is the same object: a property one member leaves out of this
@@ -118,7 +128,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		const members = cx.withLeftOut(allOf, group, () =>
 			list(cx, allOf, child(at, "allOf")),
 		);
-		out.push(...members);
+		out.push(...admitted(allOf, members));
 	}
 	out.push(own(cx, v, at));
 	// `discriminator` is not read: it must not change what the schema accepts (OAS 3.0.4, 3.1.1),
@@ -126,9 +136,38 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	for (const key of ["oneOf", "anyOf"]) {
 		const members = v.get(key);
 		if (Array.isArray(members))
-			out.push(union(list(cx, members, child(at, key))));
+			out.push(union(admitted(members, list(cx, members, child(at, key)))));
 	}
 	return nullable ? union([inter(out), NULL]) : inter(out);
+}
+
+/**
+ * The keys a closed object admits (`additionalProperties: false`, no
+ * `patternProperties`): its declared properties. undefined when it is not closed.
+ */
+function closedKeys(v: JsonObject): Set<string> | undefined {
+	if (v.get("additionalProperties") !== false) return undefined;
+	if (v.get("patternProperties") !== undefined) return undefined;
+	const props = v.get("properties");
+	return new Set(
+		props instanceof JsonObject ? props.entries.map(([k]) => k) : [],
+	);
+}
+
+/** The keys a schema requires: its own `required`, and those of the schema its `$ref` reaches. */
+function requiredKeys(cx: Ctx, s: Value): string[] {
+	const req = get(s, "required");
+	const own = Array.isArray(req)
+		? req.filter((n): n is string => typeof n === "string")
+		: [];
+	const r = str(s, "$ref");
+	const target = r === undefined ? undefined : cx.tryLocate(r);
+	if (target === undefined) return own;
+	// The target's own $refs resolve against the document it is in.
+	return [
+		...own,
+		...cx.withBase(target.base, () => requiredKeys(cx, target.value)),
+	];
 }
 
 /** Keywords that only apply to objects; their presence implies `type: object`. */
@@ -342,6 +381,10 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (d !== undefined) p.doc = d;
 		props.push(p);
 	}
+	// A closed object admits only its declared properties, so requiring another admits nothing.
+	const closed = closedKeys(v);
+	if (closed !== undefined && required.some((n) => !closed.has(n)))
+		return NEVER;
 	// maxProperties 0 admits no keys: the empty object, or nothing if one is required.
 	const max = v.get("maxProperties");
 	if (max instanceof JsonNumber && Number(max.text) === 0)
