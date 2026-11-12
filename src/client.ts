@@ -278,6 +278,24 @@ export type ResultOf<
 	A extends ParseAs | undefined = undefined,
 > = Result<Op<P, Path, M>, A, M>;
 
+/**
+ * The results of R that `if (res.ok)` leaves: the 2xx statuses, and `default`, which
+ * covers an undocumented 2xx (its `ok` is `boolean`). `OkResult<ResultOf<…>>["data"]`
+ * types what a wrapper returns when it throws the others.
+ */
+export type OkResult<R> = R extends { ok: infer K }
+	? true extends K
+		? R & { ok: true }
+		: never
+	: never;
+
+/** The results of R that `if (!res.ok)` leaves: the other statuses, and `default`. */
+export type NotOkResult<R> = R extends { ok: infer K }
+	? false extends K
+		? R & { ok: false }
+		: never
+	: never;
+
 type MaybePromise<T> = T | Promise<T>;
 
 export interface ClientConfig extends FetchOptions {
