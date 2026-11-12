@@ -140,6 +140,21 @@ async function get<
 
 For `api.request`, the method takes the place of `"get"`: `ArgsOf<paths, "COPY", Path>`.
 
+`OkResult<R>` and `NotOkResult<R>` are the results `if (res.ok)` leaves on each side. `default` is on both, since it covers an undocumented 2xx; `Extract<R, { ok: true }>` would drop it. A wrapper that throws the others returns `OkResult<…>["data"]`:
+
+```ts
+import type { ArgsOf, OkResult, PathsOf, ResultOf } from "kanagata/client";
+
+async function getOk<Path extends PathsOf<paths, "get">>(
+	path: Path,
+	...args: ArgsOf<paths, "get", Path>
+): Promise<OkResult<ResultOf<paths, "get", Path>>["data"]> {
+	const res = await api.get(path, ...args);
+	if (!res.ok) throw res; // NotOkResult<ResultOf<paths, "get", Path>>
+	return res.data;
+}
+```
+
 ### Details
 
 - **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. `""` is the origin of the page's base URL. Its own query is kept, before the call's. An operation that declares `servers` (or whose path item does) is served there, not by the document's servers, so its call names one of them as `baseUrl`; other operations take the config's and cannot be given one.

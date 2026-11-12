@@ -5,6 +5,8 @@ import {
 	type ArgsOf,
 	type Client,
 	createClient,
+	type NotOkResult,
+	type OkResult,
 	type ParseAs,
 	type PathsOf,
 	type Result,
@@ -228,6 +230,43 @@ export async function statusRanges(): Promise<void> {
 
 	const head = await api.head("/things/{id}", { path: { id: 1 } });
 	expectType<Equal<typeof head.data, undefined>>();
+}
+
+export async function okResults(): Promise<void> {
+	// README: OkResult and NotOkResult are the results `if (res.ok)` leaves on each side.
+	type Get = ResultOf<Api.paths, "get", "/things/{id}">;
+	expectType<Equal<OkResult<Get>["data"], Api.Thing | string>>();
+	expectType<Equal<NotOkResult<Get>["data"], Api.Problem>>();
+	expectType<Equal<OkResult<Get>["ok"], true>>();
+	expectType<Equal<NotOkResult<Get>["ok"], false>>();
+	// default (ok: boolean) is on both sides, as an undocumented 2xx may arrive.
+	type Delete = ResultOf<Api.paths, "delete", "/things/{id}">;
+	expectType<Equal<OkResult<Delete>["data"], undefined | Api.Problem>>();
+	expectType<Equal<NotOkResult<Delete>["data"], Api.Problem>>();
+	expectType<Equal<NotOkResult<Delete>["status"], number>>();
+	type Default = ResultOf<DefaultOnly, "get", "/d">;
+	expectType<Equal<OkResult<Default>["data"], { n: number }>>();
+	expectType<Equal<NotOkResult<Default>["data"], { n: number }>>();
+	// Only successes, or only failures: the other side is never.
+	type Head = ResultOf<NoBodyPaths, "head", "/n">;
+	expectType<Equal<NotOkResult<Head>, never>>();
+	type Basic404 = Extract<
+		ResultOf<Basic.paths, "get", "/users/{id}">,
+		{ status: 404 }
+	>;
+	expectType<Equal<OkResult<Basic404>, never>>();
+
+	// A wrapper that returns data on success and throws the result otherwise.
+	async function getOk<Path extends PathsOf<Api.paths, "get">>(
+		path: Path,
+		...args: ArgsOf<Api.paths, "get", Path>
+	): Promise<OkResult<ResultOf<Api.paths, "get", Path>>["data"]> {
+		const res = await api.get(path, ...args);
+		if (!res.ok) throw res;
+		return res.data;
+	}
+	const data = await getOk("/things/{id}", { path: { id: 1 } });
+	expectType<Equal<typeof data, Api.Thing | string>>();
 }
 
 export async function optionalInit(): Promise<void> {
