@@ -25,7 +25,7 @@ const HELP = `kanagata - TypeScript types from OpenAPI 3.0 / 3.1 / 3.2 (JSON or 
 
 Usage:
   kanagata generate <openapi.json|yaml> [-o <out.d.ts>] [--check]
-                    [--strict-nullable-enum]
+                    [--loose-nullable]
   kanagata init [-o <client.ts>] [--force]
 
 Commands:
@@ -35,9 +35,10 @@ Commands:
 Options:
   -o <path>      Output file (generate: stdout, init: ./client.ts)
   --check        Exit with 1 if the -o file differs from the generated output
-  --strict-nullable-enum
-                 In 3.0, keep null out of an enum or const that does not
-                 list it, even with nullable: true (as OpenAPI 3.0.3 says)
+  --loose-nullable
+                 In 3.0, read nullable: true as "this schema or null", even
+                 where OpenAPI 3.0.3 gives it no effect (no type, next to
+                 $ref, an enum without null)
   --force        Let init overwrite an existing file
   -h, --help     Show this help
   -V, --version  Show the version
@@ -126,7 +127,7 @@ interface Flags {
 	output?: string;
 	check: boolean;
 	force: boolean;
-	strictNullableEnum: boolean;
+	looseNullable: boolean;
 	help: boolean;
 }
 
@@ -138,7 +139,7 @@ function parseFlags(
 		positional: [],
 		check: false,
 		force: false,
-		strictNullableEnum: false,
+		looseNullable: false,
 		help: false,
 	};
 	const rest = args[Symbol.iterator]();
@@ -153,7 +154,7 @@ function parseFlags(
 			f.output = path.value;
 		} else if (a === "--check") f.check = true;
 		else if (a === "--force") f.force = true;
-		else if (a === "--strict-nullable-enum") f.strictNullableEnum = true;
+		else if (a === "--loose-nullable") f.looseNullable = true;
 		else if (isHelp) f.help = true;
 		else f.positional.push(a);
 	}
@@ -166,7 +167,7 @@ function generateCommand(
 	out: (text: string) => void,
 	err: (line: string) => void,
 ): number {
-	const f = parseFlags(args, ["-o", "--check", "--strict-nullable-enum"]);
+	const f = parseFlags(args, ["-o", "--check", "--loose-nullable"]);
 	if (f.help) {
 		out(HELP);
 		return 0;
@@ -187,7 +188,7 @@ function generateCommand(
 	const generated = generate(
 		src,
 		input === "-" ? undefined : fileSource(input, io),
-		{ strictNullableEnum: f.strictNullableEnum },
+		{ looseNullable: f.looseNullable },
 	);
 	for (const w of generated.warnings) err(`${w.at}: warning: ${w.msg}`);
 

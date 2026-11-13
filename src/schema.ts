@@ -91,19 +91,20 @@ export function doc(v: Value): string | undefined {
 }
 
 /**
- * `nullable: true` (3.0 only; 3.1 has no such keyword) adds `null` to whatever the rest
- * of the schema gives, as documents mean it (see README); with `strictNullableEnum`,
- * an `enum` or `const` that does not list `null` keeps it out, as OAS 3.0.3 says.
+ * `nullable: true` (3.0 only; 3.1 has no such keyword) adds `null` to the `type` next
+ * to it, and only then; the other keywords still apply to `null` (OAS 3.0.3). With
+ * `looseNullable` it adds `null` to whatever the rest of the schema gives (see README).
  */
 function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const nullable = !cx.refSiblings && v.get("nullable") === true;
+	const loose = nullable && cx.looseNullable;
 	const out: Ty[] = [];
 	const r = v.str("$ref");
 	if (r !== undefined) {
 		const target = reference(cx, r, at);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
-		// are ignored, except nullable.
-		if (!cx.refSiblings) return nullable ? union([target, NULL]) : target;
+		// are ignored, nullable among them unless loose.
+		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
 		out.push(target);
 	}
 	const c = v.get("const");
@@ -131,7 +132,8 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		);
 		out.push(...admitted(allOf, members));
 	}
-	out.push(own(cx, v, at));
+	const typedNull = nullable && !loose && v.get("type") !== undefined;
+	out.push(typedNull ? union([own(cx, v, at), NULL]) : own(cx, v, at));
 	// `discriminator` is not read: it must not change what the schema accepts (OAS 3.0.4, 3.1.1),
 	// and a member is narrowed by the property only where the member itself fixes it.
 	for (const key of ["oneOf", "anyOf"]) {
@@ -139,16 +141,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (Array.isArray(members))
 			out.push(union(admitted(members, list(cx, members, child(at, key)))));
 	}
-	const addsNull = nullable && (!cx.strictNullableEnum || valuesAdmitNull(v));
-	return addsNull ? union([inter(out), NULL]) : inter(out);
-}
-
-/** Whether the schema's own `enum` and `const`, where present, admit `null`. */
-function valuesAdmitNull(v: JsonObject): boolean {
-	const e = v.get("enum");
-	if (Array.isArray(e) && !e.includes(null)) return false;
-	const c = v.get("const");
-	return c === undefined || c === null;
+	return loose ? union([inter(out), NULL]) : inter(out);
 }
 
 /**

@@ -14,9 +14,9 @@ export type User = {
   id: number;
 };
 
-export type MaybeUser = User | null;
+export type MaybeUser = User;
 
 export type Holder = {
-  owner?: User | null;
-  either?: User | string | null;
+  owner?: User;
+  either?: User | string;
 };

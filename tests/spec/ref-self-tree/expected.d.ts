@@ -11,5 +11,5 @@ export interface schemas {
 export type Tree = {
   value: number;
   children?: Tree[];
-  parent?: Tree | null;
+  parent?: Tree;
 };

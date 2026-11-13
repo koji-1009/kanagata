@@ -143,8 +143,8 @@ export class Ctx {
 	mode: View = "read";
 	/** Whether keywords next to `$ref` apply (OpenAPI 3.1) or are ignored (3.0). */
 	readonly refSiblings: boolean;
-	/** Whether an `enum` or `const` that does not list `null` keeps it out despite 3.0 `nullable: true`. */
-	readonly strictNullableEnum: boolean;
+	/** Whether 3.0 `nullable: true` means "this schema or null" instead of adding `null` to `type`. */
+	readonly looseNullable: boolean;
 	/** Schemas from other files that got a key, in the order they were first referred to. */
 	readonly hoisted: Hoisted[] = [];
 	/** Hoisted keys by the URI of the schema. */
@@ -186,12 +186,12 @@ export class Ctx {
 		schemas: ReadonlySet<string> = new Set(),
 		refSiblings = false,
 		location?: Location,
-		strictNullableEnum = false,
+		looseNullable = false,
 	) {
 		this.root = root;
 		this.schemas = schemas;
 		this.refSiblings = refSiblings;
-		this.strictNullableEnum = strictNullableEnum;
+		this.looseNullable = looseNullable;
 		this.documentUrl =
 			location === undefined
 				? DOCUMENT

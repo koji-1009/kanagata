@@ -40,10 +40,11 @@ export interface Source {
 /** How the document is read. */
 export interface Options {
 	/**
-	 * In 3.0, keep `null` out of an `enum` or `const` that does not list it, even with
-	 * `nullable: true`, as OpenAPI 3.0.3 says. Off by default: documents mean "or null".
+	 * In 3.0, read `nullable: true` as "this schema or null": `null` even without `type`,
+	 * next to `$ref`, and past an `enum`, `const` or `allOf` that does not admit it.
+	 * Off by default: `nullable` adds `null` to `type` only, as OpenAPI 3.0.3 says.
 	 */
-	strictNullableEnum?: boolean;
+	looseNullable?: boolean;
 }
 
 /** Text that starts with `{` (or is blank) is JSON; anything else is YAML. */
@@ -80,7 +81,7 @@ export function generate(
 			url: source.url,
 			load: (url) => loadText(cx, url, source.read(url)),
 		},
-		options.strictNullableEnum === true,
+		options.looseNullable === true,
 	);
 
 	const p = paths(cx, root);
