@@ -1,6 +1,6 @@
 # AGENTS.md
 
-How to change kanagata without breaking README.md, which is the user-facing contract.
+How to change kanagata without breaking README.md and `docs/`, which are the user-facing contract.
 
 ## Scope
 
@@ -16,7 +16,7 @@ The exports of `src/index.ts` and `src/client.ts` are public API under semver.
 ## Layout
 
 - `src/` is the whole library, compiled one to one into `dist/` by `tsconfig.build.json`; every `bin` and `exports` entry is a file there. The package ships `dist/` and `src/client.ts` (for `init`).
-- `tests/` and `scripts/` are never published.
+- `tests/`, `scripts/` and `docs/` are never published; README links to `docs/`, which npm resolves to the repository.
 - `dist/` and `.real-specs/` are generated and ignored by git.
 
 | Config                             | Checks                                                                                    |
@@ -66,10 +66,10 @@ pnpm build      # dist/
 3. **Types follow what the schema accepts**, as closely as TypeScript allows, never what another generator prints.
 4. **100% coverage with behaviour tests.** Remove a branch no input reaches instead of testing it artificially. `test:unit` runs in one process because merged coverage can hide unreached branches.
 5. **Real documents only.** Write code for documents as APIs publish them, not for pathological inputs. Show a pattern in a real document before calling it a defect. Unsupported or malformed input that real documents have is a located error (exit code 2) or a warning.
-6. **README is the contract.** A user-observable change (output, warnings, CLI, client) updates README in the same change.
+6. **README and `docs/` are the contract.** A user-observable change (output, warnings, CLI, client) updates them in the same change: the full rules in `docs/cli.md`, `docs/client.md` or `docs/types.md`, and README where its summary changes.
 7. **Biome** formats and lints (`pnpm format`); a `biome-ignore` needs a reason that holds.
-8. **Plain, not clever.** No guessing, no rescuing malformed schemas, no warnings for authors' mistakes. Where documents broadly mean something the specification's letter does not (`nullable` in 3.0), README states the convention.
+8. **Plain, not clever.** No guessing, no rescuing malformed schemas, no warnings for authors' mistakes. The specification's letter is the default; where documents broadly mean something else (`nullable` in 3.0), an option reads them that way and `docs/` states the convention.
 
 ## Commits
 
-[Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/): `type(scope): description`, imperative, lower case, no period. Types: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`; scopes: `client`, `cli`, `yaml`, `ref`. A behaviour change goes in one commit with its tests and README; a breaking change uses `!` and a `BREAKING CHANGE:` footer.
+[Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/): `type(scope): description`, imperative, lower case, no period. Types: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `build`, `ci`, `chore`; scopes: `client`, `cli`, `yaml`, `ref`. A behaviour change goes in one commit with its tests and docs; a breaking change uses `!` and a `BREAKING CHANGE:` footer.
