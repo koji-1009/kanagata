@@ -21,6 +21,8 @@ export type Campaign = {
   code?: string;
 } & {
   code: {} | null;
+} & {
+  secret?: never;
 };
 
 export type Secret = {
@@ -39,8 +41,12 @@ export type Open = {
   code?: string;
 } & ({
   code: {} | null;
+} & {
+  secret?: never;
 } | {
   secret: {} | null;
+} & {
+  code?: never;
 });
 
 export type Patterned = {

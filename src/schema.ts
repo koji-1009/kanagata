@@ -138,8 +138,13 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	// and a member is narrowed by the property only where the member itself fixes it.
 	for (const key of ["oneOf", "anyOf"]) {
 		const members = v.get(key);
-		if (Array.isArray(members))
-			out.push(union(admitted(members, list(cx, members, child(at, key)))));
+		if (!Array.isArray(members)) continue;
+		const tys = admitted(members, list(cx, members, child(at, key)));
+		out.push(
+			union(
+				key === "oneOf" ? exclusive(cx, members, tys, child(at, key)) : tys,
+			),
+		);
 	}
 	return loose ? union([inter(out), NULL]) : inter(out);
 }
@@ -171,6 +176,112 @@ function requiredKeys(cx: Ctx, s: Value): string[] {
 		...own,
 		...cx.withBase(target.base, () => requiredKeys(cx, target.value)),
 	];
+}
+
+/**
+ * oneOf admits a value only one member admits. A member that asks nothing but some
+ * keys (`{ required: [a] }`) does not admit exactly the objects without one of them.
+ * So among such members, each lacks one of the keys each other requires: `b?: never`,
+ * or `({ b?: never } | { c?: never })` for `required: [b, c]`, with `b?: unknown;
+ * c?: unknown` so that an object literal with one of them is not excess. One that has
+ * all of another's keys admits nothing. Other members stay as they are: TypeScript
+ * cannot say what they do not admit.
+ */
+function exclusive(cx: Ctx, members: Value[], tys: Ty[], at: string): Ty[] {
+	const keys = members.map((m, i) => keysOnly(cx, m, child(at, String(i))));
+	const without = (key: string, ty: Ty): Prop => ({ key, ty, optional: true });
+	return tys.map((t, i) => {
+		const own = keys[i];
+		if (own === undefined) return t;
+		// Each key another member requires: never here, or unknown where only one of several must lack.
+		const others = new Map<string, Ty>();
+		const either: Ty[] = [];
+		for (const [j, other] of keys.entries()) {
+			if (j === i || other === undefined) continue;
+			const missing = other.filter((k) => !own.includes(k));
+			if (missing.length === 0) return NEVER;
+			if (missing.length === 1) {
+				others.set(missing[0] as string, NEVER);
+				continue;
+			}
+			for (const k of missing) if (!others.has(k)) others.set(k, UNKNOWN);
+			either.push(
+				union(
+					missing.map((k) => ({ kind: "object", props: [without(k, NEVER)] })),
+				),
+			);
+		}
+		if (others.size === 0) return t;
+		const props = [...others].map(([k, ty]) => without(k, ty));
+		return inter([t, { kind: "object", props }, ...either]);
+	});
+}
+
+/** Keywords that do not change which values are valid. */
+const ANNOTATIONS = new Set([
+	"title",
+	"description",
+	"$comment",
+	"default",
+	"example",
+	"examples",
+	"deprecated",
+	"externalDocs",
+	"xml",
+]);
+
+const isAnnotation = (k: string): boolean =>
+	ANNOTATIONS.has(k) || k.startsWith("x-");
+
+/**
+ * The keys a schema requires, when that is all it asks of an object: a non-empty
+ * `required`, with at most `type: object`, properties that admit any value and
+ * annotations; or a `$ref`, with annotations at most, to such a schema.
+ */
+function keysOnly(cx: Ctx, s: Value, at: string): string[] | undefined {
+	if (!(s instanceof JsonObject)) return undefined;
+	const r = s.str("$ref");
+	if (r !== undefined)
+		return s.entries.every(([k]) => k === "$ref" || isAnnotation(k))
+			? follow(cx, r, at, (t, where) => keysOnly(cx, t, where))
+			: undefined;
+	const props = child(at, "properties");
+	const allowed = s.entries.every(
+		([k, x]) =>
+			k === "required" ||
+			isAnnotation(k) ||
+			(k === "type" && x === "object") ||
+			(k === "properties" &&
+				x instanceof JsonObject &&
+				x.entries.every(([p, ps]) => admitsAnyValue(cx, ps, child(props, p)))),
+	);
+	const req = s.get("required");
+	return allowed && Array.isArray(req) && req.length > 0
+		? req.filter((n): n is string => typeof n === "string")
+		: undefined;
+}
+
+/** Whether a schema admits every value: `true`, annotations alone, or a `$ref` to such a schema next to them. */
+function admitsAnyValue(cx: Ctx, s: Value, at: string): boolean {
+	if (s === true) return true;
+	if (!(s instanceof JsonObject)) return false;
+	if (!s.entries.every(([k]) => k === "$ref" || isAnnotation(k))) return false;
+	const r = s.str("$ref");
+	return (
+		r === undefined ||
+		follow(cx, r, at, (t, where) => admitsAnyValue(cx, t, where))
+	);
+}
+
+/** `f` on the schema a `$ref` reaches, with the base URI of the document it is in. */
+function follow<T>(
+	cx: Ctx,
+	r: string,
+	at: string,
+	f: (target: Value, where: string) => T,
+): T {
+	const { value, base, where } = cx.locate(r, at);
+	return cx.withBase(base, () => f(value, where));
 }
 
 /** Keywords that only apply to objects; their presence implies `type: object`. */
