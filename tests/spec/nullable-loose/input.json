@@ -1,0 +1,18 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Closed": { "description": "With looseNullable, nullable adds null even next to an enum without it.", "type": "string", "enum": ["a", "b"], "nullable": true },
+      "Untyped": { "enum": ["a"], "nullable": true },
+      "Fixed": { "type": "string", "const": "a", "nullable": true },
+      "Choice": { "type": "string", "enum": ["a", null], "nullable": true },
+      "Name": { "type": "string", "nullable": true },
+      "User": { "type": "object", "required": ["id"], "properties": { "id": { "type": "integer" } } },
+      "MaybeUser": { "description": "nullable without type adds null.", "allOf": [{ "$ref": "#/components/schemas/User" }], "nullable": true },
+      "Either": { "oneOf": [{ "$ref": "#/components/schemas/User" }, { "type": "string" }], "nullable": true },
+      "Owner": { "description": "nullable next to $ref adds null, though 3.0 ignores the keywords there.", "$ref": "#/components/schemas/User", "nullable": true },
+      "TypedOwner": { "type": "object", "allOf": [{ "$ref": "#/components/schemas/User" }], "nullable": true }
+    }
+  }
+}

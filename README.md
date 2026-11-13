@@ -44,12 +44,12 @@ kanagata generate - < openapi.yaml > src/api/schema.d.ts       # stdin to stdout
 kanagata init -o src/api/client.ts                             # copy the client into your project
 ```
 
-| Option                   | Meaning                                                                                                                                       |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-o <path>`              | output file (`generate`: stdout; `init`: `./client.ts`)                                                                                       |
-| `--check`                | `generate`: compare with the `-o` file instead of writing                                                                                     |
-| `--strict-nullable-enum` | `generate`: in 3.0, keep `null` out of an `enum` or `const` that does not list it, even with `nullable: true`; see [`nullable`](#nullable-30) |
-| `--force`                | `init`: overwrite an existing file                                                                                                            |
+| Option             | Meaning                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| `-o <path>`        | output file (`generate`: stdout; `init`: `./client.ts`)                                            |
+| `--check`          | `generate`: compare with the `-o` file instead of writing                                          |
+| `--loose-nullable` | `generate`: in 3.0, read `nullable: true` as "this schema or null"; see [`nullable`](#nullable-30) |
+| `--force`          | `init`: overwrite an existing file                                                                 |
 
 - **Exit codes:** 0 success, 1 `--check` found a difference, 2 an error (document, command line, or file I/O), 3 a bug in kanagata (stack on stderr).
 - **Messages** go to stderr as `location: message` or `location: warning: message`. The location is `line:col` for JSON and YAML syntax, a JSON Pointer otherwise, and starts with the file's path relative to the document for other files (`schemas/User.yaml#/properties/id`, `common.json:3:5`).
@@ -199,7 +199,7 @@ try {
 }
 ```
 
-`generate(src, source?, options?)` returns `{ code, warnings }` and throws `GenerateError` (`e.name` is `"GenerateError"` for every `kind`). `source` is the document's absolute URL and `read(url)`, which returns the text of a file a `$ref` points to; without it, `$ref`s to other files are errors. `options` is `{ strictNullableEnum?: boolean }`, as `--strict-nullable-enum`.
+`generate(src, source?, options?)` returns `{ code, warnings }` and throws `GenerateError` (`e.name` is `"GenerateError"` for every `kind`). `source` is the document's absolute URL and `read(url)`, which returns the text of a file a `$ref` points to; without it, `$ref`s to other files are errors. `options` is `{ looseNullable?: boolean }`, as `--loose-nullable`.
 
 ## Output
 
@@ -233,8 +233,8 @@ Types follow what the schema accepts, not another generator's output.
 | `const`, `enum`                                                                                                     | literal types; objects and arrays become exact object and tuple types                                                                                                 |
 | `allOf`, `oneOf` / `anyOf`, sibling `type` / object keywords                                                        | all intersected: `A & B & (C \| D)`                                                                                                                                   |
 | `discriminator`                                                                                                     | not read (it must not change what is accepted, OAS 3.0.4 / 3.1.1); members narrow where they fix the property (`const`, `enum`)                                       |
-| keywords next to `$ref`                                                                                             | intersected in 3.1 and 3.2; ignored in 3.0 (`readOnly` / `writeOnly` too) except `nullable` and `description`                                                         |
-| `type: [...]`, `nullable: true` (3.0)                                                                               | union, with `null`                                                                                                                                                    |
+| keywords next to `$ref`                                                                                             | intersected in 3.1 and 3.2; ignored in 3.0 (`readOnly` / `writeOnly` and `nullable` too) except `description`                                                         |
+| `type: [...]`; `nullable: true` (3.0) next to `type`                                                                | union, with `null`; see [`nullable`](#nullable-30)                                                                                                                    |
 | `type` with `const` / `enum`, and these with each other                                                             | the values all allow: `type: string, enum: ["a", 1]` is `"a"`; a contradiction is `never`                                                                             |
 | `type: integer`                                                                                                     | `number`; non-integer `enum` / `const` values are dropped                                                                                                             |
 | `format: binary`; binary `contentMediaType` without `contentEncoding`                                               | `Blob`                                                                                                                                                                |
@@ -261,9 +261,15 @@ A sequential media type's `itemSchema` (3.2) is checked like a schema but types 
 
 ### `nullable` (3.0)
 
-`nullable: true` adds `null` even without `type` (`{ nullable: true, allOf: [{ $ref: … }] }`) and next to an `enum` (or `const`) that does not list `null`. OpenAPI 3.0.3 says neither takes effect, but documents use both to mean "this schema or null" (Stripe and GitHub among them) and their servers return `null`, so kanagata follows the intent.
+`nullable: true` reads as OpenAPI 3.0.3 says: it adds `null` to the `type` in the same schema, and the other keywords still apply to `null`.
 
-`--strict-nullable-enum` (`generate(src, source, { strictNullableEnum: true })`) reads the `enum` case as OpenAPI 3.0.3 does: an `enum` or `const` that does not list `null` keeps it out, so `{ type: string, enum: [a, b], nullable: true }` is `"a" | "b"`. `nullable` without `type` still adds `null`.
+- `{ type: string, nullable: true }` is `string | null`.
+- Without `type` it takes no effect: `{ nullable: true, allOf: [{ $ref: User }] }` is `User`.
+- Next to `$ref` it is ignored, like every keyword there in 3.0: `{ $ref: User, nullable: true }` is `User`.
+- An `enum` or `const` that does not list `null` keeps it out: `{ type: string, enum: [a, b], nullable: true }` is `"a" | "b"`.
+- `allOf`, `oneOf` and `anyOf` members must admit `null` too: `{ type: object, nullable: true, allOf: [{ $ref: User }] }` is `User & (Record<string, unknown> | null)`, which has `null` only if `User` does.
+
+Many documents use these forms to mean "this schema or null" (Stripe and GitHub among them), and their servers return `null`. `--loose-nullable` (`generate(src, source, { looseNullable: true })`) reads them that way: `nullable: true` adds `null` to the whole schema, so each example above but the first is also `| null`.
 
 ## Not supported
 

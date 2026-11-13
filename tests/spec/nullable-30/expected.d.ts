@@ -14,6 +14,8 @@ export interface schemas {
   Fixed: Fixed;
   NotNull: NotNull;
   MaybeNotNull: MaybeNotNull;
+  StillNotNull: StillNotNull;
+  MaybePoint: MaybePoint;
 }
 
 export type Name = string | null;
@@ -27,14 +29,20 @@ export type Point = {
 
 export type Choice = "a" | "b" | null;
 
-/** nullable adds null even next to an enum without it, as documents mean it. */
-export type Closed = "a" | null;
+/** nullable adds null to the type; an enum without null still keeps it out (OAS 3.0.3). */
+export type Closed = "a";
 
-export type Untyped = "a" | null;
+/** nullable without type takes no effect. */
+export type Untyped = "a";
 
-export type Fixed = "a" | null;
+export type Fixed = "a";
 
 export type NotNull = string;
 
-/** nullable is the one keyword next to $ref that 3.0 documents rely on. */
-export type MaybeNotNull = NotNull | null;
+/** 3.0 ignores the keywords next to $ref, nullable among them. */
+export type MaybeNotNull = NotNull;
+
+/** null must also pass allOf. */
+export type StillNotNull = NotNull & (string | null);
+
+export type MaybePoint = Point & (Record<string, unknown> | null);
