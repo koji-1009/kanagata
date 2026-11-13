@@ -93,7 +93,7 @@ export function doc(v: Value): string | undefined {
 /**
  * `nullable: true` (3.0 only; 3.1 has no such keyword) adds `null` to the `type` next
  * to it, and only then; the other keywords still apply to `null` (OAS 3.0.3). With
- * `looseNullable` it adds `null` to whatever the rest of the schema gives (see README).
+ * `looseNullable` it adds `null` to whatever the rest of the schema gives (see docs/types.md).
  */
 function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const nullable = !cx.refSiblings && v.get("nullable") === true;

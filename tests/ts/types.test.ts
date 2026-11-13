@@ -125,7 +125,7 @@ export async function narrowing(): Promise<void> {
 }
 
 export async function resultType(): Promise<void> {
-	// README: Result<operation, parseAs, method> is what a call resolves to, as is the
+	// docs/client.md: Result<operation, parseAs, method> is what a call resolves to, as is the
 	// call's return type.
 	const res = await api.get("/things/{id}", { path: { id: 1 } });
 	type Thing = Api.paths["/things/{id}"]["get"];
@@ -155,7 +155,7 @@ export async function resultType(): Promise<void> {
 }
 
 export async function wrapping(): Promise<void> {
-	// README: PathsOf, ArgsOf and ResultOf type a function that wraps a call, with no assertion.
+	// docs/client.md: PathsOf, ArgsOf and ResultOf type a function that wraps a call, with no assertion.
 	// TypeScript cannot infer parseAs through the spread, so the call names Path and A.
 	async function get<
 		Path extends PathsOf<Api.paths, "get">,
@@ -233,7 +233,7 @@ export async function statusRanges(): Promise<void> {
 }
 
 export async function okResults(): Promise<void> {
-	// README: OkResult and NotOkResult are the results `if (res.ok)` leaves on each side.
+	// docs/client.md: OkResult and NotOkResult are the results `if (res.ok)` leaves on each side.
 	type Get = ResultOf<Api.paths, "get", "/things/{id}">;
 	expectType<Equal<OkResult<Get>["data"], Api.Thing | string>>();
 	expectType<Equal<NotOkResult<Get>["data"], Api.Problem>>();
