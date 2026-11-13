@@ -18,6 +18,7 @@ import type * as Api from "../spec/client/expected";
 import type * as Composition from "../spec/composition-with-type/expected";
 import type * as Methods32 from "../spec/methods-32/expected";
 import type * as Missing from "../spec/object-required-optional/expected";
+import type * as OneOfRequired from "../spec/oneof-required/expected";
 import type * as Cookies from "../spec/params-header-cookie/expected";
 import type * as Querystring from "../spec/params-querystring/expected";
 import type * as Derived from "../spec/read-write-allof/expected";
@@ -863,4 +864,28 @@ export function requiredRefOfAnyValue(
 	const undef: AnyRef.Box = { a: undefined, b: 1, c: "c", n: null, both: 1 };
 	void ok;
 	void undef;
+}
+
+export function oneOfRequiredKeys(
+	targets: OneOfRequired.Targets,
+	pair: OneOfRequired.Pair,
+	mixed: OneOfRequired.Mixed,
+): void {
+	// Members that only require keys exclude each other: exactly one of the keys.
+	const one: typeof targets = { repositories: ["a/b"] };
+	// @ts-expect-error two of them match two members, which oneOf rejects
+	const two: typeof targets = { repositories: ["a/b"], lists: ["l"] };
+	// @ts-expect-error none of them matches no member
+	const none: typeof targets = {};
+	// The member that requires c lacks a or b, and the one that requires a and b lacks c.
+	const ab: typeof pair = { a: 1, b: 1 };
+	const ac: typeof pair = { a: 1, c: 1 };
+	const bc: typeof pair = { b: 1, c: 1 };
+	// @ts-expect-error a, b and c match every member
+	const abc: typeof pair = { a: 1, b: 1, c: 1 };
+	// Only the member requiring a matches (b is not a number), so oneOf accepts it: a member
+	// with a value constraint takes no keys away from the others.
+	const value = { a: 1, b: "x" };
+	const b: typeof mixed = value;
+	void [one, two, none, ab, ac, bc, abc, b];
 }

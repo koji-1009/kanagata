@@ -29,6 +29,7 @@ Types follow what the schema accepts, not another generator's output.
 | `false`                                                                                                             | `never`                                                                                                                                                               |
 | `const`, `enum`                                                                                                     | literal types; objects and arrays become exact object and tuple types                                                                                                 |
 | `allOf`, `oneOf` / `anyOf`, sibling `type` / object keywords                                                        | all intersected: `A & B & (C \| D)`                                                                                                                                   |
+| `oneOf` members that only require keys                                                                              | each lacks the keys the others require; see [`oneOf`](#oneof)                                                                                                         |
 | `discriminator`                                                                                                     | not read (it must not change what is accepted, OAS 3.0.4 / 3.1.1); members narrow where they fix the property (`const`, `enum`)                                       |
 | keywords next to `$ref`                                                                                             | intersected in 3.1 and 3.2; ignored in 3.0 (`readOnly` / `writeOnly` and `nullable` too) except `description`; see [`nullable`](#nullable-30)                         |
 | `type: [...]`; `nullable: true` (3.0) next to `type`                                                                | union, with `null`; see [`nullable`](#nullable-30)                                                                                                                    |
@@ -44,6 +45,15 @@ Types follow what the schema accepts, not another generator's output.
 | object keywords without `type`                                                                                      | an object (non-objects are never meant), so `{ type: "string", allOf: [{ properties: … }] }` is `never`                                                               |
 | `readOnly` / `writeOnly` property                                                                                   | left out of what is sent / what is returned                                                                                                                           |
 | `not`, `if` / `then` / `else`, `dependentSchemas`, `unevaluated*`, `$dynamicRef`                                    | ignored, with a warning                                                                                                                                               |
+
+## `oneOf`
+
+`oneOf` admits a value exactly one member admits. TypeScript has no type for what a member does not admit, so the members are a union, which also admits a value two of them admit, except among members that only require keys: `required`, with at most `type: object`, properties that admit any value (`{}`, `true`, a `$ref` to one) and annotations, or a `$ref` to such a schema. Such a member does not admit exactly the objects that lack one of its keys, so each of them lacks the keys the others require.
+
+- `oneOf: [{ required: [a] }, { required: [b] }]` is `{ a: {} | null } & { b?: never } | { b: {} | null } & { a?: never }`: `{ a, b }` is rejected.
+- Lacking one of several keys: next to `{ required: [b, c] }`, `{ required: [a] }` is `{ a: {} | null } & { b?: unknown; c?: unknown } & ({ b?: never } | { c?: never })`. The keys are declared `unknown` so that an object literal with one of them is not rejected as excess.
+- A member that requires all of another's keys admits nothing: next to `{ required: [a] }`, `{ required: [a, b] }` is `never`.
+- Other members keep their overlaps: with `{ properties: { b: { type: number } }, required: [b] }`, `{ a: 1, b: "x" }` matches only `{ required: [a] }`, so `{ required: [a] }` cannot leave out `b`, and `{ a: 1, b: 1 }`, which both match, stays admitted.
 
 ## Content by media type
 

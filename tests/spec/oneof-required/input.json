@@ -1,0 +1,50 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Anything": true,
+      "Targets": {
+        "type": "object",
+        "properties": {
+          "repositories": { "type": "array", "items": { "type": "string" } },
+          "lists": { "type": "array", "items": { "type": "string" } },
+          "owners": { "type": "array", "items": { "type": "string" } }
+        },
+        "oneOf": [{ "required": ["repositories"] }, { "required": ["lists"] }, { "required": ["owners"] }]
+      },
+      "Forms": {
+        "oneOf": [
+          { "type": "object", "required": ["a"], "description": "by a", "x-note": true },
+          {
+            "properties": { "b": {}, "c": true, "d": { "$ref": "#/components/schemas/Anything", "description": "any" } },
+            "required": ["b"]
+          },
+          { "$ref": "#/components/schemas/ByC", "description": "by c" }
+        ]
+      },
+      "ByC": { "required": ["c"] },
+      "Pair": {
+        "oneOf": [{ "required": ["a", "b"] }, { "required": ["c"] }, { "required": ["a", "b", "c"] }]
+      },
+      "Mixed": {
+        "oneOf": [
+          { "required": ["a"] },
+          { "required": ["c"] },
+          { "properties": { "b": { "type": "number" } }, "required": ["b"] },
+          { "properties": { "d": { "minLength": 1 } }, "required": ["d"] },
+          { "properties": { "f": false }, "required": ["g"] },
+          { "type": ["object", "null"], "required": ["e"] },
+          { "$ref": "#/components/schemas/ByC", "required": ["h"] },
+          false
+        ]
+      },
+      "Alone": {
+        "oneOf": [{ "required": [] }, { "required": ["a"] }]
+      },
+      "Either": {
+        "anyOf": [{ "required": ["a"] }, { "required": ["b"] }]
+      }
+    }
+  }
+}
