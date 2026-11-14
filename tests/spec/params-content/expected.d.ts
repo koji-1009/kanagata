@@ -5,14 +5,25 @@ export interface paths {
     get: {
       parameters: {
         query?: {
-          filter?: {
-            q?: string;
+          filter?: string;
+          raw?: string;
+          tags?: string;
+          form?: {
+            a?: string;
           };
-          raw?: unknown;
+        };
+        header: {
+          "X-Meta": string;
         };
       };
       responses: {
-        200: {};
+        200: {
+          headers: {
+            "X-Page"?: {
+              next?: string;
+            };
+          };
+        };
       };
     };
   };

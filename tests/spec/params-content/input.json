@@ -11,9 +11,34 @@
               "application/json": { "schema": { "type": "object", "properties": { "q": { "type": "string" } } } }
             }
           },
-          { "name": "raw", "in": "query", "content": { "text/plain": {} } }
+          { "name": "raw", "in": "query", "content": { "text/plain": {} } },
+          {
+            "name": "tags",
+            "in": "query",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "type": "string" } } } }
+          },
+          {
+            "name": "form",
+            "in": "query",
+            "content": {
+              "Application/X-WWW-Form-URLEncoded; charset=utf-8": { "schema": { "type": "object", "properties": { "a": { "type": "string" } } } }
+            }
+          },
+          {
+            "name": "X-Meta",
+            "in": "header",
+            "required": true,
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "a": { "type": "integer" } } } } }
+          }
         ],
-        "responses": { "200": { "description": "ok" } }
+        "responses": {
+          "200": {
+            "description": "ok",
+            "headers": {
+              "X-Page": { "content": { "application/json": { "schema": { "type": "object", "properties": { "next": { "type": "string" } } } } } }
+            }
+          }
+        }
       }
     }
   }

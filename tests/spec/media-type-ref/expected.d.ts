@@ -5,9 +5,7 @@ export interface paths {
     post: {
       parameters: {
         query?: {
-          filter?: {
-            q?: string;
-          };
+          filter?: string;
         };
       };
       requestBody: {
