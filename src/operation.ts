@@ -109,13 +109,14 @@ function itemOperations(
 	const out: [string, JsonObject, string][] = [];
 	for (const method of METHODS) {
 		if (method === "query" && !cx.v32) continue;
-		const op = item.get(method) as JsonObject | undefined;
-		if (op !== undefined) out.push([method, op, child(itemAt, method)]);
+		const op = item.get(method);
+		const at = child(itemAt, method);
+		if (op !== undefined) out.push([method, operationObject(op, at), at]);
 	}
-	const more = cx.v32
-		? (item.get("additionalOperations") as JsonObject | undefined)
-		: undefined;
+	const more = cx.v32 ? item.get("additionalOperations") : undefined;
 	const moreAt = child(itemAt, "additionalOperations");
+	if (more !== undefined && !(more instanceof JsonObject))
+		throw new DiagError(moreAt, "additionalOperations must be an object");
 	for (const [method, op] of more?.entries ?? []) {
 		const at = child(moreAt, method);
 		// OpenAPI forbids the method a fixed field sends (`POST` for `post`); the field's own
@@ -129,9 +130,14 @@ function itemOperations(
 				at,
 				`${method} is the Path Item's ${field} field, so additionalOperations must not have it`,
 			);
-		out.push([method, op as JsonObject, at]);
+		out.push([method, operationObject(op, at), at]);
 	}
 	return out;
+}
+
+function operationObject(op: Value, at: string): JsonObject {
+	if (op instanceof JsonObject) return op;
+	throw new DiagError(at, "an operation must be an object");
 }
 
 /** A parameter, where it is, and the base URI of the document it is in. */
@@ -158,7 +164,9 @@ function operation(
 	// The servers that serve this operation, in place of the document's: its own, or its
 	// path item's. A webhook's request is sent by the API, so it has none to choose.
 	const servers =
-		sent === "write" ? (serverUrls(o) ?? serverUrls(item)) : undefined;
+		sent === "write"
+			? (serverUrls(o, at) ?? serverUrls(item, itemAt))
+			: undefined;
 	if (servers !== undefined) fields.push(prop("servers", tuple(servers)));
 
 	// Path-level parameters first; an operation parameter with the same in + name replaces it.
@@ -175,7 +183,7 @@ function operation(
 			const optional = loc !== "path" && p.get("required") !== true;
 			const whole = loc === "querystring";
 			const ty = cx.inMode(sent, () =>
-				cx.withBase(base, () => paramType(cx, p, pAt, whole)),
+				cx.withBase(base, () => paramType(cx, p, pAt, "parameter", whole)),
 			);
 			// The whole query string (3.2) is one value; its name is not sent.
 			if (whole) groups.push(documented(loc, ty, optional, doc(p)));
@@ -233,11 +241,16 @@ function operation(
  * The URLs of a non-empty `servers`, as literals; a URL with variables (`{region}`) is
  * any string, since TypeScript cannot check the template.
  */
-function serverUrls(owner: JsonObject): Ty[] | undefined {
+function serverUrls(owner: JsonObject, ownerAt: string): Ty[] | undefined {
 	const servers = owner.get("servers");
 	if (!Array.isArray(servers) || servers.length === 0) return undefined;
-	return servers.map((s) => {
-		const url = (s as JsonObject).str("url") as string;
+	return servers.map((s, i) => {
+		const url = s instanceof JsonObject ? s.str("url") : undefined;
+		if (url === undefined)
+			throw new DiagError(
+				child(child(ownerAt, "servers"), String(i)),
+				"a server must have a url",
+			);
 		return url.includes("{") ? STRING : lit(JSON.stringify(url));
 	});
 }
@@ -259,9 +272,13 @@ function collectParams(
 
 /** Adds one parameter; header parameters OpenAPI reserves are left out, as it requires. */
 function collectParam(cx: Ctx, out: Param[], value: Value, pAt: string): void {
-	const p = value as JsonObject;
-	const name = p.str("name") as string;
-	const loc = p.str("in") as string;
+	if (!(value instanceof JsonObject))
+		throw new DiagError(pAt, "a parameter must be an object");
+	const p = value;
+	const name = p.str("name");
+	const loc = p.str("in");
+	if (name === undefined || loc === undefined)
+		throw new DiagError(pAt, "a parameter must have name and in");
 	if (loc === "header" && RESERVED_HEADERS.includes(asciiLower(name))) return;
 	// Header names are case-insensitive, so `X-Id` replaces `x-id`; an operation has one
 	// querystring, whose name is not sent.
@@ -284,17 +301,29 @@ function asciiLower(s: string): string {
 }
 
 /**
- * The type of a parameter or header: its `schema`, or the schema of its one `content`
- * media type. A querystring (`whole`) is that schema for application/x-www-form-urlencoded,
- * which the client URL-encodes; for any other media type it is the serialized text, a string.
+ * The type of a parameter or header (`kind`): its `schema`, or the schema of its one
+ * `content` media type; OpenAPI requires one of the two. A querystring (`whole`) is that
+ * schema for application/x-www-form-urlencoded, which the client URL-encodes; for any
+ * other media type it is the serialized text, a string.
  */
-function paramType(cx: Ctx, p: JsonObject, at: string, whole = false): Ty {
+function paramType(
+	cx: Ctx,
+	p: JsonObject,
+	at: string,
+	kind: "parameter" | "header",
+	whole = false,
+): Ty {
 	const s = p.get("schema");
 	if (s !== undefined) return schema(cx, s, child(at, "schema"));
-	const [[mt, raw]] = (p.get("content") as JsonObject).entries as [
-		[string, Value],
-	];
-	const mAt = child(child(at, "content"), mt);
+	const media = p.get("content");
+	if (media === undefined)
+		throw new DiagError(at, `a ${kind} must have schema or content`);
+	const cAt = child(at, "content");
+	const first = media instanceof JsonObject ? media.entries[0] : undefined;
+	if (first === undefined)
+		throw new DiagError(cAt, "content must have a media type");
+	const [mt, raw] = first;
+	const mAt = child(cAt, mt);
 	return mediaType(cx, raw, mAt, (m) => {
 		const ty = schema(cx, m.get("schema") as Value, child(mAt, "schema"));
 		const urlEncoded = essence(mt) === "application/x-www-form-urlencoded";
@@ -332,12 +361,13 @@ function headers(cx: Ctx, response: Value, at: string): Ty | undefined {
 	for (const [name, raw] of declared.entries) {
 		if (name.toLowerCase() === "content-type") continue;
 		const hAt = child(base, name);
-		cx.derefIn(raw, hAt, (value) => {
-			const h = value as JsonObject;
+		cx.derefIn(raw, hAt, (h) => {
+			if (!(h instanceof JsonObject))
+				throw new DiagError(hAt, "a header must be an object");
 			props.push(
 				documented(
 					name,
-					paramType(cx, h, hAt),
+					paramType(cx, h, hAt, "header"),
 					h.get("required") !== true,
 					doc(h),
 				),

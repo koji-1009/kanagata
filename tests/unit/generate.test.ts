@@ -78,6 +78,68 @@ test("an error anywhere in the document stops generation and names its location"
 	}
 });
 
+test("a field OpenAPI requires, missing or of another kind, is an error at its object", () => {
+	const p = "#/paths/~1a/get";
+	const param = (fields: string) =>
+		paths(`"/a":{"get":{"parameters":[${fields}]}}`);
+	const cases: [string, string][] = [
+		[param(`"q"`), `${p}/parameters/0: a parameter must be an object`],
+		[
+			param(`{"in":"query","schema":{}}`),
+			`${p}/parameters/0: a parameter must have name and in`,
+		],
+		[
+			param(`{"name":"q","in":1,"schema":{}}`),
+			`${p}/parameters/0: a parameter must have name and in`,
+		],
+		[
+			param(`{"name":"q","in":"query"}`),
+			`${p}/parameters/0: a parameter must have schema or content`,
+		],
+		[
+			param(`{"name":"q","in":"query","content":{}}`),
+			`${p}/parameters/0/content: content must have a media type`,
+		],
+		[
+			param(`{"name":"q","in":"query","content":[]}`),
+			`${p}/parameters/0/content: content must have a media type`,
+		],
+		[
+			paths(`"/a":{"get":{"responses":{"200":{"headers":{"X":true}}}}}`),
+			`${p}/responses/200/headers/X: a header must be an object`,
+		],
+		[
+			paths(
+				`"/a":{"get":{"responses":{"200":{"headers":{"X":{"content":{}}}}}}}`,
+			),
+			`${p}/responses/200/headers/X/content: content must have a media type`,
+		],
+		[paths(`"/a":{"get":"x"}`), `${p}: an operation must be an object`],
+		[paths(`"/a":{"get":null}`), `${p}: an operation must be an object`],
+		[
+			`{"openapi":"3.2.0","paths":{"/a":{"additionalOperations":[]}}}`,
+			"#/paths/~1a/additionalOperations: additionalOperations must be an object",
+		],
+		[
+			`{"openapi":"3.2.0","paths":{"/a":{"additionalOperations":{"COPY":1}}}}`,
+			"#/paths/~1a/additionalOperations/COPY: an operation must be an object",
+		],
+		[
+			paths(`"/a":{"get":{"servers":[{"description":"x"}]}}`),
+			`${p}/servers/0: a server must have a url`,
+		],
+		[
+			paths(`"/a":{"servers":["https://a.example"],"get":{}}`),
+			"#/paths/~1a/servers/0: a server must have a url",
+		],
+	];
+	for (const [src, message] of cases) {
+		const e = error(src);
+		assert.equal(e.kind, "input", src);
+		assert.equal(e.message, message, src);
+	}
+});
+
 test("error kinds and messages", () => {
 	const json = error("{");
 	assert.equal(json.kind, "json");
