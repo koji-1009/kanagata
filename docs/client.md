@@ -55,8 +55,12 @@ A method of `additionalOperations` (3.2) is called through `api.request`, named 
   - The content-type the server sends decides, not the document: content typed by a wildcard (`*/*`) is typed by its schema but read as whatever arrives, and a response without a content-type is text (`parseAs: "blob"` keeps its bytes).
   - `data` is read once the whole body has arrived; for a stream that stays open (`text/event-stream`), use `parseAs: "stream"`.
 - **`parseAs`** reads the body its way for one call and types `data` to match: `text` a string, `blob` a `Blob`, `arrayBuffer` an `ArrayBuffer`, `stream` the body (`null` when there is none), `json` the parsed JSON (`undefined` when empty), typed by the schemas of JSON and wildcard media types and `unknown` for the others.
-- **`ok`** is fetch's: `true` for 2xx. For `default` (every status the operation does not list, 2xx included) it is `boolean`; narrow by `status` or `ok`.
-- **Undocumented statuses:** list them with `default` or a range (`4XX`, `5XX`) in the document and they are typed. A status outside the document is still returned, in the branch the types call unreachable. An operation that documents no responses gives `status: number`, `ok: boolean` and `data: unknown`.
+- **`ok`** is fetch's: `true` for 2xx. For `default` (every status the operation does not list, 2xx included) it is `boolean`.
+- **Narrowing:** compare `status` with `===` (or `switch` on it), or check `ok`; each leaves the statuses that can match.
+- **Undocumented statuses:** TypeScript has no type for "any number but the documented statuses", so the types cannot tell a status the document does not list from the documented ones:
+  - Without `default`, such a status is still returned, in a branch the types do not give it: with 200 and 404 documented, a gateway's 502 lands in the `else` of `if (res.status === 200)`, typed as the 404 body, and in the branch the types call unreachable once every documented status is checked.
+  - With `default`, whose `status` is `number`, `default` stays wherever a status could match: with 200 and `default` documented, `data` is still `{ id } | { message }` after `res.status === 200`, and after `res.ok` too, since `default`'s `ok` is `boolean`. Neither check narrows to the success body alone. A range (`4XX`, `5XX`) also has `status: number`.
+  - List the statuses with `default` or a range in the document and their bodies are typed. An operation that documents no responses gives `status: number`, `ok: boolean` and `data: unknown`.
 - **Response headers** are typed in the declarations (`responses[200].headers`); read them from `res.response.headers`.
 
 ## Wrapping a call

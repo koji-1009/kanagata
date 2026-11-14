@@ -22,7 +22,7 @@ const res = await api.get("/users/{id}", { path: { id: 1 } });
 if (res.status === 200) {
 	const user: User = res.data;
 } else {
-	res.data.message; // the 404 body
+	res.data.message; // typed as the 404 body; a status the document does not list (a gateway's 502) lands here too
 }
 ```
 
@@ -67,7 +67,7 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 ```
 
 - `api.get`, `api.post`, … take the path template and the operation's parameters and body; a method of `additionalOperations` (3.2) goes through `api.request("COPY", …)`.
-- The result is `{ status, ok, data, response }`, a union over the statuses the operation documents: checking `status` or `ok` narrows `data`. HTTP error statuses never throw.
+- The result is `{ status, ok, data, response }`, a union over the statuses the operation documents: checking `status` or `ok` narrows `data`. In an operation with `default`, neither narrows to the success body alone: `default`'s `status` is `number` and its `ok` is `boolean`, so its `data` stays after `res.status === 200` and after `res.ok`. HTTP error statuses never throw.
 - `kanagata init` copies the client's source into your project to edit as you like.
 
 Config, call options, results, typing a wrapper, how requests are built, and errors: [docs/client.md](docs/client.md).
