@@ -1,0 +1,1 @@
+#/components/schemas/Tree: circular reference without an object, array or tuple in between, which TypeScript rejects: Tree → Tree

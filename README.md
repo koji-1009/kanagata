@@ -86,7 +86,7 @@ Every rule, with `$ref` resolution and media types: [docs/types.md](docs/types.m
 - Runtime validation (use `onData`), middleware (wrap `config.fetch`), per-operation functions, framework bindings, mocks.
 - Per-parameter `style` / `explode` / `encoding`: a server parses every query and form the same way, so one `arrayFormat` / `objectFormat` per client (or per call) matches it.
 - Fetching `$ref`s over the network; finding another file by its `$self` (3.2), since files are read by where they are; Swagger 2.0.
-- Pathological inputs: a schema that is directly itself (`A: { $ref: A }`), looping `$ref`s or YAML aliases, nesting thousands of levels deep, or exponential expansion may crash (exit code 3) or not finish.
+- Pathological inputs: looping `$ref`s outside schemas (a parameter that is a `$ref` to itself) or YAML aliases, nesting thousands of levels deep, or exponential expansion may crash (exit code 3) or not finish. A schema that is itself without an object, array or tuple in between (`A: { $ref: A }`) is an error ([docs/types.md](docs/types.md#ref)).
 
 ## Development
 

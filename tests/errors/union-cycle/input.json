@@ -1,0 +1,8 @@
+{
+  "openapi": "3.1.0",
+  "components": {
+    "schemas": {
+      "Tree": { "oneOf": [{ "type": "string" }, { "$ref": "#/components/schemas/Tree" }] }
+    }
+  }
+}

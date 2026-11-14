@@ -215,6 +215,36 @@ test("a field OpenAPI requires, missing or of another kind, is an error at its o
 	}
 });
 
+test("a schema that reaches itself only through unions, intersections and references is an error", () => {
+	const msg =
+		"circular reference without an object, array or tuple in between, which TypeScript rejects";
+	const s = (key: string) => `"#/components/schemas/${key}"`;
+	const cases: [string, string][] = [
+		[
+			`"Self":{"$ref":${s("Self")}}`,
+			`#/components/schemas/Self: ${msg}: Self → Self`,
+		],
+		[
+			`"A":{"allOf":[{"$ref":${s("B")}}]},"B":{"anyOf":[{"type":"null"},{"$ref":${s("A")}}]}`,
+			`#/components/schemas/A: ${msg}: A → B → A`,
+		],
+		[
+			`"A":{"$ref":${s("B")},"description":"x"},"B":{"type":["string","null"]},"C":{"oneOf":[{"$ref":${s("A")}},{"allOf":[{"$ref":${s("C")}}]}]}`,
+			`#/components/schemas/C: ${msg}: C → C`,
+		],
+	];
+	for (const [body, message] of cases)
+		assert.equal(error(schemas(body)).message, message, body);
+
+	// TypeScript defers a reference inside an object, array or tuple type.
+	const { code } = generate(
+		schemas(
+			`"Json":{"oneOf":[{"type":"string"},{"type":"array","items":{"$ref":${s("Json")}}},{"type":"object","additionalProperties":{"$ref":${s("Json")}}},{"prefixItems":[{"$ref":${s("Json")}}]}]}`,
+		),
+	);
+	assert.match(code, /export type Json = string \| Json\[\] \| \{/);
+});
+
 test("error kinds and messages", () => {
 	const json = error("{");
 	assert.equal(json.kind, "json");
