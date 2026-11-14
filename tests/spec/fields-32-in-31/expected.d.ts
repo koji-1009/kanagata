@@ -6,7 +6,7 @@ export interface paths {
     get: {
       parameters: {
         query?: {
-          f?: unknown;
+          f?: string;
         };
       };
       responses: {

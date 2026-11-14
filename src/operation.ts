@@ -223,7 +223,7 @@ function operation(
 			const optional = loc !== "path" && !booleanAt(p, pAt, "required");
 			const whole = loc === "querystring";
 			const ty = cx.inMode(sent, () =>
-				cx.withBase(base, () => paramType(cx, p, pAt, "parameter", whole)),
+				cx.withBase(base, () => paramType(cx, p, pAt, "parameter")),
 			);
 			// The whole query string (3.2) is one value; its name is not sent.
 			if (whole) groups.push(documented(loc, ty, optional, doc(p)));
@@ -342,16 +342,17 @@ function asciiLower(s: string): string {
 
 /**
  * The type of a parameter or header (`kind`): its `schema`, or the schema of its one
- * `content` media type; OpenAPI requires one of the two. A querystring (`whole`) is that
- * schema for application/x-www-form-urlencoded, which the client URL-encodes; for any
- * other media type it is the serialized text, a string.
+ * `content` media type; OpenAPI requires one of the two. A parameter's `content` is that
+ * schema for application/x-www-form-urlencoded, which the client encodes as it does any
+ * parameter; for any other media type it is the serialized text, a string, since the
+ * client has no document to serialize the value by. A response header is read, not sent,
+ * so it keeps the schema.
  */
 function paramType(
 	cx: Ctx,
 	p: JsonObject,
 	at: string,
 	kind: "parameter" | "header",
-	whole = false,
 ): Ty {
 	const s = p.get("schema");
 	if (s !== undefined) return schema(cx, s, child(at, "schema"));
@@ -370,7 +371,7 @@ function paramType(
 	return mediaType(cx, raw, mAt, (m) => {
 		const ty = schema(cx, m.get("schema") as Value, child(mAt, "schema"));
 		const urlEncoded = essence(mt) === "application/x-www-form-urlencoded";
-		return whole && !urlEncoded ? STRING : ty;
+		return kind === "parameter" && !urlEncoded ? STRING : ty;
 	});
 }
 
