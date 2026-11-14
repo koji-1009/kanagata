@@ -42,7 +42,7 @@ pnpm build      # dist/
 
 | Path                                         | Role                                                                                                    |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`                               | `generate`: parse, convert both views, cut cycles TypeScript rejects, name, render                      |
+| `src/index.ts`                               | `generate`: parse, convert both views, reject cycles TypeScript rejects, name, render                   |
 | `src/json.ts`                                | JSON parser keeping key order and number notation, rejecting repeated keys; JSON Pointer helpers        |
 | `src/yaml.ts`                                | YAML 1.2 → the same values (via `yaml`)                                                                 |
 | `src/pointer.ts`                             | `Ctx`: `$ref` resolution, base URI, read/write view, hoisting, component aliasing, warnings             |

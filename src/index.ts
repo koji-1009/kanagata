@@ -9,6 +9,7 @@ import { Ctx, child, type Diag, DiagError, type Hoisted } from "./pointer.ts";
 import { doc, schema } from "./schema.ts";
 import {
 	admitsAny,
+	bareRefs,
 	equal,
 	type Prop,
 	presentKeys,
@@ -111,6 +112,7 @@ export function generate(
 			write: view("write"),
 		});
 	}
+	rejectBareCycles(converted);
 	const names = typeNames(converted.map((c) => c.key));
 	// typeNames gives one name per key, in order
 	const components: Component[] = converted.map((c, i) => ({
@@ -182,6 +184,35 @@ interface Converted {
 
 interface Component extends Converted {
 	name: string;
+}
+
+/**
+ * Rejects a schema that reaches itself through unions, intersections and references
+ * only (`Tree: { oneOf: [{ type: string }, { $ref: Tree }] }`): TypeScript rejects
+ * `type Tree = string | Tree` (TS2456). A reference inside an object, array or tuple
+ * type is deferred, so a cycle through one is a type. Only properties differ between
+ * the views, so the read view's references are the write view's too.
+ */
+function rejectBareCycles(converted: readonly Converted[]): void {
+	const byKey = new Map(converted.map((c) => [c.key, c]));
+	const done = new Set<string>();
+	const path: string[] = [];
+	const visit = (key: string): void => {
+		const start = path.indexOf(key);
+		if (start >= 0) {
+			const cycle = [...path.slice(start), key].join(" → ");
+			throw new DiagError(
+				(byKey.get(key) as Converted).at,
+				`circular reference without an object, array or tuple in between, which TypeScript rejects: ${cycle}`,
+			);
+		}
+		if (done.has(key)) return;
+		path.push(key);
+		for (const r of bareRefs((byKey.get(key) as Converted).read)) visit(r);
+		path.pop();
+		done.add(key);
+	};
+	for (const c of converted) visit(c.key);
 }
 
 /** `presentKeys`, with references resolved to the components' types in their view. */

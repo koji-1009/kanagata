@@ -18,7 +18,7 @@
 - Other files (`schemas/User.yaml`, `common.json#/Error`) resolve against the base URI where the `$ref` is: the file it is in, or the document's `$self`. Each is read once, JSON or YAML by its content, and known by where it is read: another file's `$self` is not read. URLs are not fetched.
 - A schema in another file is a named type. A component that is only a `$ref` to it (with at most `title` and `description`) gives the name (`User: { $ref: schemas/User.yaml }`); otherwise it is named after the file (`Order.yaml` → `Order`) or the pointer's last token (`common.json#/Error` → `Error`), numbered when taken, and listed in `schemas`.
 - A component that is only a `$ref` within the document names its target the same way; other targets within the document are expanded where they are used.
-- A schema may refer to itself through an object, array or tuple (`next?: Node`). A cycle among `$ref`s expanded inline becomes `unknown`, with a warning.
+- A schema may refer to itself through an object, array or tuple (`next?: Node`). One that reaches itself without one in between, through `allOf`, `oneOf`, `anyOf` and `$ref` only (`Tree: { oneOf: [{ type: string }, { $ref: Tree }] }`, `A: { $ref: A }`), is an error: TypeScript rejects `type Tree = string | Tree`. A cycle among `$ref`s expanded inline becomes `unknown`, with a warning.
 
 ## Schemas
 
