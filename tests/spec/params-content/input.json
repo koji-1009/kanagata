@@ -8,8 +8,7 @@
             "name": "filter",
             "in": "query",
             "content": {
-              "application/json": { "schema": { "type": "object", "properties": { "q": { "type": "string" } } } },
-              "text/plain": { "schema": { "type": "string" } }
+              "application/json": { "schema": { "type": "object", "properties": { "q": { "type": "string" } } } }
             }
           },
           { "name": "raw", "in": "query", "content": { "text/plain": {} } }

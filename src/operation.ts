@@ -70,7 +70,7 @@ function pathItems(
 		if (key === "paths" && path.startsWith("x-")) continue;
 		const itemAt = child(`#/${key}`, path);
 		const methods = cx.derefIn(rawItem, itemAt, (value) => {
-			const item = value as JsonObject;
+			const item = objectAt(value, itemAt, "a path item");
 			const methods: Prop[] = [];
 			for (const [method, op, opAt] of itemOperations(cx, item, itemAt)) {
 				// A webhook is called by the API: it sends the request and reads the response.
@@ -81,7 +81,12 @@ function pathItems(
 					key === "webhooks" || (method !== "get" && method !== "head");
 				const ty = operation(cx, { item, itemAt, op, at: opAt, sent, body });
 				const opDoc = doc(op);
-				const id = op.str("operationId");
+				const id = op.get("operationId");
+				if (id !== undefined && typeof id !== "string")
+					throw new DiagError(
+						child(opAt, "operationId"),
+						"operationId must be a string",
+					);
 				if (id !== undefined && id !== "") {
 					operations.push(documented(id, ty, false, opDoc));
 					methods.push(prop(method, opRef(id)));
@@ -111,7 +116,8 @@ function itemOperations(
 		if (method === "query" && !cx.v32) continue;
 		const op = item.get(method);
 		const at = child(itemAt, method);
-		if (op !== undefined) out.push([method, operationObject(op, at), at]);
+		if (op !== undefined)
+			out.push([method, objectAt(op, at, "an operation"), at]);
 	}
 	const more = cx.v32 ? item.get("additionalOperations") : undefined;
 	const moreAt = child(itemAt, "additionalOperations");
@@ -130,14 +136,9 @@ function itemOperations(
 				at,
 				`${method} is the Path Item's ${field} field, so additionalOperations must not have it`,
 			);
-		out.push([method, operationObject(op, at), at]);
+		out.push([method, objectAt(op, at, "an operation"), at]);
 	}
 	return out;
-}
-
-function operationObject(op: Value, at: string): JsonObject {
-	if (op instanceof JsonObject) return op;
-	throw new DiagError(at, "an operation must be an object");
 }
 
 /** A parameter, where it is, and the base URI of the document it is in. */
@@ -180,7 +181,7 @@ function operation(
 		const props: Prop[] = [];
 		for (const [p, pAt, base] of params) {
 			if (p.str("in") !== loc) continue;
-			const optional = loc !== "path" && p.get("required") !== true;
+			const optional = loc !== "path" && !booleanAt(p, pAt, "required");
 			const whole = loc === "querystring";
 			const ty = cx.inMode(sent, () =>
 				cx.withBase(base, () => paramType(cx, p, pAt, "parameter", whole)),
@@ -203,13 +204,16 @@ function operation(
 	if (rawBody !== undefined && hasBody) {
 		const bodyAt = child(at, "requestBody");
 		cx.derefIn(rawBody, bodyAt, (value) => {
-			const body = value as JsonObject;
-			const c = cx.inMode(sent, () => content(cx, body, bodyAt)) as Ty;
+			const body = objectAt(value, bodyAt, "a request body");
+			if (body.get("content") === undefined)
+				throw new DiagError(bodyAt, "a request body must have content");
+			// An empty content describes no representation: no body can be passed.
+			const c = cx.inMode(sent, () => content(cx, body, bodyAt)) ?? object([]);
 			fields.push(
 				documented(
 					"requestBody",
 					object([prop("content", c)]),
-					body.get("required") !== true,
+					!booleanAt(body, bodyAt, "required"),
 					doc(body),
 				),
 			);
@@ -217,12 +221,15 @@ function operation(
 	}
 
 	const responses: Prop[] = [];
-	const rs = o.get("responses") as JsonObject | undefined;
+	const rs = o.get("responses");
 	const base = child(at, "responses");
-	for (const [status, raw] of rs?.entries ?? []) {
+	const statuses =
+		rs === undefined ? [] : objectAt(rs, base, "responses").entries;
+	for (const [status, raw] of statuses) {
 		if (status.startsWith("x-")) continue; // a specification extension, not a status
 		const rAt = child(base, status);
-		const parts = cx.derefIn(raw, rAt, (r) => {
+		const parts = cx.derefIn(raw, rAt, (value) => {
+			const r = objectAt(value, rAt, "a response");
 			const parts: Prop[] = [];
 			const h = cx.inMode(received, () => headers(cx, r, rAt));
 			if (h !== undefined) parts.push(prop("headers", h));
@@ -242,15 +249,13 @@ function operation(
  * any string, since TypeScript cannot check the template.
  */
 function serverUrls(owner: JsonObject, ownerAt: string): Ty[] | undefined {
-	const servers = owner.get("servers");
-	if (!Array.isArray(servers) || servers.length === 0) return undefined;
+	const at = child(ownerAt, "servers");
+	const servers = arrayAt(owner.get("servers"), at, "servers");
+	if (servers.length === 0) return undefined;
 	return servers.map((s, i) => {
 		const url = s instanceof JsonObject ? s.str("url") : undefined;
 		if (url === undefined)
-			throw new DiagError(
-				child(child(ownerAt, "servers"), String(i)),
-				"a server must have a url",
-			);
+			throw new DiagError(child(at, String(i)), "a server must have a url");
 		return url.includes("{") ? STRING : lit(JSON.stringify(url));
 	});
 }
@@ -261,10 +266,8 @@ function collectParams(
 	owner: JsonObject,
 	ownerAt: string,
 ): void {
-	const list = owner.get("parameters");
-	if (!Array.isArray(list)) return;
 	const base = child(ownerAt, "parameters");
-	list.forEach((raw, i) => {
+	arrayAt(owner.get("parameters"), base, "parameters").forEach((raw, i) => {
 		const pAt = child(base, String(i));
 		cx.derefIn(raw, pAt, (p) => collectParam(cx, out, p, pAt));
 	});
@@ -272,9 +275,7 @@ function collectParams(
 
 /** Adds one parameter; header parameters OpenAPI reserves are left out, as it requires. */
 function collectParam(cx: Ctx, out: Param[], value: Value, pAt: string): void {
-	if (!(value instanceof JsonObject))
-		throw new DiagError(pAt, "a parameter must be an object");
-	const p = value;
+	const p = objectAt(value, pAt, "a parameter");
 	const name = p.str("name");
 	const loc = p.str("in");
 	if (name === undefined || loc === undefined)
@@ -319,10 +320,13 @@ function paramType(
 	if (media === undefined)
 		throw new DiagError(at, `a ${kind} must have schema or content`);
 	const cAt = child(at, "content");
-	const first = media instanceof JsonObject ? media.entries[0] : undefined;
-	if (first === undefined)
-		throw new DiagError(cAt, "content must have a media type");
-	const [mt, raw] = first;
+	const entries = objectAt(media, cAt, "content").entries;
+	if (entries.length !== 1)
+		throw new DiagError(
+			cAt,
+			`a ${kind}'s content must have exactly one media type`,
+		);
+	const [[mt, raw]] = entries as [[string, Value]];
 	const mAt = child(cAt, mt);
 	return mediaType(cx, raw, mAt, (m) => {
 		const ty = schema(cx, m.get("schema") as Value, child(mAt, "schema"));
@@ -346,29 +350,47 @@ function mediaType<T>(
 	at: string,
 	f: (m: JsonObject) => T,
 ): T {
-	if (!cx.v32) return f(raw as JsonObject);
-	return cx.derefIn(raw, at, (m) => f(m as JsonObject));
+	const media = (m: Value) => f(objectAt(m, at, "a media type"));
+	if (!cx.v32) return media(raw);
+	return cx.derefIn(raw, at, media);
+}
+
+/** `v` as an object, or an error: `what` (`a response`) must be one. */
+function objectAt(v: Value, at: string, what: string): JsonObject {
+	if (v instanceof JsonObject) return v;
+	throw new DiagError(at, `${what} must be an object`);
+}
+
+/** An array field (`servers`, `parameters`): its items, none when absent, or an error. */
+function arrayAt(v: Value | undefined, at: string, key: string): Value[] {
+	if (v === undefined) return [];
+	if (Array.isArray(v)) return v;
+	throw new DiagError(at, `${key} must be an array`);
+}
+
+/** A boolean field (`required`): false when absent, or an error. */
+function booleanAt(owner: JsonObject, at: string, key: string): boolean {
+	const v = owner.get(key);
+	if (v === undefined || typeof v === "boolean") return v === true;
+	throw new DiagError(child(at, key), `${key} must be a boolean`);
 }
 
 /** `{ Name: T }` for a response's `headers`; Content-Type is ignored, as OpenAPI requires. */
-function headers(cx: Ctx, response: Value, at: string): Ty | undefined {
-	const declared = (response as JsonObject).get("headers") as
-		| JsonObject
-		| undefined;
+function headers(cx: Ctx, response: JsonObject, at: string): Ty | undefined {
+	const declared = response.get("headers");
 	if (declared === undefined) return undefined;
 	const base = child(at, "headers");
 	const props: Prop[] = [];
-	for (const [name, raw] of declared.entries) {
+	for (const [name, raw] of objectAt(declared, base, "headers").entries) {
 		if (name.toLowerCase() === "content-type") continue;
 		const hAt = child(base, name);
-		cx.derefIn(raw, hAt, (h) => {
-			if (!(h instanceof JsonObject))
-				throw new DiagError(hAt, "a header must be an object");
+		cx.derefIn(raw, hAt, (value) => {
+			const h = objectAt(value, hAt, "a header");
 			props.push(
 				documented(
 					name,
 					paramType(cx, h, hAt, "header"),
-					h.get("required") !== true,
+					!booleanAt(h, hAt, "required"),
 					doc(h),
 				),
 			);
@@ -385,10 +407,12 @@ function headers(cx: Ctx, response: Value, at: string): Ty | undefined {
  * reads a sequential media type (`application/jsonl`, `text/event-stream`) whole, as these
  * rules say, not item by item.
  */
-function content(cx: Ctx, owner: Value, at: string): Ty | undefined {
-	const media = (owner as JsonObject).get("content") as JsonObject | undefined;
-	if (media === undefined || media.entries.length === 0) return undefined;
+function content(cx: Ctx, owner: JsonObject, at: string): Ty | undefined {
+	const declared = owner.get("content");
+	if (declared === undefined) return undefined;
 	const base = child(at, "content");
+	const media = objectAt(declared, base, "content");
+	if (media.entries.length === 0) return undefined;
 	return object(
 		media.entries.map(([mt, raw]) => {
 			const mAt = child(base, mt);

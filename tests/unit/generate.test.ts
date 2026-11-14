@@ -98,11 +98,17 @@ test("a field OpenAPI requires, missing or of another kind, is an error at its o
 		],
 		[
 			param(`{"name":"q","in":"query","content":{}}`),
-			`${p}/parameters/0/content: content must have a media type`,
+			`${p}/parameters/0/content: a parameter's content must have exactly one media type`,
+		],
+		[
+			param(
+				`{"name":"q","in":"query","content":{"application/json":{},"text/plain":{}}}`,
+			),
+			`${p}/parameters/0/content: a parameter's content must have exactly one media type`,
 		],
 		[
 			param(`{"name":"q","in":"query","content":[]}`),
-			`${p}/parameters/0/content: content must have a media type`,
+			`${p}/parameters/0/content: content must be an object`,
 		],
 		[
 			paths(`"/a":{"get":{"responses":{"200":{"headers":{"X":true}}}}}`),
@@ -112,7 +118,7 @@ test("a field OpenAPI requires, missing or of another kind, is an error at its o
 			paths(
 				`"/a":{"get":{"responses":{"200":{"headers":{"X":{"content":{}}}}}}}`,
 			),
-			`${p}/responses/200/headers/X/content: content must have a media type`,
+			`${p}/responses/200/headers/X/content: a header's content must have exactly one media type`,
 		],
 		[paths(`"/a":{"get":"x"}`), `${p}: an operation must be an object`],
 		[paths(`"/a":{"get":null}`), `${p}: an operation must be an object`],
@@ -131,6 +137,75 @@ test("a field OpenAPI requires, missing or of another kind, is an error at its o
 		[
 			paths(`"/a":{"servers":["https://a.example"],"get":{}}`),
 			"#/paths/~1a/servers/0: a server must have a url",
+		],
+		[paths(`"/a":[]`), "#/paths/~1a: a path item must be an object"],
+		[
+			paths(`"/a":{"post":{"requestBody":"x"}}`),
+			"#/paths/~1a/post/requestBody: a request body must be an object",
+		],
+		[
+			paths(`"/a":{"post":{"requestBody":{"description":"x"}}}`),
+			"#/paths/~1a/post/requestBody: a request body must have content",
+		],
+		[
+			paths(`"/a":{"post":{"requestBody":{"content":[]}}}`),
+			"#/paths/~1a/post/requestBody/content: content must be an object",
+		],
+		[
+			paths(`"/a":{"post":{"requestBody":{"content":{"text/plain":1}}}}`),
+			"#/paths/~1a/post/requestBody/content/text~1plain: a media type must be an object",
+		],
+		[
+			`{"openapi":"3.2.0","paths":{"/a":{"post":{"requestBody":{"content":{"text/plain":1}}}}}}`,
+			"#/paths/~1a/post/requestBody/content/text~1plain: a media type must be an object",
+		],
+		[
+			param(`{"name":"q","in":"query","content":{"text/plain":null}}`),
+			`${p}/parameters/0/content/text~1plain: a media type must be an object`,
+		],
+		[
+			paths(`"/a":{"get":{"responses":[]}}`),
+			`${p}/responses: responses must be an object`,
+		],
+		[
+			paths(`"/a":{"get":{"responses":{"200":"ok"}}}`),
+			`${p}/responses/200: a response must be an object`,
+		],
+		[
+			paths(`"/a":{"get":{"responses":{"200":{"headers":[]}}}}`),
+			`${p}/responses/200/headers: headers must be an object`,
+		],
+		[
+			paths(`"/a":{"get":{"parameters":{}}}`),
+			`${p}/parameters: parameters must be an array`,
+		],
+		[
+			paths(`"/a":{"parameters":"q","get":{}}`),
+			"#/paths/~1a/parameters: parameters must be an array",
+		],
+		[
+			paths(`"/a":{"get":{"servers":{}}}`),
+			`${p}/servers: servers must be an array`,
+		],
+		[
+			param(`{"name":"q","in":"query","required":"true","schema":{}}`),
+			`${p}/parameters/0/required: required must be a boolean`,
+		],
+		[
+			paths(
+				`"/a":{"post":{"requestBody":{"required":1,"content":{"text/plain":{}}}}}`,
+			),
+			"#/paths/~1a/post/requestBody/required: required must be a boolean",
+		],
+		[
+			paths(
+				`"/a":{"get":{"responses":{"200":{"headers":{"X":{"required":null,"schema":{}}}}}}}`,
+			),
+			`${p}/responses/200/headers/X/required: required must be a boolean`,
+		],
+		[
+			paths(`"/a":{"get":{"operationId":1}}`),
+			`${p}/operationId: operationId must be a string`,
 		],
 	];
 	for (const [src, message] of cases) {

@@ -6,7 +6,7 @@
 - A schema with a `readOnly` / `writeOnly` property (on it or on a schema it references) gets a second type for requests, `UserInput`.
 - `description` and `deprecated` become JSDoc.
 - Header parameters named `Accept`, `Content-Type` or `Authorization`, and a response header `Content-Type`, are ignored, as OpenAPI requires.
-- A field OpenAPI requires is an error where it is missing: a parameter's `name` and `in`, a parameter's or header's `schema` or `content` (one of the two, and `content` with a media type), a server's `url`. So is an operation, parameter or header that is not an object.
+- A field OpenAPI requires is an error where it is missing: a parameter's `name` and `in`, a parameter's or header's `schema` or `content` (one of the two, and `content` with exactly one media type, as OpenAPI requires), a request body's `content` (an empty one describes no representation, so it is `content: {}`, which no body matches), a server's `url`. So is a path item, operation, parameter, request body, response, header, media type, `responses`, `headers` or `content` that is not an object, `parameters` or `servers` that is not an array, an `operationId` that is not a string, and a `required` that is not a boolean.
 - An operation's `servers`, or its path item's, is `servers: ["https://uploads.example.com"]` in its type; a URL with variables (`{region}`) is `string`. A webhook has none, since the API sends its request.
 - A `requestBody` on a GET or HEAD operation is left out: OpenAPI 3.0 has consumers ignore it, and fetch cannot send one. A webhook keeps it, since the API sends that request.
 
