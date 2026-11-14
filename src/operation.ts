@@ -6,6 +6,7 @@ import { type Ctx, child, DiagError } from "./pointer.ts";
 import { doc, schema } from "./schema.ts";
 import {
 	BLOB,
+	equal,
 	lit,
 	object,
 	opRef,
@@ -42,23 +43,55 @@ function documented(
 		: { key, ty, optional, doc: d };
 }
 
+/** `operations` by operationId: the Operation Object, its declaration, and where it is. */
+type Operations = Map<string, { op: JsonObject; prop: Prop; at: string }>;
+
 /** `paths` and `webhooks`: both map names to Path Items, and share `operations`. */
 export function paths(cx: Ctx, root: JsonObject): Paths {
-	const operations: Prop[] = [];
+	const operations: Operations = new Map();
 	const out: Paths = {
 		paths: pathItems(cx, root, "paths", operations),
-		operations,
+		operations: [],
 	};
 	if (root.get("webhooks") !== undefined)
 		out.webhooks = pathItems(cx, root, "webhooks", operations);
+	out.operations = [...operations.values()].map((o) => o.prop);
 	return out;
+}
+
+/**
+ * Adds an operation with an operationId. A Path Item shared by `$ref` (or a YAML alias)
+ * gives the same Operation Object again, which is declared once; another Operation
+ * Object with the same operationId, which OpenAPI requires to be unique, is an error.
+ * The same operation as a path's and a webhook's has two types (the API sends a
+ * webhook's request) but one `operations[id]`, which TypeScript cannot declare twice.
+ */
+function addOperation(
+	operations: Operations,
+	id: string,
+	op: JsonObject,
+	prop: Prop,
+	at: string,
+): void {
+	const known = operations.get(id);
+	if (known === undefined) operations.set(id, { op, prop, at });
+	else if (known.op !== op)
+		throw new DiagError(
+			at,
+			`operationId ${JSON.stringify(id)} is also ${known.at}'s; OpenAPI requires it to be unique`,
+		);
+	else if (!equal(known.prop.ty, prop.ty))
+		throw new DiagError(
+			at,
+			`operation ${JSON.stringify(id)} is also ${known.at}, as a path's and a webhook's, whose types differ; operations[${JSON.stringify(id)}] has one type`,
+		);
 }
 
 function pathItems(
 	cx: Ctx,
 	root: JsonObject,
 	key: "paths" | "webhooks",
-	operations: Prop[],
+	operations: Operations,
 ): Prop[] {
 	const out: Prop[] = [];
 	const entries = root.get(key);
@@ -88,7 +121,13 @@ function pathItems(
 						"operationId must be a string",
 					);
 				if (id !== undefined && id !== "") {
-					operations.push(documented(id, ty, false, opDoc));
+					addOperation(
+						operations,
+						id,
+						op,
+						documented(id, ty, false, opDoc),
+						opAt,
+					);
 					methods.push(prop(method, opRef(id)));
 				} else {
 					methods.push(documented(method, ty, false, opDoc));

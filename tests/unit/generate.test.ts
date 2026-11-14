@@ -463,3 +463,35 @@ test("a warning raised in both views of a schema is reported once", () => {
 		},
 	]);
 });
+
+test("an operationId is declared once for the same operation, and is an error for another", () => {
+	// A YAML alias is the node it names: the same operation, declared once.
+	const aliased = generate(
+		"openapi: 3.1.0\npaths:\n  /a: &a\n    get: { operationId: get, responses: {} }\n  /b: *a\n",
+	).code;
+	assert.equal(aliased.match(/^ {2}get: \{$/gm)?.length, 1, aliased);
+
+	// Two Operation Objects are two operations, even written alike.
+	const op = '{"get":{"operationId":"x","responses":{}}}';
+	assert.equal(
+		error(paths(`"/a":${op},"/b":${op}`)).message,
+		`#/paths/~1b/get: operationId "x" is also #/paths/~1a/get's; OpenAPI requires it to be unique`,
+	);
+
+	// The same operation as a path's and a webhook's has two types, sent by either side.
+	assert.equal(
+		error(
+			`{"openapi":"3.1.0","paths":{"/a":{"$ref":"#/components/pathItems/P"}},"webhooks":{"w":{"$ref":"#/components/pathItems/P"}},"components":{"pathItems":{"P":{"post":{"operationId":"p","requestBody":{"content":{"application/json":{"schema":{"type":"object","properties":{"id":{"type":"string","readOnly":true}}}}}}}}}}}`,
+		).message,
+		`#/webhooks/w/post: operation "p" is also #/paths/~1a/post, as a path's and a webhook's, whose types differ; operations["p"] has one type`,
+	);
+});
+
+test("a YAML alias inside the node it names is an error", () => {
+	assert.equal(
+		error(
+			"openapi: 3.1.0\ncomponents:\n  schemas:\n    A: &a\n      type: array\n      items: *a\n",
+		).message,
+		"#/components/schemas/A/items: alias *a is inside the node it names",
+	);
+});

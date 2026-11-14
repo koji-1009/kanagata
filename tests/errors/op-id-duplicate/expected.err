@@ -1,0 +1,1 @@
+#/paths/~1teams/get: operationId "list" is also #/paths/~1users/get's; OpenAPI requires it to be unique
