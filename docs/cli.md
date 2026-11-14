@@ -20,7 +20,7 @@ kanagata init -o src/api/client.ts                             # copy the client
 - **Messages** go to stderr as `location: message` or `location: warning: message`. The location is `line:col` for JSON and YAML syntax, a JSON Pointer otherwise, and starts with the file's path relative to the document for other files (`schemas/User.yaml#/properties/id`, `common.json:3:5`).
 - **stdin** (`-`) has no location, so it cannot `$ref` other files.
 - **Format:** a document that starts with `{` is JSON, anything else YAML 1.2. A key repeated in one object is an error in both.
-- **YAML:** numbers keep their notation when it is a JSON number (`1.50` stays `1.50`); YAML-only forms become the number they mean (`0x1F` is `31`). An alias is a copy of its node. The merge key `<<` is YAML 1.1, so it is an ordinary key, with a warning.
+- **YAML:** numbers keep their notation when it is a JSON number (`1.50` stays `1.50`); YAML-only forms become the number they mean (`0x1F` is `31`). An alias is the node it names, not a copy, so a Path Item shared by an alias is one Path Item (its operations are declared once); an alias inside the node it names is an error. The merge key `<<` is YAML 1.1, so it is an ordinary key, with a warning.
 
 ## Library API
 

@@ -11,7 +11,7 @@ import {
 } from "yaml";
 import { GenerateError } from "./error.ts";
 import { isJsonNumber, JsonNumber, JsonObject, type Value } from "./json.ts";
-import { child, type Diag } from "./pointer.ts";
+import { child, type Diag, DiagError } from "./pointer.ts";
 
 /**
  * Parses a YAML 1.2 document (core schema). Syntax errors throw a GenerateError of
@@ -30,9 +30,25 @@ export function parseYaml(src: string, warnings: Diag[]): Value {
 		);
 	}
 
+	// An alias is the node anchored with its name, not a copy: both are one value.
+	const anchored = new Map<unknown, Value>();
 	const convert = (node: unknown, at: string): Value => {
-		// An alias is a copy of the node anchored with its name.
-		if (isAlias(node)) return convert(node.resolve(doc), at);
+		if (isAlias(node)) {
+			// An anchored node is converted before its aliases, unless one is inside it.
+			const value = anchored.get(node.resolve(doc));
+			if (value === undefined)
+				throw new DiagError(
+					at,
+					`alias *${node.source} is inside the node it names`,
+				);
+			return value;
+		}
+		const value = convertNode(node, at);
+		if ((node as { anchor?: string }).anchor !== undefined)
+			anchored.set(node, value);
+		return value;
+	};
+	const convertNode = (node: unknown, at: string): Value => {
 		if (isMap(node))
 			return new JsonObject(
 				node.items.map(({ key, value }): [string, Value] => {
