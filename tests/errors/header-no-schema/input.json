@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/r": {
+      "get": {
+        "responses": {
+          "200": { "description": "ok", "headers": { "X-Rate-Limit": { "description": "requests left" } } }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/items": {
+      "put": {
+        "requestBody": { "required": true, "content": {} },
+        "responses": { "204": { "description": "ok" } }
+      },
+      "patch": {
+        "requestBody": { "content": {} },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  }
+}
