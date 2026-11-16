@@ -20,7 +20,17 @@
       }
     },
     "petGone": {
-      "post": { "responses": { "204": { "description": "Received." } } }
+      "post": {
+        "requestBody": {
+          "description": "A form the API sends is read as its text, as a form response is.",
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": { "type": "object", "properties": { "id": { "type": "integer" } } }
+            }
+          }
+        },
+        "responses": { "204": { "description": "Received." } }
+      }
     }
   },
   "components": {

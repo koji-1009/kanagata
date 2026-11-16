@@ -8,6 +8,8 @@ export interface schemas {
   RO: RO;
   Holder: Holder;
   Derived: Derived;
+  Stamped: Stamped;
+  Mixed: Mixed;
 }
 
 export type RO = {
@@ -37,5 +39,26 @@ export type Derived = {
 export type DerivedInput = {
   name?: string;
 } & {
+  name: {} | null;
+};
+
+export type Stamped = {
+  stamp?: string;
+};
+
+export type StampedInput = Record<string, unknown>;
+
+/** Every allOf member counts, a $ref after an inline schema too. */
+export type Mixed = {
+  name?: string;
+} & Stamped & {
+  name: {} | null;
+  stamp: {} | null;
+};
+
+/** Every allOf member counts, a $ref after an inline schema too. */
+export type MixedInput = {
+  name?: string;
+} & StampedInput & {
   name: {} | null;
 };

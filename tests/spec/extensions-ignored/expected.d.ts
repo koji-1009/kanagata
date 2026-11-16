@@ -5,6 +5,7 @@ export interface paths {
     get: {
       responses: {
         200: {};
+        404: {};
       };
     };
   };

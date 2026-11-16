@@ -98,7 +98,9 @@ test("syntax errors", () => {
 		['{"a"', [1, 5], "unexpected end of input"],
 		['{"a":1 "b":2}', [1, 8], "expected ',' or '}'"],
 		['{"a":1', [1, 7], "unexpected end of input"],
+		['{"a":1,x}', [1, 8], 'unexpected character "x"'],
 		["[1 2]", [1, 4], "expected ',' or ']'"],
+		["[1", [1, 3], "unexpected end of input"],
 		['"abc', [1, 5], "unexpected end of input in string"],
 		["tru", [1, 1], 'unexpected character "t"'],
 		["@", [1, 1], 'unexpected character "@"'],
@@ -156,6 +158,8 @@ test("number notation is kept", () => {
 		"0",
 		"12345678901234567890",
 		"1e+2",
+		"9",
+		"-9.5",
 	]) {
 		assert.deepEqual(parse(text), n(text), text);
 	}
@@ -164,6 +168,11 @@ test("number notation is kept", () => {
 test("invalid numbers", () => {
 	for (const text of ["01", "1.", ".5", "-", "1e", "+1", "-a"]) {
 		assert.throws(() => parse(text), ParseError, text);
+	}
+	// A minus sign must be followed by a digit.
+	for (const text of ["-", "-a", "[-]"]) {
+		const e = parseError(text);
+		assert.equal(e.msg, "invalid number", text);
 	}
 });
 
@@ -175,6 +184,9 @@ test("raw control character", () => {
 test("columns count characters, not UTF-16 units", () => {
 	assert.deepEqual(err('"あ" x'), [1, 5]);
 	assert.deepEqual(err('"\u{1F600}" x'), [1, 5]);
+	// The first and last characters past U+FFFF, whose low surrogates are U+DC00 and U+DFFF.
+	assert.deepEqual(err('"\u{10000}" x'), [1, 5]);
+	assert.deepEqual(err('"\u{10FFFF}" x'), [1, 5]);
 });
 
 test("trailing garbage", () => {

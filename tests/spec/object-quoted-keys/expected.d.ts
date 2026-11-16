@@ -17,6 +17,8 @@ export type Keys = {
   "": string;
   "1abc": string;
   200: string;
+  123456789012345: string;
+  "1234567890123456": string;
   "a b": string;
   "é": string;
   "q\"uote": string;

@@ -1,6 +1,13 @@
 {
   "openapi": "3.0.3",
-  "paths": {},
+  "paths": {
+    "/holders": {
+      "post": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Holder" } } } },
+        "responses": { "204": { "description": "Holder is sent: its write view leaves out stamp, not base or both." } }
+      }
+    }
+  },
   "components": {
     "schemas": {
       "Base": { "type": "object", "properties": { "id": { "type": "string" } } },
@@ -15,9 +22,11 @@
         "type": "object",
         "properties": {
           "base": { "$ref": "#/components/schemas/Base", "readOnly": true },
-          "both": { "$ref": "#/components/schemas/Base", "allOf": [{ "readOnly": true }] }
+          "both": { "$ref": "#/components/schemas/Base", "allOf": [{ "readOnly": true }] },
+          "stamp": { "type": "string", "readOnly": true }
         }
-      }
+      },
+      "Negated": { "description": "Without $ref, an ignored keyword is reported.", "not": { "type": "string" } }
     }
   }
 }

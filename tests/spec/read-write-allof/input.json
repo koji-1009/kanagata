@@ -17,6 +17,15 @@
           { "type": "object", "properties": { "id": { "type": "string", "readOnly": true }, "name": { "type": "string" } } }
         ],
         "required": ["id", "name"]
+      },
+      "Stamped": { "type": "object", "properties": { "stamp": { "type": "string", "readOnly": true } } },
+      "Mixed": {
+        "description": "Every allOf member counts, a $ref after an inline schema too.",
+        "allOf": [
+          { "type": "object", "properties": { "name": { "type": "string" } } },
+          { "$ref": "#/components/schemas/Stamped" }
+        ],
+        "required": ["name", "stamp"]
       }
     }
   }

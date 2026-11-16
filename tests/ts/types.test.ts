@@ -81,7 +81,18 @@ export async function methods32(): Promise<void> {
 	// take them; Patch it sends as written.
 	type Op = { responses: Record<never, never> };
 	const t = createClient<{
-		"/t": { CONNECT: Op; Track: Op; Post: Op; Patch: Op; MOVE: Op };
+		"/t": {
+			CONNECT: Op;
+			Track: Op;
+			Delete: Op;
+			Get: Op;
+			Head: Op;
+			Options: Op;
+			Post: Op;
+			Put: Op;
+			Patch: Op;
+			MOVE: Op;
+		};
 	}>({ baseUrl: "https://api.test" });
 	await t.request("MOVE", "/t");
 	await t.request("Patch", "/t");
@@ -89,8 +100,18 @@ export async function methods32(): Promise<void> {
 	await t.request("CONNECT", "/t");
 	// @ts-expect-error fetch rejects TRACK, in any case
 	await t.request("Track", "/t");
+	// @ts-expect-error fetch would send DELETE
+	await t.request("Delete", "/t");
+	// @ts-expect-error fetch would send GET
+	await t.request("Get", "/t");
+	// @ts-expect-error fetch would send HEAD
+	await t.request("Head", "/t");
+	// @ts-expect-error fetch would send OPTIONS
+	await t.request("Options", "/t");
 	// @ts-expect-error fetch would send POST
 	await t.request("Post", "/t");
+	// @ts-expect-error fetch would send PUT
+	await t.request("Put", "/t");
 	await m.request("Patch", "/r");
 	// Without additionalOperations, request takes no method.
 	// @ts-expect-error no method
@@ -268,11 +289,20 @@ export async function okResults(): Promise<void> {
 	}
 	const data = await getOk("/things/{id}", { path: { id: 1 } });
 	expectType<Equal<typeof data, Api.Thing | string>>();
+	// ArgsOf's parseAs argument defaults to undefined, as ResultOf's does.
+	expectType<
+		Equal<
+			ArgsOf<Api.paths, "get", "/things/{id}">,
+			ArgsOf<Api.paths, "get", "/things/{id}", undefined>
+		>
+	>();
 }
 
 export async function optionalInit(): Promise<void> {
 	// Nothing required: the second argument can be omitted.
 	await api.put("/items");
+	// An optional body left undefined is no body, as left out (docs/client.md).
+	await api.put("/items", { body: undefined });
 	await api.put("/items", { body: { name: "x" } });
 	await api.put("/items", { body: "plain text", contentType: "text/plain" });
 	// @ts-expect-error a non-JSON body needs its contentType
@@ -685,6 +715,29 @@ export async function parseAsJsonKeepsJsonSchemas(): Promise<void> {
 	const j = createClient<JsonOnlyPaths>({ baseUrl: "https://api.test" });
 	const res = await j.get("/j", { parseAs: "json" });
 	expectType<Equal<typeof res.data, { a: number } | { b: number }>>();
+}
+
+interface JsonVariantPaths {
+	"/v": {
+		get: {
+			responses: {
+				200: { content: { "application/problem+json": { p: number } } };
+				201: { content: { "application/json; charset=utf-8": { c: number } } };
+				202: { content: { "*/*; q=0.5": { w: number } } };
+				203: { content: { "application/*; x=1": { x: number } } };
+			};
+		};
+	};
+}
+
+export async function parseAsJsonKeepsJsonVariants(): Promise<void> {
+	// +json without parameters, application/json and the wildcards with them.
+	const j = createClient<JsonVariantPaths>({ baseUrl: "https://api.test" });
+	const res = await j.get("/v", { parseAs: "json" });
+	if (res.status === 200) expectType<Equal<typeof res.data, { p: number }>>();
+	if (res.status === 201) expectType<Equal<typeof res.data, { c: number }>>();
+	if (res.status === 202) expectType<Equal<typeof res.data, { w: number }>>();
+	if (res.status === 203) expectType<Equal<typeof res.data, { x: number }>>();
 }
 
 interface NoBodyPaths {

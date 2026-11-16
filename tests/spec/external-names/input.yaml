@@ -13,3 +13,13 @@ components:
         b: { $ref: defs/Order.yaml }
         c: { $ref: "defs/common.json#/Line%20Item" }
         d: { $ref: defs/order-status.yml }
+        e: { $ref: "defs/common.json#/Order" }
+        f: { $ref: "defs/common.json#/Count" }
+    Status:
+      description: Not only a $ref, so it does not name order-status.yml.
+      $ref: defs/order-status.yml
+      type: string
+    Tally: { $ref: "defs/common.json#/Count" }
+    Total:
+      $ref: "defs/common.json#/Count"
+      description: Only a $ref too; the first such component gives the name.
