@@ -725,6 +725,39 @@ async function assertFiles(form: FormData): Promise<void> {
 	assert.deepEqual(await Promise.all(files.map((f) => f.text())), ["a", "b"]);
 }
 
+test("multipart fields: numbers and booleans are their text, undefined and null are left out, in arrays too", async () => {
+	const rec = recorder();
+	await client(rec).post("/f", {
+		body: {
+			n: 1.5,
+			yes: true,
+			no: false,
+			zero: 0,
+			empty: "",
+			skip: undefined,
+			none: null,
+			items: [1, null, "x", undefined, { k: 1 }, [2, 3], false],
+			gone: [null, undefined],
+		},
+		contentType: "multipart/form-data",
+	});
+	assert.deepEqual(
+		[...(await rec.request(0).formData())],
+		[
+			["n", "1.5"],
+			["yes", "true"],
+			["no", "false"],
+			["zero", "0"],
+			["empty", ""],
+			["items", "1"],
+			["items", "x"],
+			["items", '{"k":1}'],
+			["items", "[2,3]"],
+			["items", "false"],
+		],
+	);
+});
+
 test("a raw body is sent as it is for form media types too", async () => {
 	const rec = recorder();
 	const api = client(rec);
@@ -795,6 +828,46 @@ test("contentType: JSON media types are stringified, others sent as is", async (
 		"application/json; charset=utf-8",
 		"an explicit header is kept",
 	);
+});
+
+test("contentType is sent as written, its parameters and case kept", async () => {
+	const rec = recorder();
+	const api = client(rec);
+	await api.post("/b", {
+		body: { a: 1 },
+		contentType: "application/json; charset=utf-8",
+	});
+	await api.post("/b", { body: { a: 1 }, contentType: "Application/JSON" });
+	await api.post("/b", {
+		body: "hello",
+		contentType: "text/plain; charset=utf-8",
+	});
+	await api.post("/b", {
+		body: { q: "a b" },
+		contentType: "application/x-www-form-urlencoded; charset=utf-8",
+	});
+	await api.post("/b", {
+		body: new Blob(["bin"]),
+		contentType: "application/octet-stream; x=1",
+	});
+	assert.deepEqual(
+		rec.requests.map((r) => r.headers.get("content-type")),
+		[
+			"application/json; charset=utf-8",
+			"Application/JSON",
+			"text/plain; charset=utf-8",
+			"application/x-www-form-urlencoded; charset=utf-8",
+			"application/octet-stream; x=1",
+		],
+	);
+	// The media type is read without its parameters and case: JSON is stringified, a form URL-encoded.
+	assert.deepEqual(await Promise.all(rec.requests.map((r) => r.text())), [
+		'{"a":1}',
+		'{"a":1}',
+		"hello",
+		"q=a%20b",
+		"bin",
+	]);
 });
 
 test("a string body for a JSON media type is JSON, not raw text", async () => {
@@ -1079,12 +1152,22 @@ test("an error from config.headers rejects the call as it is, before fetch", asy
 	assert.equal(rec.requests.length, 0);
 });
 
-test("network failures propagate", async () => {
-	const failing: typeof fetch = async () => {
-		throw new TypeError("network down");
-	};
-	const api = loose({ baseUrl: "https://api.test", fetch: failing });
-	await assert.rejects(api.get("/r"), /network down/);
+test("an error from config.fetch (a network failure) or onData rejects the call as it is", async () => {
+	const failure = new TypeError("network down");
+	const failing = loose({
+		baseUrl: "https://api.test",
+		fetch: async () => {
+			throw failure;
+		},
+	});
+	await assert.rejects(failing.get("/r"), (e) => e === failure);
+	const invalid = new Error("does not match the schema");
+	const api = client(recorder(), {
+		onData: () => {
+			throw invalid;
+		},
+	});
+	await assert.rejects(api.get("/r"), (e) => e === invalid);
 });
 
 test("parseAs reads the body as asked", async () => {
@@ -1149,15 +1232,21 @@ test("a body that does not parse as its content-type says throws with the respon
 	await assert.rejects(api.get("/r"), (e: unknown) => {
 		assert.ok(e instanceof ResponseBodyError);
 		assert.equal(e.name, "ResponseBodyError");
+		assert.equal(e.message, "response body is not valid JSON (status 502)");
+		assert.ok(e.cause instanceof SyntaxError, "JSON.parse's error");
 		assert.equal(e.response.status, 502);
 		assert.equal(e.text, "<html>bad gateway</html>");
 		return true;
 	});
 	const parseAs = client(recorder(() => new Response("nope", { status: 200 })));
-	await assert.rejects(
-		parseAs.get("/r", { parseAs: "json" }),
-		ResponseBodyError,
-	);
+	await assert.rejects(parseAs.get("/r", { parseAs: "json" }), (e: unknown) => {
+		assert.ok(e instanceof ResponseBodyError);
+		assert.equal(e.message, "response body is not valid JSON (status 200)");
+		assert.ok(e.cause instanceof SyntaxError);
+		assert.equal(e.response.status, 200);
+		assert.equal(e.text, "nope");
+		return true;
+	});
 });
 
 test("onData runs for bodies that are empty too", async () => {
