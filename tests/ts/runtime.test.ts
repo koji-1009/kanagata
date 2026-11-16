@@ -638,6 +638,7 @@ test("contentType: an object body becomes FormData for multipart", async () => {
 	await client(rec).post("/f", {
 		body: own,
 		contentType: "multipart/form-data",
+		headers: { "content-type": "multipart/form-data" }, // dropped: fetch adds the boundary
 	});
 	assert.match(
 		rec.request(1).headers.get("content-type") ?? "",
@@ -838,6 +839,11 @@ test("contentType is sent as written, its parameters and case kept", async () =>
 		contentType: "application/json; charset=utf-8",
 	});
 	await api.post("/b", { body: { a: 1 }, contentType: "Application/JSON" });
+	// Space before the semicolon is allowed (RFC 9110, "Parameters").
+	await api.post("/b", {
+		body: { a: 1 },
+		contentType: "application/json ; charset=utf-8",
+	});
 	await api.post("/b", {
 		body: "hello",
 		contentType: "text/plain; charset=utf-8",
@@ -855,6 +861,7 @@ test("contentType is sent as written, its parameters and case kept", async () =>
 		[
 			"application/json; charset=utf-8",
 			"Application/JSON",
+			"application/json ; charset=utf-8",
 			"text/plain; charset=utf-8",
 			"application/x-www-form-urlencoded; charset=utf-8",
 			"application/octet-stream; x=1",
@@ -862,6 +869,7 @@ test("contentType is sent as written, its parameters and case kept", async () =>
 	);
 	// The media type is read without its parameters and case: JSON is stringified, a form URL-encoded.
 	assert.deepEqual(await Promise.all(rec.requests.map((r) => r.text())), [
+		'{"a":1}',
 		'{"a":1}',
 		'{"a":1}',
 		"hello",
@@ -992,6 +1000,7 @@ test("JSON responses are parsed, including +json", async () => {
 	for (const type of [
 		"application/json",
 		"application/json; charset=utf-8",
+		"application/json ; charset=utf-8",
 		"application/problem+json",
 	]) {
 		const res = await client(recorder(json(type))).get("/r");
