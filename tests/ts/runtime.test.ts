@@ -608,6 +608,20 @@ test("contentType: an object body becomes FormData for multipart", async () => {
 	assert.equal(form.get("meta"), '{"k":1}');
 	assert.equal(form.has("skip"), false);
 
+	rec.requests.pop();
+	await client(rec).post("/f", {
+		body: {
+			doc: new File(["pdf"], "report 1.pdf", { type: "application/pdf" }),
+			blob: new Blob(["img"], { type: "image/png" }),
+			files: [
+				new File(["a"], "a.txt", { type: "text/plain" }),
+				new File(["b"], "b.txt", { type: "text/plain" }),
+			],
+		},
+		contentType: "multipart/form-data",
+	});
+	await assertFiles(await rec.request(0).formData());
+
 	await client(rec).post("/f", {
 		body: { caption: "p" },
 		contentType: "Multipart/Form-Data; charset=utf-8",
@@ -656,7 +670,60 @@ test("contentType: an object body for another multipart type is sent as its name
 	assert.ok(file instanceof Blob);
 	assert.equal(await file.text(), "img");
 	assert.equal(parts.get("meta"), '{"k":1}');
+
+	await client(rec).post("/f", {
+		body: {
+			doc: new File(["pdf"], "report 1.pdf", { type: "application/pdf" }),
+			blob: new Blob(["img"], { type: "image/png" }),
+			files: [
+				new File(["a"], "a.txt", { type: "text/plain" }),
+				new File(["b"], "b.txt", { type: "text/plain" }),
+			],
+		},
+		contentType: "multipart/related",
+	});
+	const related = rec.request(1);
+	const relatedBoundary = /^multipart\/related; boundary=(.+)$/.exec(
+		related.headers.get("content-type") ?? "",
+	)?.[1];
+	assert.ok(relatedBoundary);
+	await assertFiles(
+		await new Response(await related.blob(), {
+			headers: {
+				"content-type": `multipart/form-data; boundary=${relatedBoundary}`,
+			},
+		}).formData(),
+	);
 });
+
+/**
+ * The parts sent for the files of the multipart tests: a File keeps its name and type,
+ * a Blob is a file named "blob" (as FormData names it) with its type, and an array of
+ * Files repeats the field, each with its own name.
+ */
+async function assertFiles(form: FormData): Promise<void> {
+	const part = (value: ReturnType<FormData["get"]>) => {
+		assert.ok(value instanceof File, String(value));
+		return value;
+	};
+	const doc = part(form.get("doc"));
+	assert.equal(doc.name, "report 1.pdf");
+	assert.equal(doc.type, "application/pdf");
+	assert.equal(await doc.text(), "pdf");
+	const blob = part(form.get("blob"));
+	assert.equal(blob.name, "blob");
+	assert.equal(blob.type, "image/png");
+	assert.equal(await blob.text(), "img");
+	const files = form.getAll("files").map(part);
+	assert.deepEqual(
+		files.map((f) => [f.name, f.type]),
+		[
+			["a.txt", "text/plain"],
+			["b.txt", "text/plain"],
+		],
+	);
+	assert.deepEqual(await Promise.all(files.map((f) => f.text())), ["a", "b"]);
+}
 
 test("a raw body is sent as it is for form media types too", async () => {
 	const rec = recorder();
@@ -765,16 +832,36 @@ test("without contentType an object body is JSON, even if a form content-type he
 	);
 });
 
-test("a content-type in the client's headers is never sent", async () => {
+test("a call without a body sends no body and no content-type, whatever the method and the client's headers", async () => {
 	const rec = recorder();
 	const api = client(rec, {
 		headers: { "content-type": "application/json", "x-kept": "1" },
 	});
-	await api.get("/f");
-	await api.delete("/f");
-	for (const req of rec.requests) {
-		assert.equal(req.headers.has("content-type"), false, req.method);
-		assert.equal(req.headers.get("x-kept"), "1");
+	const methods = [
+		"get",
+		"put",
+		"post",
+		"delete",
+		"options",
+		"head",
+		"patch",
+		"query",
+	] as const;
+	// No init, an empty init, and a body left undefined (an optional requestBody) are the same call.
+	for (const method of methods) {
+		await api[method]("/f");
+		await api[method]("/f", {});
+		await api[method]("/f", { body: undefined });
+	}
+	await api.request("COPY", "/f");
+	await api.request("COPY", "/f", { body: undefined });
+	assert.equal(rec.requests.length, methods.length * 3 + 2);
+	for (const [i, req] of rec.requests.entries()) {
+		const call = `${req.method} #${i}`;
+		assert.equal(req.body, null, call);
+		assert.equal(req.headers.has("content-type"), false, call);
+		assert.equal(req.headers.has("content-length"), false, call);
+		assert.equal(req.headers.get("x-kept"), "1", call);
 	}
 });
 
