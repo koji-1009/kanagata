@@ -1,6 +1,13 @@
 {
   "openapi": "3.1.0",
-  "paths": {},
+  "paths": {
+    "/holders": {
+      "post": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Holder" } } } },
+        "responses": { "204": { "description": "Holder is sent: its write view leaves out base." } }
+      }
+    }
+  },
   "components": {
     "schemas": {
       "Base": { "type": "object", "properties": { "id": { "type": "string" } } },
@@ -10,7 +17,20 @@
         "required": ["id"],
         "properties": { "tag": { "type": "string" } }
       },
-      "Described": { "$ref": "#/components/schemas/Base", "description": "Only an annotation next to $ref." }
+      "Described": { "$ref": "#/components/schemas/Base", "description": "Only an annotation next to $ref." },
+      "Holder": {
+        "description": "readOnly next to $ref applies: base is returned, not sent.",
+        "type": "object",
+        "properties": {
+          "base": { "$ref": "#/components/schemas/Base", "readOnly": true },
+          "name": { "type": "string" }
+        }
+      },
+      "Negated": {
+        "description": "An ignored keyword next to $ref is reported, as it would apply.",
+        "$ref": "#/components/schemas/Base",
+        "not": { "type": "string" }
+      }
     }
   }
 }

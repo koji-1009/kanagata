@@ -16,6 +16,12 @@ export interface webhooks {
   };
   petGone: {
     post: {
+      /** A form the API sends is read as its text, as a form response is. */
+      requestBody?: {
+        content: {
+          "application/x-www-form-urlencoded": string;
+        };
+      };
       responses: {
         204: {};
       };

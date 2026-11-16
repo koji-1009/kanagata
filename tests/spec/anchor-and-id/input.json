@@ -16,7 +16,21 @@
           "tag": { "$ref": "https://example.com/schemas/tag" },
           "author": { "$ref": "#person" },
           "node": { "$ref": "#node" },
-          "label": { "$ref": "https://example.com/schemas/labels#/$defs/label" }
+          "label": { "$ref": "https://example.com/schemas/labels#/$defs/label" },
+          "member": { "$ref": "#member" }
+        }
+      }
+    },
+    "x-groups": {
+      "Group": {
+        "description": "An $anchor after an example (data, not a schema) is found too.",
+        "type": "object",
+        "example": { "members": [{ "nick": "a" }] },
+        "properties": {
+          "members": {
+            "type": "array",
+            "items": { "$anchor": "member", "type": "object", "properties": { "nick": { "type": "string" } } }
+          }
         }
       }
     },

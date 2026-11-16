@@ -14,6 +14,7 @@ import {
 	RECORD,
 	ref,
 	STRING,
+	type Ty,
 	tuple,
 	UNKNOWN,
 	union,
@@ -40,6 +41,8 @@ test("type keywords narrow sets of values", () => {
 	assert.deepEqual(inter([lit('"a"'), ab, STRING]), lit('"a"'));
 	// kind types meet: what every one of them allows (integer within number)
 	assert.equal(inter([INTEGER, NUMBER]), INTEGER);
+	assert.equal(inter([NUMBER, INTEGER]), INTEGER, "in either order");
+	assert.equal(inter([STRING, INTEGER]), NEVER);
 	assert.equal(inter([union([STRING, NULL]), STRING]), STRING);
 	assert.equal(inter([STRING, NUMBER]), NEVER);
 	assert.deepEqual(
@@ -59,6 +62,12 @@ test("type keywords narrow sets of values", () => {
 	assert.equal(inter([lit('"a"'), lit('"b"')]), NEVER);
 	assert.deepEqual(inter([union([lit("1"), lit("2")]), lit("1.0")]), lit("1"));
 	assert.deepEqual(inter([union([lit("0"), NULL]), NULL]), NULL);
+	// zero is one value, whatever its sign or notation
+	assert.deepEqual(inter([union([lit("0"), lit("1")]), lit("-0.0")]), lit("0"));
+	assert.deepEqual(
+		inter([union([lit("-0"), lit("2")]), lit("0e5")]),
+		lit("-0"),
+	);
 	assert.deepEqual(
 		inter([
 			union([lit('"a"'), lit('"b"'), lit("1")]),
@@ -97,6 +106,32 @@ test("narrowing leaves other intersections alone", () => {
 test("union flattens and removes duplicates", () => {
 	const t = union([STRING, union([NULL, NUMBER]), NULL, STRING]);
 	assert.deepEqual(t, { kind: "union", items: [STRING, NULL, NUMBER] });
+});
+
+test("union keeps tuples that differ in their items, minimum or rest", () => {
+	const items = [tuple([STRING]), tuple([NUMBER])];
+	assert.deepEqual(union(items), { kind: "union", items });
+	const optional: Ty = { kind: "tuple", items: [STRING], min: 0 };
+	assert.deepEqual(union([tuple([STRING]), optional]), {
+		kind: "union",
+		items: [tuple([STRING]), optional],
+	});
+	const rest: Ty = { kind: "tuple", items: [STRING], min: 1, rest: NUMBER };
+	const otherRest: Ty = {
+		kind: "tuple",
+		items: [STRING],
+		min: 1,
+		rest: STRING,
+	};
+	assert.deepEqual(union([tuple([STRING]), rest, otherRest]), {
+		kind: "union",
+		items: [tuple([STRING]), rest, otherRest],
+	});
+	assert.deepEqual(union([rest, tuple([STRING])]), {
+		kind: "union",
+		items: [rest, tuple([STRING])],
+	});
+	assert.equal(union([rest, { ...rest }]), rest, "equal tuples are one");
 });
 
 test("union drops never and absorbs unknown", () => {

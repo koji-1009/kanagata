@@ -6,7 +6,8 @@
       "get": {
         "responses": {
           "200": { "description": "ok" },
-          "x-note": "Specification extensions are not paths or status codes."
+          "x-note": "Specification extensions are not paths or status codes.",
+          "404": { "description": "A status after an extension is read too." }
         }
       }
     }

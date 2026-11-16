@@ -24,4 +24,7 @@ export type Post = {
   };
   node?: Node;
   label?: string;
+  member?: {
+    nick?: string;
+  };
 };

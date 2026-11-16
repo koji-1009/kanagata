@@ -7,9 +7,13 @@ export interface operations {}
 export interface schemas {
   Order: Order;
   Box: Box;
+  Status: Status;
+  Tally: Tally;
+  Total: Total;
   Order2: Order2;
   "Line Item": LineItem;
   "order-status": OrderStatus;
+  Order3: Order3;
 }
 
 export type Order = string;
@@ -20,10 +24,22 @@ export type Box = {
   b?: Order2;
   c?: LineItem;
   d?: OrderStatus;
+  e?: Order3;
+  f?: Tally;
 };
+
+/** Not only a $ref, so it does not name order-status.yml. */
+export type Status = OrderStatus & string;
+
+export type Tally = number;
+
+/** Only a $ref too; the first such component gives the name. */
+export type Total = Tally;
 
 export type Order2 = Record<string, unknown>;
 
 export type LineItem = number;
 
 export type OrderStatus = "open" | "closed";
+
+export type Order3 = boolean;

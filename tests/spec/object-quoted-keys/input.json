@@ -5,7 +5,7 @@
     "schemas": {
       "Keys": {
         "type": "object",
-        "required": ["name", "default", "$ref", "_x", "content-type", "", "1abc", "200", "a b", "é", "q\"uote"],
+        "required": ["name", "default", "$ref", "_x", "content-type", "", "1abc", "200", "123456789012345", "1234567890123456", "a b", "é", "q\"uote"],
         "properties": {
           "name": { "type": "string" },
           "default": { "type": "string" },
@@ -15,6 +15,8 @@
           "": { "type": "string" },
           "1abc": { "type": "string" },
           "200": { "type": "string" },
+          "123456789012345": { "type": "string" },
+          "1234567890123456": { "type": "string" },
           "a b": { "type": "string" },
           "é": { "type": "string" },
           "q\"uote": { "type": "string" }

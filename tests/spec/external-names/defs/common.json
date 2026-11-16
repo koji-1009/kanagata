@@ -1,1 +1,1 @@
-{ "Line Item": { "type": "integer" } }
+{ "Line Item": { "type": "integer" }, "Order": { "type": "boolean" }, "Count": { "type": "integer" } }

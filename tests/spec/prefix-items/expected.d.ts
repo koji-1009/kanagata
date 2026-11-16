@@ -8,6 +8,7 @@ export interface schemas {
   Pair: Pair;
   Open: Open;
   Rest: Rest;
+  NoPrefix: NoPrefix;
 }
 
 export type Pair = [string, number];
@@ -15,3 +16,5 @@ export type Pair = [string, number];
 export type Open = [string?, (number | null)?, ...unknown[]];
 
 export type Rest = [string, ...number[]];
+
+export type NoPrefix = [...number[]];
