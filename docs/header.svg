@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="title">
+	<title id="title">kanagata: types, not generated clients</title>
+	<style>
+		.bg { fill: #f6f8fa; }
+		.die-a { fill: #6b7480; }
+		.die-b { fill: #9aa3ae; }
+		.part { fill: #3178c6; }
+		.glyph { fill: #ffffff; }
+		.name { fill: #1f2328; }
+		.muted { fill: #59636e; }
+		.faint { fill: #818b98; }
+		.type { fill: #3178c6; }
+		.rule { stroke: #d1d9e0; }
+		@media (prefers-color-scheme: dark) {
+			.bg { fill: #161b22; }
+			.die-a { fill: #8b949e; }
+			.die-b { fill: #5d6570; }
+			.part { fill: #4493f8; }
+			.glyph { fill: #0d1117; }
+			.name { fill: #e6edf3; }
+			.muted { fill: #9198a1; }
+			.faint { fill: #6e7681; }
+			.type { fill: #4493f8; }
+			.rule { stroke: #30363d; }
+		}
+		text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+		.mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+	</style>
+
+	<rect class="bg" width="1280" height="320" rx="24"/>
+
+	<!-- the die: two halves closing around the part -->
+	<path class="die-a" d="M96 90 Q96 80 106 80 H228 V102 H118 V212 H96 Z"/>
+	<path class="die-b" d="M256 108 V230 Q256 240 246 240 H124 V218 H234 V108 Z"/>
+	<rect class="part" x="128" y="112" width="96" height="96" rx="12"/>
+	<text class="glyph mono" x="176" y="174" font-size="40" font-weight="700" text-anchor="middle">{ }</text>
+
+	<text class="name" x="304" y="168" font-size="84" font-weight="700" letter-spacing="-1">kanagata</text>
+	<text class="muted" x="306" y="222" font-size="28">Types, not generated clients.</text>
+
+	<line class="rule" x1="720" y1="88" x2="720" y2="232" stroke-width="2"/>
+
+	<!-- a schema and the type it becomes -->
+	<g class="mono" font-size="17">
+		<text class="faint" x="752" y="108">type: object</text>
+		<text class="faint" x="752" y="136">required: [id]</text>
+		<text class="faint" x="752" y="164">properties:</text>
+		<text class="faint" x="772" y="192">id: { type: integer }</text>
+		<text class="faint" x="772" y="220">name: { type: string }</text>
+
+		<text class="muted" x="1012" y="166" font-size="22">→</text>
+
+		<text class="name" x="1050" y="122">{</text>
+		<text class="name" x="1070" y="150">id: <tspan class="type">number</tspan>;</text>
+		<text class="name" x="1070" y="178">name?: <tspan class="type">string</tspan>;</text>
+		<text class="name" x="1050" y="206">}</text>
+	</g>
+</svg>
