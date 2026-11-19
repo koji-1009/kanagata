@@ -28,6 +28,15 @@ if (res.status === 200) {
 
 Run `generate` again after upgrading kanagata: the types and the client come from the same version.
 
+## Types, not generated clients
+
+kanagata generates no code per operation. It translates the OpenAPI schema into accurate TypeScript types, then lets TypeScript do the rest. Rather than generating a collection of abstractions, it provides the foundation for building a type-safe API environment:
+
+- Each call is checked against its operation, and the editor autocompletes its path, parameters and request body.
+- Responses form a discriminated union, so checking `status` narrows `data` to the corresponding response type.
+- When the document changes, regenerate types: TypeScript flags affected calls that no longer match the updated contract, and `--check` fails CI if generated files are stale.
+- Your own wrappers, query functions, hooks and validators are typed by the same `paths` and `operations` ([Wrapping a call](docs/client.md#wrapping-a-call)), without generating parallel runtime implementations.
+
 ## Install
 
 - The CLI needs Node 24 or later (`engines`). Its one dependency is [`yaml`](https://github.com/eemeli/yaml), which has none.
