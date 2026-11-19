@@ -1,5 +1,7 @@
 # kanagata
 
+![kanagata: types, not generated clients](docs/header.svg)
+
 TypeScript types from an OpenAPI 3.0 / 3.1 / 3.2 document (JSON or YAML), and a typed `fetch` client for them.
 
 - `kanagata generate` writes one `.d.ts` file.
