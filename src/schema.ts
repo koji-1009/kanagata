@@ -331,9 +331,15 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (Array.isArray(type))
 		return union(type.map((t) => typed(cx, v, t as string, at)));
 	if (hasObjectKeywords(v)) return object(cx, v, at);
-	if (v.get("items") !== undefined || v.get("prefixItems") !== undefined)
-		return array(cx, v, at);
+	if (hasArrayKeywords(v)) return array(cx, v, at);
 	return UNKNOWN;
+}
+
+/** Keywords that only apply to arrays and that the type reads; their presence implies `type: array`. */
+function hasArrayKeywords(v: JsonObject): boolean {
+	return ["items", "prefixItems", "minItems", "maxItems"].some(
+		(k) => v.get(k) !== undefined,
+	);
 }
 
 function list(cx: Ctx, items: Value[], at: string): Ty[] {
@@ -428,9 +434,8 @@ function isBinaryString(v: JsonObject): boolean {
 /**
  * An array, or a tuple where `prefixItems`, `minItems` or `maxItems` say more: the first
  * `minItems` items are required, `prefixItems` types the first ones and `items` the rest
- * (absent means any; false, next to `prefixItems`, none). `maxItems` closes the tuple where
- * it is not past the items already written: TypeScript has no other bound on a length, and
- * writing out `maxItems: 5000` items is no type to read.
+ * (absent means any; false, next to `prefixItems`, none), and `maxItems` closes the tuple,
+ * which TypeScript bounds only by writing out every item.
  */
 function array(cx: Ctx, v: JsonObject, at: string): Ty {
 	const items = v.get("items");
@@ -446,20 +451,18 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 				: schema(cx, items, child(at, "items"));
 	const min = count(v, "minItems") ?? 0;
 	const max = count(v, "maxItems");
-	if (!Array.isArray(prefix) && min === 0 && (max === undefined || max > 0))
-		return arrayTy(rest as Ty);
 	if (max !== undefined && max < min) return NEVER;
-	const written = Math.max(head.length, min);
-	if (rest === undefined && written > head.length) return NEVER;
-	const tupleItems = Array.from(
-		{ length: written },
+	if (rest === undefined && min > head.length) return NEVER;
+	if (!Array.isArray(prefix) && min === 0 && max === undefined)
+		return arrayTy(rest as Ty);
+	const length = max ?? Math.max(head.length, min);
+	const written = Array.from(
+		{ length: rest === undefined ? Math.min(length, head.length) : length },
 		(_, i) => head[i] ?? (rest as Ty),
 	);
-	if (max !== undefined && max <= written)
-		return { kind: "tuple", items: tupleItems.slice(0, max), min };
-	return rest === undefined
-		? { kind: "tuple", items: tupleItems, min }
-		: { kind: "tuple", items: tupleItems, min, rest };
+	return max !== undefined || rest === undefined
+		? { kind: "tuple", items: written, min }
+		: { kind: "tuple", items: written, min, rest };
 }
 
 /** A count keyword (`minItems`, `maxItems`): a non-negative integer, or undefined. */
