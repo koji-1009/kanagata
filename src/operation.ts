@@ -6,7 +6,6 @@ import { type Ctx, child, DiagError } from "./pointer.ts";
 import { doc, schema } from "./schema.ts";
 import {
 	BLOB,
-	equal,
 	lit,
 	object,
 	opRef,
@@ -26,9 +25,22 @@ const RESERVED_HEADERS = ["accept", "content-type", "authorization"];
 
 export interface Paths {
 	paths: Prop[];
-	/** Present only when the document has `webhooks` (3.1 and later). */
+	/** Present only when the document has `webhooks` and is 3.1 or later. */
 	webhooks?: Prop[];
 	operations: Prop[];
+	/** Operations with an operationId reached again, whose types `generate` compares. */
+	again: Again[];
+}
+
+/**
+ * An operation with an operationId reached again through a Path Item that paths or
+ * webhooks share: `ty` is its type there, `first` the one `operations[id]` declares.
+ */
+export interface Again {
+	id: string;
+	ty: Ty;
+	at: string;
+	first: { ty: Ty; at: string };
 }
 
 /** A property with optional documentation. */
@@ -43,8 +55,14 @@ function documented(
 		: { key, ty, optional, doc: d };
 }
 
-/** `operations` by operationId: the Operation Object, its declaration, and where it is. */
-type Operations = Map<string, { op: JsonObject; prop: Prop; at: string }>;
+/**
+ * `operations` by operationId: the Operation Object, its declaration, where it is, and
+ * its types where it is reached again.
+ */
+type Operations = Map<
+	string,
+	{ op: JsonObject; prop: Prop; at: string; again: { ty: Ty; at: string }[] }
+>;
 
 /** `paths` and `webhooks`: both map names to Path Items, and share `operations`. */
 export function paths(cx: Ctx, root: JsonObject): Paths {
@@ -52,10 +70,16 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
 	const out: Paths = {
 		paths: pathItems(cx, root, "paths", operations),
 		operations: [],
+		again: [],
 	};
-	if (root.get("webhooks") !== undefined)
+	// `webhooks` is an OpenAPI 3.1 field, no field of a 3.0 document.
+	const v30 = (root.get("openapi") as string).startsWith("3.0.");
+	if (!v30 && root.get("webhooks") !== undefined)
 		out.webhooks = pathItems(cx, root, "webhooks", operations);
 	out.operations = [...operations.values()].map((o) => o.prop);
+	out.again = [...operations].flatMap(([id, o]) =>
+		o.again.map((a) => ({ id, ...a, first: { ty: o.prop.ty, at: o.at } })),
+	);
 	return out;
 }
 
@@ -63,8 +87,9 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
  * Adds an operation with an operationId. A Path Item shared by `$ref` (or a YAML alias)
  * gives the same Operation Object again, which is declared once; another Operation
  * Object with the same operationId, which OpenAPI requires to be unique, is an error.
- * The same operation as a path's and a webhook's has two types (the API sends a
- * webhook's request) but one `operations[id]`, which TypeScript cannot declare twice.
+ * The same operation as a path's and a webhook's has a type in each (the API sends a
+ * webhook's request) but one `operations[id]`, so its type there is kept for `generate`
+ * to compare once the components' second types are known.
  */
 function addOperation(
 	operations: Operations,
@@ -74,17 +99,13 @@ function addOperation(
 	at: string,
 ): void {
 	const known = operations.get(id);
-	if (known === undefined) operations.set(id, { op, prop, at });
+	if (known === undefined) operations.set(id, { op, prop, at, again: [] });
 	else if (known.op !== op)
 		throw new DiagError(
 			at,
 			`operationId ${JSON.stringify(id)} is also ${known.at}'s; OpenAPI requires it to be unique`,
 		);
-	else if (!equal(known.prop.ty, prop.ty))
-		throw new DiagError(
-			at,
-			`operation ${JSON.stringify(id)} is also ${known.at}, as a path's and a webhook's, whose types differ; operations[${JSON.stringify(id)}] has one type`,
-		);
+	else known.again.push({ ty: prop.ty, at });
 }
 
 function pathItems(
@@ -247,7 +268,8 @@ function operation(
 			if (body.get("content") === undefined)
 				throw new DiagError(bodyAt, "a request body must have content");
 			// An empty content describes no representation: no body can be passed.
-			const c = cx.inMode(sent, () => content(cx, body, bodyAt)) ?? object([]);
+			const c =
+				cx.inMode(sent, () => content(cx, body, bodyAt, false)) ?? object([]);
 			fields.push(
 				documented(
 					"requestBody",
@@ -272,7 +294,10 @@ function operation(
 			const parts: Prop[] = [];
 			const h = cx.inMode(received, () => headers(cx, r, rAt));
 			if (h !== undefined) parts.push(prop("headers", h));
-			const c = cx.inMode(received, () => content(cx, r, rAt));
+			// The client reads a path's responses; a webhook's are the receiver's.
+			const c = cx.inMode(received, () =>
+				content(cx, r, rAt, received === "read"),
+			);
 			if (c !== undefined) parts.push(prop("content", c));
 			return parts;
 		});
@@ -442,12 +467,17 @@ function headers(cx: Ctx, response: JsonObject, at: string): Ty | undefined {
 /**
  * `{ "<media type>": T }` for a non-empty `content`, keeping every media type.
  * A binary media type is `Blob` and a text one `string` whatever its schema says, as is
- * a form in a response (read view): that is what the client reads and sends. The schema
- * is still converted so its errors are reported, and so is `itemSchema` (3.2): the client
- * reads a sequential media type (`application/jsonl`, `text/event-stream`) whole, as these
- * rules say, not item by item.
+ * a form the client reads (`clientReads`, a path's response): that is what the client
+ * reads and sends. The schema is still converted so its errors are reported, and so is
+ * `itemSchema` (3.2): the client reads a sequential media type (`application/jsonl`,
+ * `text/event-stream`) whole, as these rules say, not item by item.
  */
-function content(cx: Ctx, owner: JsonObject, at: string): Ty | undefined {
+function content(
+	cx: Ctx,
+	owner: JsonObject,
+	at: string,
+	clientReads: boolean,
+): Ty | undefined {
 	const declared = owner.get("content");
 	if (declared === undefined) return undefined;
 	const base = child(at, "content");
@@ -462,7 +492,7 @@ function content(cx: Ctx, owner: JsonObject, at: string): Ty | undefined {
 				const s = m.get("schema");
 				return s === undefined ? UNKNOWN : schema(cx, s, child(mAt, "schema"));
 			});
-			const text = isTextMedia(mt) || (cx.mode === "read" && isFormMedia(mt));
+			const text = isTextMedia(mt) || (clientReads && isFormMedia(mt));
 			return prop(mt, isBinaryMedia(mt) ? BLOB : text ? STRING : ty);
 		}),
 	);

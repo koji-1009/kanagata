@@ -22,7 +22,7 @@
     "petGone": {
       "post": {
         "requestBody": {
-          "description": "A form the API sends is read as its text, as a form response is.",
+          "description": "A form the API sends is its schema: the client does not receive it, so it is not the text a form response is.",
           "content": {
             "application/x-www-form-urlencoded": {
               "schema": { "type": "object", "properties": { "id": { "type": "integer" } } }
