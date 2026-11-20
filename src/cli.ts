@@ -25,7 +25,7 @@ const HELP = `kanagata - TypeScript types from OpenAPI 3.0 / 3.1 / 3.2 (JSON or 
 
 Usage:
   kanagata generate <openapi.json|yaml> [-o <out.d.ts>] [--check]
-                    [--loose-nullable]
+                    [--loose-nullable] [--omit-version]
   kanagata init [-o <client.ts>] [--force]
 
 Commands:
@@ -39,6 +39,7 @@ Options:
                  In 3.0, read nullable: true as "this schema or null", even
                  where OpenAPI 3.0.3 gives it no effect (no type, next to
                  $ref, an enum without null)
+  --omit-version Leave the kanagata version out of the first line
   --force        Let init overwrite an existing file
   -h, --help     Show this help
   -V, --version  Show the version
@@ -128,6 +129,7 @@ interface Flags {
 	check: boolean;
 	force: boolean;
 	looseNullable: boolean;
+	omitVersion: boolean;
 	help: boolean;
 }
 
@@ -140,6 +142,7 @@ function parseFlags(
 		check: false,
 		force: false,
 		looseNullable: false,
+		omitVersion: false,
 		help: false,
 	};
 	const rest = args[Symbol.iterator]();
@@ -155,6 +158,7 @@ function parseFlags(
 		} else if (a === "--check") f.check = true;
 		else if (a === "--force") f.force = true;
 		else if (a === "--loose-nullable") f.looseNullable = true;
+		else if (a === "--omit-version") f.omitVersion = true;
 		else if (isHelp) f.help = true;
 		else f.positional.push(a);
 	}
@@ -167,7 +171,12 @@ function generateCommand(
 	out: (text: string) => void,
 	err: (line: string) => void,
 ): number {
-	const f = parseFlags(args, ["-o", "--check", "--loose-nullable"]);
+	const f = parseFlags(args, [
+		"-o",
+		"--check",
+		"--loose-nullable",
+		"--omit-version",
+	]);
 	if (f.help) {
 		out(HELP);
 		return 0;
@@ -188,7 +197,12 @@ function generateCommand(
 	const generated = generate(
 		src,
 		input === "-" ? undefined : fileSource(input, io),
-		{ looseNullable: f.looseNullable },
+		// The version tells which kanagata's rules the file follows: after an upgrade, a
+		// regenerated file that differs only in its first line has the same types.
+		{
+			looseNullable: f.looseNullable,
+			...(f.omitVersion ? {} : { version: version(io) }),
+		},
 	);
 	for (const w of generated.warnings) err(`${w.at}: warning: ${w.msg}`);
 
