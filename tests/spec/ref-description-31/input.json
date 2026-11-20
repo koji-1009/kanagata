@@ -1,0 +1,34 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/items": {
+      "post": {
+        "parameters": [
+          { "$ref": "#/components/parameters/Page", "description": "In 3.1, description next to $ref replaces the parameter's." },
+          { "$ref": "#/components/parameters/Size" }
+        ],
+        "requestBody": { "$ref": "#/components/requestBodies/Item", "description": "It replaces a request body's too." },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "headers": {
+              "X-Rate": { "$ref": "#/components/headers/Rate", "description": "And a header's; deprecated stays the header's." }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Page": { "name": "page", "in": "query", "description": "Replaced.", "schema": { "type": "integer" } },
+      "Size": { "name": "size", "in": "query", "description": "Without a description next to $ref, the parameter's own.", "schema": { "type": "integer" } }
+    },
+    "requestBodies": {
+      "Item": { "description": "Replaced.", "content": { "text/plain": { "schema": { "type": "string" } } } }
+    },
+    "headers": {
+      "Rate": { "description": "Replaced.", "deprecated": true, "schema": { "type": "integer" } }
+    }
+  }
+}

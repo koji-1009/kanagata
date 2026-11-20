@@ -81,9 +81,15 @@ function convert(cx: Ctx, v: JsonObject, at: string): Ty {
 	return t;
 }
 
-/** JSDoc text from an object's `description` and `deprecated`. */
-export function doc(v: JsonObject): string | undefined {
-	return docText(v, v.get("deprecated") === true);
+/**
+ * JSDoc text from an object's `description` and `deprecated`; `description` may be one
+ * that replaces the object's (next to the `$ref` that reached it, in 3.1 and 3.2).
+ */
+export function doc(
+	v: JsonObject,
+	description = v.str("description"),
+): string | undefined {
+	return docText(description, v.get("deprecated") === true);
 }
 
 /**
@@ -93,11 +99,17 @@ export function doc(v: JsonObject): string | undefined {
 export function schemaDoc(cx: Ctx, v: Value): string | undefined {
 	if (!(v instanceof JsonObject)) return undefined;
 	const siblings = cx.refSiblings || v.get("$ref") === undefined;
-	return docText(v, siblings && v.get("deprecated") === true);
+	return docText(
+		v.str("description"),
+		siblings && v.get("deprecated") === true,
+	);
 }
 
-function docText(v: JsonObject, deprecated: boolean): string | undefined {
-	const desc = v.str("description")?.trim() || undefined;
+function docText(
+	description: string | undefined,
+	deprecated: boolean,
+): string | undefined {
+	const desc = description?.trim() || undefined;
 	if (!deprecated) return desc;
 	return desc === undefined ? "@deprecated" : `${desc}\n@deprecated`;
 }

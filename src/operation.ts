@@ -251,8 +251,17 @@ function itemOperations(
 	return out;
 }
 
-/** A parameter, where it is, and the base URI of the document it is in. */
-type Param = [p: JsonObject, at: string, base: string];
+/** A parameter, where it is, the base URI of the document it is in, and its JSDoc. */
+type Param = [p: JsonObject, at: string, base: string, doc: string | undefined];
+
+/**
+ * The `description` next to a `$ref` to a parameter, request body or header, which
+ * replaces the referenced one's in 3.1 and 3.2; 3.0 ignores a Reference Object's other fields.
+ */
+function refDescription(cx: Ctx, raw: Value): string | undefined {
+	if (!cx.refSiblings || !(raw instanceof JsonObject)) return undefined;
+	return raw.get("$ref") === undefined ? undefined : raw.str("description");
+}
 
 interface OperationAt {
 	/** The Path Item, with those its `$ref`s refer to. */
@@ -295,7 +304,7 @@ function operation(
 		// `in: querystring` is OpenAPI 3.2.
 		if (loc === "querystring" && !cx.v32) continue;
 		const props: Prop[] = [];
-		for (const [p, pAt, base] of params) {
+		for (const [p, pAt, base, pDoc] of params) {
 			if (p.str("in") !== loc) continue;
 			// OpenAPI requires a path parameter's required to be true: the path needs it.
 			const required = booleanAt(p, pAt, "required");
@@ -305,9 +314,8 @@ function operation(
 				cx.withBase(base, () => paramType(cx, p, pAt, "parameter")),
 			);
 			// The whole query string (3.2) is one value; its name is not sent.
-			if (whole) groups.push(documented(loc, ty, optional, doc(p)));
-			else
-				props.push(documented(p.str("name") as string, ty, optional, doc(p)));
+			if (whole) groups.push(documented(loc, ty, optional, pDoc));
+			else props.push(documented(p.str("name") as string, ty, optional, pDoc));
 		}
 		if (props.length === 0) continue;
 		groups.push({
@@ -321,6 +329,7 @@ function operation(
 	const rawBody = o.get("requestBody");
 	if (rawBody !== undefined && hasBody) {
 		const bodyAt = child(at, "requestBody");
+		const described = refDescription(cx, rawBody);
 		cx.derefIn(rawBody, bodyAt, (value) => {
 			const body = objectAt(value, bodyAt, "a request body");
 			if (body.get("content") === undefined)
@@ -333,7 +342,7 @@ function operation(
 					"requestBody",
 					object([prop("content", c)]),
 					!booleanAt(body, bodyAt, "required"),
-					doc(body),
+					doc(body, described),
 				),
 			);
 		});
@@ -391,12 +400,19 @@ function collectParams(
 	const base = child(ownerAt, "parameters");
 	arrayAt(owner.get("parameters"), base, "parameters").forEach((raw, i) => {
 		const pAt = child(base, String(i));
-		cx.derefIn(raw, pAt, (p) => collectParam(cx, out, p, pAt));
+		const described = refDescription(cx, raw);
+		cx.derefIn(raw, pAt, (p) => collectParam(cx, out, p, pAt, described));
 	});
 }
 
 /** Adds one parameter; header parameters OpenAPI reserves are left out, as it requires. */
-function collectParam(cx: Ctx, out: Param[], value: Value, pAt: string): void {
+function collectParam(
+	cx: Ctx,
+	out: Param[],
+	value: Value,
+	pAt: string,
+	described: string | undefined,
+): void {
 	const p = objectAt(value, pAt, "a parameter");
 	const name = p.str("name");
 	const loc = p.str("in");
@@ -413,7 +429,7 @@ function collectParam(cx: Ctx, out: Param[], value: Value, pAt: string): void {
 		([q]) => q.str("in") === loc && same(q.str("name") as string),
 	);
 	// Its schema is converted later, against the document the parameter is in.
-	const param: Param = [p, pAt, cx.base];
+	const param: Param = [p, pAt, cx.base, doc(p, described)];
 	if (slot >= 0) out[slot] = param;
 	else out.push(param);
 }
@@ -507,6 +523,7 @@ function headers(cx: Ctx, response: JsonObject, at: string): Ty | undefined {
 	for (const [name, raw] of objectAt(declared, base, "headers").entries) {
 		if (name.toLowerCase() === "content-type") continue;
 		const hAt = child(base, name);
+		const described = refDescription(cx, raw);
 		cx.derefIn(raw, hAt, (value) => {
 			const h = objectAt(value, hAt, "a header");
 			props.push(
@@ -514,7 +531,7 @@ function headers(cx: Ctx, response: JsonObject, at: string): Ty | undefined {
 					name,
 					paramType(cx, h, hAt, "header"),
 					!booleanAt(h, hAt, "required"),
-					doc(h),
+					doc(h, described),
 				),
 			);
 		});
