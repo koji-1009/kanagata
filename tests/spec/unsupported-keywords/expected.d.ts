@@ -7,6 +7,9 @@ export interface operations {}
 export interface schemas {
   Cond: Cond;
   Dyn: Dyn;
+  Names: Names;
+  Contains: Contains;
+  DepReq: DepReq;
 }
 
 export type Cond = {
@@ -14,3 +17,12 @@ export type Cond = {
 };
 
 export type Dyn = unknown;
+
+export type Names = Record<string, unknown>;
+
+export type Contains = (string | number)[];
+
+export type DepReq = {
+  a?: string;
+  b?: string;
+};

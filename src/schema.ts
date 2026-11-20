@@ -50,6 +50,12 @@ const IGNORED: [keyword: string, message: string][] = [
 		"dependentSchemas cannot be expressed in TypeScript; ignored",
 	],
 	[
+		"dependentRequired",
+		"dependentRequired cannot be expressed in TypeScript; ignored",
+	],
+	["propertyNames", "propertyNames cannot be expressed in TypeScript; ignored"],
+	["contains", "contains cannot be expressed in TypeScript; ignored"],
+	[
 		"unevaluatedProperties",
 		"unevaluatedProperties cannot be expressed in TypeScript; ignored",
 	],

@@ -62,6 +62,7 @@ Types follow what the schema accepts, not another generator's output.
 | object keywords without `type`                                                                                      | an object (non-objects are never meant), so `{ type: "string", allOf: [{ properties: … }] }` is `never`                                                               |
 | `readOnly` / `writeOnly` property                                                                                   | left out of what is sent to the API / what it sends                                                                                                                   |
 | `not`, `if` / `then` / `else`, `dependentSchemas`, `unevaluated*`, `$dynamicRef`                                    | ignored, with a warning                                                                                                                                               |
+| `dependentRequired`, `propertyNames`, `contains`                                                                    | ignored, with a warning                                                                                                                                               |
 
 ## `oneOf`
 
