@@ -131,7 +131,7 @@ export function generate(
 		if (!equal(a.first.ty, a.ty, differing))
 			throw new DiagError(
 				a.at,
-				`operation ${JSON.stringify(a.id)} is also ${a.first.at}, as a path's and a webhook's, whose types differ; operations[${JSON.stringify(a.id)}] has one type`,
+				`operation ${JSON.stringify(a.id)} is also ${a.first.at}, where its type differs; operations[${JSON.stringify(a.id)}] has one type`,
 			);
 	const withInput = components.filter((c) => differing.has(c.key));
 	const inputs = inputNames(

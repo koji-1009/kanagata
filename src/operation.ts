@@ -87,9 +87,10 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
  * Adds an operation with an operationId. A Path Item shared by `$ref` (or a YAML alias)
  * gives the same Operation Object again, which is declared once; another Operation
  * Object with the same operationId, which OpenAPI requires to be unique, is an error.
- * The same operation as a path's and a webhook's has a type in each (the API sends a
- * webhook's request) but one `operations[id]`, so its type there is kept for `generate`
- * to compare once the components' second types are known.
+ * The same operation reached again can have another type (as a path's and a webhook's,
+ * since the API sends a webhook's request; under paths with other path-level parameters)
+ * but one `operations[id]`, so its type there is kept for `generate` to compare once the
+ * components' second types are known.
  */
 function addOperation(
 	operations: Operations,
