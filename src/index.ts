@@ -6,7 +6,7 @@ import { inputNames, typeNames } from "./ident.ts";
 import { get, JsonObject, parse, type Value } from "./json.ts";
 import { paths } from "./operation.ts";
 import { Ctx, child, type Diag, DiagError, type Hoisted } from "./pointer.ts";
-import { doc, schema } from "./schema.ts";
+import { schema, schemaDoc } from "./schema.ts";
 import {
 	admitsAny,
 	bareRefs,
@@ -152,7 +152,7 @@ export function generate(
 	const decls: Decl[] = [];
 	const index: Prop[] = [];
 	for (const c of components) {
-		const d = doc(c.value);
+		const d = schemaDoc(cx, c.value);
 		const decl = (n: string, ty: Ty): Decl =>
 			d === undefined ? { name: n, ty } : { name: n, ty, doc: d };
 		index.push(prop(c.key, ref(c.key)));

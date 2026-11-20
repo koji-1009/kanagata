@@ -23,6 +23,7 @@
         "type": "object",
         "properties": {
           "base": { "$ref": "#/components/schemas/Base", "readOnly": true },
+          "old": { "$ref": "#/components/schemas/Base", "description": "description and deprecated next to $ref are read.", "deprecated": true },
           "name": { "type": "string" }
         }
       },

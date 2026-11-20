@@ -81,11 +81,23 @@ function convert(cx: Ctx, v: JsonObject, at: string): Ty {
 	return t;
 }
 
-/** JSDoc text from `description` and `deprecated`. */
-export function doc(v: Value): string | undefined {
+/** JSDoc text from an object's `description` and `deprecated`. */
+export function doc(v: JsonObject): string | undefined {
+	return docText(v, v.get("deprecated") === true);
+}
+
+/**
+ * A schema's JSDoc: in 3.0 the keywords next to `$ref` are ignored, `deprecated` among
+ * them; `description` is read there too (docs/types.md).
+ */
+export function schemaDoc(cx: Ctx, v: Value): string | undefined {
 	if (!(v instanceof JsonObject)) return undefined;
+	const siblings = cx.refSiblings || v.get("$ref") === undefined;
+	return docText(v, siblings && v.get("deprecated") === true);
+}
+
+function docText(v: JsonObject, deprecated: boolean): string | undefined {
 	const desc = v.str("description")?.trim() || undefined;
-	const deprecated = v.get("deprecated") === true;
 	if (!deprecated) return desc;
 	return desc === undefined ? "@deprecated" : `${desc}\n@deprecated`;
 }
@@ -492,7 +504,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 			optional: !required.includes(key),
 		};
 		if (!p.optional) p.present = true;
-		const d = doc(s);
+		const d = schemaDoc(cx, s);
 		if (d !== undefined) p.doc = d;
 		props.push(p);
 	}

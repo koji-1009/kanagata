@@ -41,11 +41,21 @@ export type Described = Base;
 /** readOnly next to $ref applies: base is returned, not sent. */
 export type Holder = {
   base?: Base;
+  /**
+   * description and deprecated next to $ref are read.
+   * @deprecated
+   */
+  old?: Base;
   name?: string;
 };
 
 /** readOnly next to $ref applies: base is returned, not sent. */
 export type HolderInput = {
+  /**
+   * description and deprecated next to $ref are read.
+   * @deprecated
+   */
+  old?: Base;
   name?: string;
 };
 
