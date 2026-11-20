@@ -1,15 +1,28 @@
 # Generated types
 
 - Every schema in `components.schemas` is a named type (`export type User = { … }`), referenced by name. Names are PascalCase, with `_` before one that would start with a digit; a taken or reserved name gets a number (`User2`). `export interface schemas` maps each original name to its type.
-- Operations are `paths[path][method]`, `webhooks[name][method]` (3.1 and 3.2; every key is a name, `x-` ones included), and `operations[operationId]`. An Operation Object reached again through a Path Item that two paths share (a `$ref` or a YAML alias) is declared once there; another Operation Object with the same `operationId`, which OpenAPI requires to be unique, is an error, even when written alike. The same operation as a path's and a webhook's is an error too: the API sends a webhook's request, so it has two types, and `operations[operationId]` has one. The methods are the Path Item's fields in OpenAPI's order (`get` … `trace`, then `query`), then the keys of `additionalOperations` (3.2) as written (`COPY`). A key that is a fixed field's method (`POST`), which OpenAPI forbids, or its name (`post`) is an error; methods are case-sensitive, so `Patch` is another method. The fields OpenAPI 3.2 adds (`$self`, `query`, `additionalOperations`, `in: querystring`, a `$ref` as a media type, `itemSchema`) are read in 3.2 documents only.
+- Operations are `paths[path][method]`, `webhooks[name][method]` (3.1 and 3.2; see [Webhooks](#webhooks)), and `operations[operationId]`. An Operation Object reached again through a Path Item that two paths share (a `$ref` or a YAML alias) is declared once there; another Operation Object with the same `operationId`, which OpenAPI requires to be unique, is an error, even when written alike. The methods are the Path Item's fields in OpenAPI's order (`get` … `trace`, then `query`), then the keys of `additionalOperations` (3.2) as written (`COPY`). A key that is a fixed field's method (`POST`), which OpenAPI forbids, or its name (`post`) is an error; methods are case-sensitive, so `Patch` is another method. The fields OpenAPI 3.2 adds (`$self`, `query`, `additionalOperations`, `in: querystring`, a `$ref` as a media type, `itemSchema`) are read in 3.2 documents only.
 - A parameter defined by `content` is the schema of its media type for `application/x-www-form-urlencoded`, which the client encodes as it does any parameter, and `string` for any other: the client has no document to serialize the value by, so the call passes the serialized text (`filter: JSON.stringify({ q: "a" })` for `application/json`). A response header defined by `content` keeps the schema.
 - An `in: querystring` parameter (3.2) is `parameters.querystring`, without its name, which is not sent; it is defined by `content`, so it is typed as above.
-- A schema with a `readOnly` / `writeOnly` property (on it or on a schema it references) gets a second type for requests, `UserInput`.
+- A schema with a `readOnly` / `writeOnly` property (on it or on a schema it references) gets a second type for what is sent to the API (a path's request, a webhook's responses), `UserInput`.
 - `description` and `deprecated` become JSDoc.
 - Header parameters named `Accept`, `Content-Type` or `Authorization`, and a response header `Content-Type`, are ignored, as OpenAPI requires.
 - A field OpenAPI requires is an error where it is missing: a parameter's `name` and `in`, a parameter's or header's `schema` or `content` (one of the two, and `content` with exactly one media type, as OpenAPI requires), a request body's `content` (an empty one describes no representation, so it is `content: {}`, which no body matches), a server's `url`. So is a path item, operation, parameter, request body, response, header, media type, `responses`, `headers` or `content` that is not an object, `parameters` or `servers` that is not an array, an `operationId` that is not a string, and a `required` that is not a boolean.
-- An operation's `servers`, or its path item's, is `servers: ["https://uploads.example.com"]` in its type; a URL with variables (`{region}`) is `string`. A webhook has none, since the API sends its request.
-- A `requestBody` on a GET or HEAD operation is left out: OpenAPI 3.0 has consumers ignore it, and fetch cannot send one. A webhook keeps it, since the API sends that request.
+- The `servers` of a path's operation, or of its path item, are `servers: ["https://uploads.example.com"]` in its type; a URL with variables (`{region}`) is `string`.
+- A `requestBody` on a path's GET or HEAD operation is left out: OpenAPI 3.0 has consumers ignore it, and fetch cannot send one.
+
+## Webhooks
+
+A webhook (`webhooks`, 3.1 and 3.2) is a request the API sends to a receiver the API consumer implements, and the responses the API expects back. A webhook's types are a path operation's with the directions swapped:
+
+- Its parameters and request body are the read view, and its responses (headers and content) the write view: `readOnly` properties are kept and `writeOnly` ones left out of the request, the other way round in the responses, so a schema with either is `User` in the request and `UserInput` in the responses.
+- A form in its request is `string`, read as its text as a form response is; a form in its responses is its schema.
+- It keeps a `requestBody` on GET and HEAD, since the API sends the request.
+- It has no `servers`: the API sends its request, so there is none to choose.
+- Every key of `webhooks` is a name, `x-` ones included.
+- An operation with an `operationId` that is both a path's and a webhook's (in a Path Item they share) is an error where its two types differ: `operations[operationId]` has one type.
+
+A parameter or header defined by `content` is typed as a path's is (above). The client calls `paths` only (`createClient<paths>`): `webhooks` types the receiver you implement.
 
 ## `$ref`
 
@@ -45,7 +58,7 @@ Types follow what the schema accepts, not another generator's output.
 | `additionalProperties: false` (no `patternProperties`) and a required key outside `properties`                      | `never`, as is an `allOf` / `oneOf` / `anyOf` member next to it that requires one                                                                                     |
 | object without properties                                                                                           | `Record<string, unknown>`                                                                                                                                             |
 | object keywords without `type`                                                                                      | an object (non-objects are never meant), so `{ type: "string", allOf: [{ properties: … }] }` is `never`                                                               |
-| `readOnly` / `writeOnly` property                                                                                   | left out of what is sent / what is returned                                                                                                                           |
+| `readOnly` / `writeOnly` property                                                                                   | left out of what is sent to the API / what it sends                                                                                                                   |
 | `not`, `if` / `then` / `else`, `dependentSchemas`, `unevaluated*`, `$dynamicRef`                                    | ignored, with a warning                                                                                                                                               |
 
 ## `oneOf`
@@ -59,12 +72,12 @@ Types follow what the schema accepts, not another generator's output.
 
 ## Content by media type
 
-| Media type                                                 | Type                                    |
-| ---------------------------------------------------------- | --------------------------------------- |
-| JSON                                                       | its schema                              |
-| `text/*`, XML                                              | `string`                                |
-| forms (`application/x-www-form-urlencoded`, `multipart/*`) | request: its schema; response: `string` |
-| any other (binary), not a wildcard                         | `Blob`                                  |
+| Media type                                                 | Type                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------ |
+| JSON                                                       | its schema                                             |
+| `text/*`, XML                                              | `string`                                               |
+| forms (`application/x-www-form-urlencoded`, `multipart/*`) | sent to the API: its schema; sent by the API: `string` |
+| any other (binary), not a wildcard                         | `Blob`                                                 |
 
 A sequential media type's `itemSchema` (3.2) is checked like a schema but types nothing: the client reads the content whole, by the rules above (`application/jsonl` is `Blob`, `text/event-stream` `string`). Read it item by item with `parseAs: "stream"`.
 

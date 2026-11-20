@@ -87,7 +87,7 @@ Config, call options, results, typing a wrapper, how requests are built, and err
 
 - Every schema in `components.schemas` is a named type; operations are `paths[path][method]`, `webhooks[name][method]` and `operations[operationId]`.
 - Types follow what the schema accepts, not another generator's output.
-- A schema with a `readOnly` / `writeOnly` property gets a second type for requests, `UserInput`.
+- A schema with a `readOnly` / `writeOnly` property gets a second type for what is sent to the API (a path's request, a webhook's responses), `UserInput`.
 - In 3.0, `nullable: true` adds `null` to the `type` next to it, as OpenAPI 3.0.3 says, so it takes no effect without `type`, next to `$ref`, or past an `enum` without `null`. Many documents mean "this schema or null" instead; `--loose-nullable` reads them that way.
 
 Every rule, with `$ref` resolution and media types: [docs/types.md](docs/types.md).
@@ -97,6 +97,7 @@ Every rule, with `$ref` resolution and media types: [docs/types.md](docs/types.m
 - Runtime validation (use `onData`), middleware (wrap `config.fetch`), per-operation functions, framework bindings, mocks.
 - Per-parameter `style` / `explode` / `encoding`: a server parses every query and form the same way, so one `arrayFormat` / `objectFormat` per client (or per call) matches it.
 - Serializing a parameter by its `content` media type: such a parameter (other than `application/x-www-form-urlencoded`) is typed `string`, and the call passes the serialized text.
+- An operation's `callbacks`, which are not read.
 - Fetching `$ref`s over the network; finding another file by its `$self` (3.2), since files are read by where they are; Swagger 2.0.
 - Pathological inputs: looping `$ref`s outside schemas (a parameter that is a `$ref` to itself), nesting thousands of levels deep, or exponential expansion may crash (exit code 3) or not finish. A schema that is itself without an object, array or tuple in between (`A: { $ref: A }`) is an error ([docs/types.md](docs/types.md#ref)).
 
