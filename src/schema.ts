@@ -432,18 +432,10 @@ function isBinaryString(v: JsonObject): boolean {
 }
 
 /**
- * How many items `minItems` and `maxItems` write out, past those of `prefixItems`.
- * TypeScript bounds a length only by writing out every item, and `maxItems: 5000`
- * items is no type to read.
- */
-const WRITTEN = 10;
-
-/**
  * An array, or a tuple where `prefixItems`, `minItems` or `maxItems` say more: the first
  * `minItems` items are required, `prefixItems` types the first ones and `items` the rest
- * (absent means any; false, next to `prefixItems`, none), and `maxItems` closes the tuple.
- * Within `WRITTEN` items or those of `prefixItems`: past them, `minItems` requires that
- * many and `maxItems` is left out.
+ * (absent means any; false, next to `prefixItems`, none), and `maxItems` closes the tuple,
+ * which TypeScript bounds only by writing out every item.
  */
 function array(cx: Ctx, v: JsonObject, at: string): Ty {
 	const items = v.get("items");
@@ -461,19 +453,16 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 	const max = count(v, "maxItems");
 	if (max !== undefined && max < min) return NEVER;
 	if (rest === undefined && min > head.length) return NEVER;
-	const limit = Math.max(head.length, WRITTEN);
-	const required = Math.min(min, limit);
-	const closed = max !== undefined && max <= limit ? max : undefined;
-	if (!Array.isArray(prefix) && required === 0 && closed === undefined)
+	if (!Array.isArray(prefix) && min === 0 && max === undefined)
 		return arrayTy(rest as Ty);
-	const length = closed ?? Math.max(head.length, required);
+	const length = max ?? Math.max(head.length, min);
 	const written = Array.from(
 		{ length: rest === undefined ? Math.min(length, head.length) : length },
 		(_, i) => head[i] ?? (rest as Ty),
 	);
-	return closed !== undefined || rest === undefined
-		? { kind: "tuple", items: written, min: required }
-		: { kind: "tuple", items: written, min: required, rest };
+	return max !== undefined || rest === undefined
+		? { kind: "tuple", items: written, min }
+		: { kind: "tuple", items: written, min, rest };
 }
 
 /** A count keyword (`minItems`, `maxItems`): a non-negative integer, or undefined. */

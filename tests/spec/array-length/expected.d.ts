@@ -9,8 +9,6 @@ export interface schemas {
   Pair: Pair;
   UpToTwo: UpToTwo;
   Few: Few;
-  Ten: Ten;
-  Eleven: Eleven;
   Some: Some;
   Many: Many;
   Empty: Empty;
@@ -43,17 +41,11 @@ export type UpToTwo = [string, string?];
 /** maxItems alone too. */
 export type Few = [string?, string?, string?];
 
-/** Up to 10 items are written. */
-export type Ten = [string?, string?, string?, string?, string?, string?, string?, string?, string?, string?];
+/** Every item up to maxItems is written out. */
+export type Some = [string, string?, string?, string?, string?, string?, string?, string?, string?, string?, string?, string?];
 
-/** A larger maxItems is not written out. */
-export type Eleven = string[];
-
-/** Nor next to minItems. */
-export type Some = [string, ...string[]];
-
-/** A larger minItems requires the first 10. */
-export type Many = [string, string, string, string, string, string, string, string, string, string, ...string[]];
+/** And every required one. */
+export type Many = [string, string, string, string, string, string, string, string, string, string, string, string, ...string[]];
 
 /** maxItems 0 admits only the empty array. */
 export type Empty = [];
