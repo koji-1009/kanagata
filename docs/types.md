@@ -20,7 +20,7 @@ A webhook (`webhooks`, 3.1 and 3.2) is a request the API sends to a receiver the
 - It keeps a `requestBody` on GET and HEAD, since the API sends the request.
 - It has no `servers`: the API sends its request, so there is none to choose.
 - Every key of `webhooks` is a name, `x-` ones included.
-- An operation with an `operationId` that is both a path's and a webhook's (in a Path Item they share) is an error where its two types differ: `operations[operationId]` has one type.
+- An operation with an `operationId` that is both a path's and a webhook's (in a Path Item they share) is an error where its two types are declared differently, as they are when it has a `readOnly` / `writeOnly` property or refers to a schema with one (`User` in one, `UserInput` in the other): `operations[operationId]` has one type.
 
 A parameter or header defined by `content` is typed as a path's is (above). The client calls `paths` only (`createClient<paths>`): `webhooks` types the receiver you implement.
 

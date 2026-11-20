@@ -125,6 +125,14 @@ export function generate(
 		name: names[i] as string,
 	}));
 	const differing = differingViews(components);
+	// An operation reached again is declared once, so its types must be declared alike:
+	// a reference to either view of a schema without a second type is the same name.
+	for (const a of p.again)
+		if (!equal(a.first.ty, a.ty, differing))
+			throw new DiagError(
+				a.at,
+				`operation ${JSON.stringify(a.id)} is also ${a.first.at}, as a path's and a webhook's, whose types differ; operations[${JSON.stringify(a.id)}] has one type`,
+			);
 	const withInput = components.filter((c) => differing.has(c.key));
 	const inputs = inputNames(
 		withInput.map((c) => c.name),

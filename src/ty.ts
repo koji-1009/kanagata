@@ -84,8 +84,15 @@ export const prop = (key: string, ty: Ty): Prop => ({
 	optional: false,
 });
 
-/** Structural equality; with `views: false`, references to either view of a schema are equal. */
-export function equal(a: Ty, b: Ty, views = true): boolean {
+/**
+ * Structural equality. References to two views of a schema differ only where `views` says
+ * the schema's views differ: always (`true`), never (`false`), or for the schemas in it.
+ */
+export function equal(
+	a: Ty,
+	b: Ty,
+	views: boolean | ReadonlySet<string> = true,
+): boolean {
 	if (a === b) return true;
 	const eq = (x: Ty, y: Ty) => equal(x, y, views);
 	// Both lists have the same length when their items are compared.
@@ -110,7 +117,8 @@ export function equal(a: Ty, b: Ty, views = true): boolean {
 			return (
 				b.kind === "ref" &&
 				a.schema === b.schema &&
-				(!views || a.view === b.view)
+				(a.view === b.view ||
+					(typeof views === "boolean" ? !views : !views.has(a.schema)))
 			);
 		case "array":
 			return b.kind === "array" && eq(a.elem, b.elem);

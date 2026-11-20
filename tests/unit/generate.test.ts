@@ -485,6 +485,25 @@ test("an operationId is declared once for the same operation, and is an error fo
 		).message,
 		`#/webhooks/w/post: operation "p" is also #/paths/~1a/post, as a path's and a webhook's, whose types differ; operations["p"] has one type`,
 	);
+
+	// Its types are compared as declared: a $ref to a schema without readOnly or writeOnly
+	// is one type in both views, and one with them is S in one and SInput in the other.
+	const shared = (s: string) =>
+		`{"openapi":"3.1.0","paths":{"/a":{"$ref":"#/components/pathItems/P"}},"webhooks":{"w":{"$ref":"#/components/pathItems/P"}},"components":{"pathItems":{"P":{"post":{"operationId":"p","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/S"}}}}}}},"schemas":{"S":${s}}}}`;
+	const alike = generate(
+		shared(`{"type":"object","properties":{"id":{"type":"string"}}}`),
+	).code;
+	assert.match(alike, /^ {2}"\/a": \{\n {4}post: operations\["p"\];$/m);
+	assert.match(alike, /^ {2}w: \{\n {4}post: operations\["p"\];$/m);
+	assert.match(alike, /"application\/json": S;/);
+	assert.equal(
+		error(
+			shared(
+				`{"type":"object","properties":{"id":{"type":"string","readOnly":true}}}`,
+			),
+		).message,
+		`#/webhooks/w/post: operation "p" is also #/paths/~1a/post, as a path's and a webhook's, whose types differ; operations["p"] has one type`,
+	);
 });
 
 test("the first line names the version given in options, and only then", () => {
