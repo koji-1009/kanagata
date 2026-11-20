@@ -268,7 +268,8 @@ function operation(
 			if (body.get("content") === undefined)
 				throw new DiagError(bodyAt, "a request body must have content");
 			// An empty content describes no representation: no body can be passed.
-			const c = cx.inMode(sent, () => content(cx, body, bodyAt)) ?? object([]);
+			const c =
+				cx.inMode(sent, () => content(cx, body, bodyAt, false)) ?? object([]);
 			fields.push(
 				documented(
 					"requestBody",
@@ -293,7 +294,10 @@ function operation(
 			const parts: Prop[] = [];
 			const h = cx.inMode(received, () => headers(cx, r, rAt));
 			if (h !== undefined) parts.push(prop("headers", h));
-			const c = cx.inMode(received, () => content(cx, r, rAt));
+			// The client reads a path's responses; a webhook's are the receiver's.
+			const c = cx.inMode(received, () =>
+				content(cx, r, rAt, received === "read"),
+			);
 			if (c !== undefined) parts.push(prop("content", c));
 			return parts;
 		});
@@ -463,12 +467,17 @@ function headers(cx: Ctx, response: JsonObject, at: string): Ty | undefined {
 /**
  * `{ "<media type>": T }` for a non-empty `content`, keeping every media type.
  * A binary media type is `Blob` and a text one `string` whatever its schema says, as is
- * a form in a response (read view): that is what the client reads and sends. The schema
- * is still converted so its errors are reported, and so is `itemSchema` (3.2): the client
- * reads a sequential media type (`application/jsonl`, `text/event-stream`) whole, as these
- * rules say, not item by item.
+ * a form the client reads (`clientReads`, a path's response): that is what the client
+ * reads and sends. The schema is still converted so its errors are reported, and so is
+ * `itemSchema` (3.2): the client reads a sequential media type (`application/jsonl`,
+ * `text/event-stream`) whole, as these rules say, not item by item.
  */
-function content(cx: Ctx, owner: JsonObject, at: string): Ty | undefined {
+function content(
+	cx: Ctx,
+	owner: JsonObject,
+	at: string,
+	clientReads: boolean,
+): Ty | undefined {
 	const declared = owner.get("content");
 	if (declared === undefined) return undefined;
 	const base = child(at, "content");
@@ -483,7 +492,7 @@ function content(cx: Ctx, owner: JsonObject, at: string): Ty | undefined {
 				const s = m.get("schema");
 				return s === undefined ? UNKNOWN : schema(cx, s, child(mAt, "schema"));
 			});
-			const text = isTextMedia(mt) || (cx.mode === "read" && isFormMedia(mt));
+			const text = isTextMedia(mt) || (clientReads && isFormMedia(mt));
 			return prop(mt, isBinaryMedia(mt) ? BLOB : text ? STRING : ty);
 		}),
 	);

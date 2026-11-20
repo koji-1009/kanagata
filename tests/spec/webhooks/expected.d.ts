@@ -16,10 +16,12 @@ export interface webhooks {
   };
   petGone: {
     post: {
-      /** A form the API sends is read as its text, as a form response is. */
+      /** A form the API sends is its schema: the client does not receive it, so it is not the text a form response is. */
       requestBody?: {
         content: {
-          "application/x-www-form-urlencoded": string;
+          "application/x-www-form-urlencoded": {
+            id?: number;
+          };
         };
       };
       responses: {

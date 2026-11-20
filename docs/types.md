@@ -16,7 +16,7 @@
 A webhook (`webhooks`, 3.1 and 3.2) is a request the API sends to a receiver the API consumer implements, and the responses the API expects back. `webhooks` is read in 3.1 and 3.2 documents only: it is no field of OpenAPI 3.0. A webhook's types are a path operation's with the directions swapped:
 
 - Its parameters and request body are the read view, and its responses (headers and content) the write view: `readOnly` properties are kept and `writeOnly` ones left out of the request, the other way round in the responses, so a schema with either is `User` in the request and `UserInput` in the responses.
-- A form in its request is `string`, read as its text as a form response is; a form in its responses is its schema.
+- A form, in its request or its responses, is its schema: the client does not receive it, so it is not the text a path's form response is.
 - It keeps a `requestBody` on GET and HEAD, since the API sends the request.
 - It has no `servers`: the API sends its request, so there is none to choose.
 - Every key of `webhooks` is a name, `x-` ones included.
@@ -72,12 +72,12 @@ Types follow what the schema accepts, not another generator's output.
 
 ## Content by media type
 
-| Media type                                                 | Type                                                   |
-| ---------------------------------------------------------- | ------------------------------------------------------ |
-| JSON                                                       | its schema                                             |
-| `text/*`, XML                                              | `string`                                               |
-| forms (`application/x-www-form-urlencoded`, `multipart/*`) | sent to the API: its schema; sent by the API: `string` |
-| any other (binary), not a wildcard                         | `Blob`                                                 |
+| Media type                                                 | Type                                              |
+| ---------------------------------------------------------- | ------------------------------------------------- |
+| JSON                                                       | its schema                                        |
+| `text/*`, XML                                              | `string`                                          |
+| forms (`application/x-www-form-urlencoded`, `multipart/*`) | a path's response: `string`; otherwise its schema |
+| any other (binary), not a wildcard                         | `Blob`                                            |
 
 A sequential media type's `itemSchema` (3.2) is checked like a schema but types nothing: the client reads the content whole, by the rules above (`application/jsonl` is `Blob`, `text/event-stream` `string`). Read it item by item with `parseAs: "stream"`.
 
