@@ -9,6 +9,14 @@
         ],
         "responses": { "200": { "description": "ok" } }
       }
+    },
+    "/users/{id}": {
+      "get": {
+        "parameters": [
+          { "name": "id", "in": "path", "required": false, "description": "A path parameter is required whatever required says.", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
     }
   }
 }

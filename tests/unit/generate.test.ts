@@ -192,6 +192,10 @@ test("a field OpenAPI requires, missing or of another kind, is an error at its o
 			`${p}/parameters/0/required: required must be a boolean`,
 		],
 		[
+			param(`{"name":"a","in":"path","required":"yes","schema":{}}`),
+			`${p}/parameters/0/required: required must be a boolean`,
+		],
+		[
 			paths(
 				`"/a":{"post":{"requestBody":{"required":1,"content":{"text/plain":{}}}}}`,
 			),
@@ -483,7 +487,15 @@ test("an operationId is declared once for the same operation, and is an error fo
 		error(
 			`{"openapi":"3.1.0","paths":{"/a":{"$ref":"#/components/pathItems/P"}},"webhooks":{"w":{"$ref":"#/components/pathItems/P"}},"components":{"pathItems":{"P":{"post":{"operationId":"p","requestBody":{"content":{"application/json":{"schema":{"type":"object","properties":{"id":{"type":"string","readOnly":true}}}}}}}}}}}`,
 		).message,
-		`#/webhooks/w/post: operation "p" is also #/paths/~1a/post, as a path's and a webhook's, whose types differ; operations["p"] has one type`,
+		`#/webhooks/w/post: operation "p" is also #/paths/~1a/post, where its type differs; operations["p"] has one type`,
+	);
+
+	// So does an Operation Object under two paths by a YAML alias, with each path's parameters.
+	assert.equal(
+		error(
+			"openapi: 3.1.0\npaths:\n  /a/{id}:\n    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]\n    get: &op { operationId: thing, responses: {} }\n  /b:\n    get: *op\n",
+		).message,
+		`#/paths/~1b/get: operation "thing" is also #/paths/~1a~1{id}/get, where its type differs; operations["thing"] has one type`,
 	);
 
 	// Its types are compared as declared: a $ref to a schema without readOnly or writeOnly
@@ -502,7 +514,7 @@ test("an operationId is declared once for the same operation, and is an error fo
 				`{"type":"object","properties":{"id":{"type":"string","readOnly":true}}}`,
 			),
 		).message,
-		`#/webhooks/w/post: operation "p" is also #/paths/~1a/post, as a path's and a webhook's, whose types differ; operations["p"] has one type`,
+		`#/webhooks/w/post: operation "p" is also #/paths/~1a/post, where its type differs; operations["p"] has one type`,
 	);
 });
 

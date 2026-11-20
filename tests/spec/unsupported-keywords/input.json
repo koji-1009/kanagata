@@ -12,7 +12,14 @@
         "dependentSchemas": { "kind": { "required": ["x"] } },
         "unevaluatedProperties": false
       },
-      "Dyn": { "$dynamicRef": "#meta" }
+      "Dyn": { "$dynamicRef": "#meta" },
+      "Names": { "type": "object", "propertyNames": { "enum": ["a", "b"] } },
+      "Contains": { "type": "array", "items": { "type": ["string", "number"] }, "contains": { "type": "string" } },
+      "DepReq": {
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "dependentRequired": { "a": ["b"] }
+      }
     }
   }
 }

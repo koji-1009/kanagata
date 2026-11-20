@@ -6,7 +6,7 @@ import { inputNames, typeNames } from "./ident.ts";
 import { get, JsonObject, parse, type Value } from "./json.ts";
 import { paths } from "./operation.ts";
 import { Ctx, child, type Diag, DiagError, type Hoisted } from "./pointer.ts";
-import { doc, schema } from "./schema.ts";
+import { schema, schemaDoc } from "./schema.ts";
 import {
 	admitsAny,
 	bareRefs,
@@ -131,7 +131,7 @@ export function generate(
 		if (!equal(a.first.ty, a.ty, differing))
 			throw new DiagError(
 				a.at,
-				`operation ${JSON.stringify(a.id)} is also ${a.first.at}, as a path's and a webhook's, whose types differ; operations[${JSON.stringify(a.id)}] has one type`,
+				`operation ${JSON.stringify(a.id)} is also ${a.first.at}, where its type differs; operations[${JSON.stringify(a.id)}] has one type`,
 			);
 	const withInput = components.filter((c) => differing.has(c.key));
 	const inputs = inputNames(
@@ -152,7 +152,7 @@ export function generate(
 	const decls: Decl[] = [];
 	const index: Prop[] = [];
 	for (const c of components) {
-		const d = doc(c.value);
+		const d = schemaDoc(cx, c.value);
 		const decl = (n: string, ty: Ty): Decl =>
 			d === undefined ? { name: n, ty } : { name: n, ty, doc: d };
 		index.push(prop(c.key, ref(c.key)));

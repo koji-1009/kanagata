@@ -1,0 +1,31 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/pets": {
+      "$ref": "#/components/pathItems/Pets",
+      "description": "A field next to $ref is read with those of the Path Item it refers to.",
+      "parameters": [
+        { "name": "X-Trace", "in": "header", "description": "Next to $ref, so it applies to the referenced get too.", "schema": { "type": "string" } }
+      ],
+      "post": {
+        "operationId": "addPet",
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } } },
+        "responses": { "201": { "description": "Created." } }
+      }
+    }
+  },
+  "components": {
+    "pathItems": {
+      "Pets": {
+        "description": "description is in both, and kanagata does not read it.",
+        "get": {
+          "operationId": "listPets",
+          "responses": { "200": { "description": "The pets.", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } } } } } }
+        }
+      }
+    },
+    "schemas": {
+      "Pet": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }
+    }
+  }
+}

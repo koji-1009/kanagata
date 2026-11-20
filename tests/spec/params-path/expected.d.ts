@@ -15,6 +15,19 @@ export interface paths {
       };
     };
   };
+  "/users/{id}": {
+    get: {
+      parameters: {
+        path: {
+          /** A path parameter is required whatever required says. */
+          id: string;
+        };
+      };
+      responses: {
+        200: {};
+      };
+    };
+  };
 }
 
 export interface operations {}

@@ -23,10 +23,12 @@
         "properties": {
           "base": { "$ref": "#/components/schemas/Base", "readOnly": true },
           "both": { "$ref": "#/components/schemas/Base", "allOf": [{ "readOnly": true }] },
+          "old": { "$ref": "#/components/schemas/Base", "description": "description next to $ref is read; deprecated is not.", "deprecated": true },
           "stamp": { "type": "string", "readOnly": true }
         }
       },
-      "Negated": { "description": "Without $ref, an ignored keyword is reported.", "not": { "type": "string" } }
+      "Negated": { "description": "Without $ref, an ignored keyword is reported.", "not": { "type": "string" } },
+      "Old": { "$ref": "#/components/schemas/Base", "deprecated": true }
     }
   }
 }

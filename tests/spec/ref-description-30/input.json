@@ -1,0 +1,18 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/items": {
+      "get": {
+        "parameters": [
+          { "$ref": "#/components/parameters/Page", "description": "In 3.0, a Reference Object's other fields are ignored." }
+        ],
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Page": { "name": "page", "in": "query", "description": "The parameter's own description.", "schema": { "type": "integer" } }
+    }
+  }
+}

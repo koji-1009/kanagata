@@ -6,7 +6,7 @@ export interface operations {}
 
 export interface schemas {
   Two: Two;
-  Clamped: Clamped;
+  PastPrefix: PastPrefix;
   Fraction: Fraction;
   Negative: Negative;
   NotNumber: NotNumber;
@@ -14,7 +14,7 @@ export interface schemas {
 
 export type Two = [string, number];
 
-export type Clamped = [string, ...unknown[]];
+export type PastPrefix = [string, unknown, unknown, unknown, unknown, ...unknown[]];
 
 export type Fraction = [string?, ...unknown[]];
 

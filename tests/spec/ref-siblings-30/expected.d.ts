@@ -22,6 +22,7 @@ export interface schemas {
   Ext: Ext;
   Holder: Holder;
   Negated: Negated;
+  Old: Old;
 }
 
 export type Base = {
@@ -35,6 +36,8 @@ export type Ext = Base;
 export type Holder = {
   base?: Base;
   both?: Base;
+  /** description next to $ref is read; deprecated is not. */
+  old?: Base;
   stamp?: string;
 };
 
@@ -42,7 +45,11 @@ export type Holder = {
 export type HolderInput = {
   base?: Base;
   both?: Base;
+  /** description next to $ref is read; deprecated is not. */
+  old?: Base;
 };
 
 /** Without $ref, an ignored keyword is reported. */
 export type Negated = unknown;
+
+export type Old = Base;

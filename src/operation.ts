@@ -87,9 +87,10 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
  * Adds an operation with an operationId. A Path Item shared by `$ref` (or a YAML alias)
  * gives the same Operation Object again, which is declared once; another Operation
  * Object with the same operationId, which OpenAPI requires to be unique, is an error.
- * The same operation as a path's and a webhook's has a type in each (the API sends a
- * webhook's request) but one `operations[id]`, so its type there is kept for `generate`
- * to compare once the components' second types are known.
+ * The same operation reached again can have another type (as a path's and a webhook's,
+ * since the API sends a webhook's request; under paths with other path-level parameters)
+ * but one `operations[id]`, so its type there is kept for `generate` to compare once the
+ * components' second types are known.
  */
 function addOperation(
 	operations: Operations,
@@ -123,42 +124,92 @@ function pathItems(
 		// Paths may have specification extensions; webhooks is a plain map of names.
 		if (key === "paths" && path.startsWith("x-")) continue;
 		const itemAt = child(`#/${key}`, path);
-		const methods = cx.derefIn(rawItem, itemAt, (value) => {
-			const item = objectAt(value, itemAt, "a path item");
-			const methods: Prop[] = [];
-			for (const [method, op, opAt] of itemOperations(cx, item, itemAt)) {
-				// A webhook is called by the API: it sends the request and reads the response.
-				const sent: View = key === "webhooks" ? "read" : "write";
-				// fetch cannot send a body with GET or HEAD (OpenAPI 3.0 has consumers ignore
-				// one); a webhook's request is sent by the API, so it keeps its body.
-				const body =
-					key === "webhooks" || (method !== "get" && method !== "head");
-				const ty = operation(cx, { item, itemAt, op, at: opAt, sent, body });
-				const opDoc = doc(op);
-				const id = op.get("operationId");
-				if (id !== undefined && typeof id !== "string")
-					throw new DiagError(
-						child(opAt, "operationId"),
-						"operationId must be a string",
-					);
-				if (id !== undefined && id !== "") {
-					addOperation(
-						operations,
-						id,
-						op,
-						documented(id, ty, false, opDoc),
-						opAt,
-					);
-					methods.push(prop(method, opRef(id)));
-				} else {
-					methods.push(documented(method, ty, false, opDoc));
-				}
+		const layers = itemLayers(cx, rawItem, itemAt);
+		const ops = layers.flatMap((l) =>
+			itemOperations(cx, l.item, itemAt).map(
+				([m, o, a]) => [m, o, a, l.base] as const,
+			),
+		);
+		ops.sort(([a], [b]) => methodOrder(a) - methodOrder(b));
+		const methods: Prop[] = [];
+		for (const [method, op, opAt, base] of ops) {
+			// A webhook is called by the API: it sends the request and reads the response.
+			const sent: View = key === "webhooks" ? "read" : "write";
+			// fetch cannot send a body with GET or HEAD (OpenAPI 3.0 has consumers ignore
+			// one); a webhook's request is sent by the API, so it keeps its body.
+			const body =
+				key === "webhooks" || (method !== "get" && method !== "head");
+			const ty = cx.withBase(base, () =>
+				operation(cx, { layers, itemAt, op, at: opAt, sent, body }),
+			);
+			const opDoc = doc(op);
+			const id = op.get("operationId");
+			if (id !== undefined && typeof id !== "string")
+				throw new DiagError(
+					child(opAt, "operationId"),
+					"operationId must be a string",
+				);
+			if (id !== undefined && id !== "") {
+				addOperation(
+					operations,
+					id,
+					op,
+					documented(id, ty, false, opDoc),
+					opAt,
+				);
+				methods.push(prop(method, opRef(id)));
+			} else {
+				methods.push(documented(method, ty, false, opDoc));
 			}
-			return methods;
-		});
+		}
 		out.push(prop(path, object(methods)));
 	}
 	return out;
+}
+
+/** A Path Item object and the base URI of the document it is in. */
+interface Layer {
+	item: JsonObject;
+	base: string;
+}
+
+/** Path Item fields that only describe it; kanagata reads neither. */
+const DESCRIPTIVE = new Set(["$ref", "summary", "description"]);
+
+/**
+ * A Path Item and the Path Items its `$ref`s refer to, in turn: their fields are read
+ * together, each under the base URI of its document. A field in two of them, whose
+ * behaviour OpenAPI leaves undefined, is an error (descriptions and extensions aside).
+ */
+function itemLayers(cx: Ctx, raw: Value, itemAt: string): Layer[] {
+	const layers: Layer[] = [];
+	const seen = new Set<string>();
+	let cur = raw;
+	let base = cx.base;
+	for (;;) {
+		const item = objectAt(cur, itemAt, "a path item");
+		for (const [k] of item.entries) {
+			if (DESCRIPTIVE.has(k) || k.startsWith("x-")) continue;
+			if (seen.has(k))
+				throw new DiagError(
+					child(itemAt, k),
+					`${k} is both next to $ref and in the Path Item it refers to; OpenAPI leaves which one applies undefined`,
+				);
+			seen.add(k);
+		}
+		layers.push({ item, base });
+		const r = item.str("$ref");
+		if (r === undefined) return layers;
+		const target = cx.withBase(base, () => cx.locate(r, itemAt));
+		cur = target.value;
+		base = target.base;
+	}
+}
+
+/** Fixed methods in OpenAPI's order, then `additionalOperations` as written (a stable sort keeps them). */
+function methodOrder(method: string): number {
+	const i = (METHODS as readonly string[]).indexOf(method);
+	return i < 0 ? METHODS.length : i;
 }
 
 /**
@@ -201,11 +252,21 @@ function itemOperations(
 	return out;
 }
 
-/** A parameter, where it is, and the base URI of the document it is in. */
-type Param = [p: JsonObject, at: string, base: string];
+/** A parameter, where it is, the base URI of the document it is in, and its JSDoc. */
+type Param = [p: JsonObject, at: string, base: string, doc: string | undefined];
+
+/**
+ * The `description` next to a `$ref` to a parameter, request body or header, which
+ * replaces the referenced one's in 3.1 and 3.2; 3.0 ignores a Reference Object's other fields.
+ */
+function refDescription(cx: Ctx, raw: Value): string | undefined {
+	if (!cx.refSiblings || !(raw instanceof JsonObject)) return undefined;
+	return raw.get("$ref") === undefined ? undefined : raw.str("description");
+}
 
 interface OperationAt {
-	item: JsonObject;
+	/** The Path Item, with those its `$ref`s refer to. */
+	layers: Layer[];
 	itemAt: string;
 	op: JsonObject;
 	at: string;
@@ -217,39 +278,45 @@ interface OperationAt {
 
 function operation(
 	cx: Ctx,
-	{ item, itemAt, op: o, at, sent, body: hasBody }: OperationAt,
+	{ layers, itemAt, op: o, at, sent, body: hasBody }: OperationAt,
 ): Ty {
 	const fields: Prop[] = [];
 	const received: View = sent === "write" ? "read" : "write";
 
 	// The servers that serve this operation, in place of the document's: its own, or its
-	// path item's. A webhook's request is sent by the API, so it has none to choose.
+	// path item's (at most one layer has them). A webhook's request is sent by the API,
+	// so it has none to choose.
 	const servers =
 		sent === "write"
-			? (serverUrls(o, at) ?? serverUrls(item, itemAt))
+			? (serverUrls(o, at) ??
+				layers
+					.map((l) => serverUrls(l.item, itemAt))
+					.find((s) => s !== undefined))
 			: undefined;
 	if (servers !== undefined) fields.push(prop("servers", tuple(servers)));
 
 	// Path-level parameters first; an operation parameter with the same in + name replaces it.
 	const params: Param[] = [];
-	collectParams(cx, params, item, itemAt);
+	for (const l of layers)
+		cx.withBase(l.base, () => collectParams(cx, params, l.item, itemAt));
 	collectParams(cx, params, o, at);
 	const groups: Prop[] = [];
 	for (const loc of LOCATIONS) {
 		// `in: querystring` is OpenAPI 3.2.
 		if (loc === "querystring" && !cx.v32) continue;
 		const props: Prop[] = [];
-		for (const [p, pAt, base] of params) {
+		for (const [p, pAt, base, pDoc] of params) {
 			if (p.str("in") !== loc) continue;
-			const optional = loc !== "path" && !booleanAt(p, pAt, "required");
+			// OpenAPI requires a path parameter's required to be true: the path needs it.
+			const required = booleanAt(p, pAt, "required");
+			const optional = loc !== "path" && !required;
 			const whole = loc === "querystring";
 			const ty = cx.inMode(sent, () =>
 				cx.withBase(base, () => paramType(cx, p, pAt, "parameter")),
 			);
 			// The whole query string (3.2) is one value; its name is not sent.
-			if (whole) groups.push(documented(loc, ty, optional, doc(p)));
-			else
-				props.push(documented(p.str("name") as string, ty, optional, doc(p)));
+			if (whole) groups.push(documented(loc, ty, optional, pDoc));
+			else props.push(documented(p.str("name") as string, ty, optional, pDoc));
 		}
 		if (props.length === 0) continue;
 		groups.push({
@@ -263,6 +330,7 @@ function operation(
 	const rawBody = o.get("requestBody");
 	if (rawBody !== undefined && hasBody) {
 		const bodyAt = child(at, "requestBody");
+		const described = refDescription(cx, rawBody);
 		cx.derefIn(rawBody, bodyAt, (value) => {
 			const body = objectAt(value, bodyAt, "a request body");
 			if (body.get("content") === undefined)
@@ -275,7 +343,7 @@ function operation(
 					"requestBody",
 					object([prop("content", c)]),
 					!booleanAt(body, bodyAt, "required"),
-					doc(body),
+					doc(body, described),
 				),
 			);
 		});
@@ -333,12 +401,19 @@ function collectParams(
 	const base = child(ownerAt, "parameters");
 	arrayAt(owner.get("parameters"), base, "parameters").forEach((raw, i) => {
 		const pAt = child(base, String(i));
-		cx.derefIn(raw, pAt, (p) => collectParam(cx, out, p, pAt));
+		const described = refDescription(cx, raw);
+		cx.derefIn(raw, pAt, (p) => collectParam(cx, out, p, pAt, described));
 	});
 }
 
 /** Adds one parameter; header parameters OpenAPI reserves are left out, as it requires. */
-function collectParam(cx: Ctx, out: Param[], value: Value, pAt: string): void {
+function collectParam(
+	cx: Ctx,
+	out: Param[],
+	value: Value,
+	pAt: string,
+	described: string | undefined,
+): void {
 	const p = objectAt(value, pAt, "a parameter");
 	const name = p.str("name");
 	const loc = p.str("in");
@@ -355,7 +430,7 @@ function collectParam(cx: Ctx, out: Param[], value: Value, pAt: string): void {
 		([q]) => q.str("in") === loc && same(q.str("name") as string),
 	);
 	// Its schema is converted later, against the document the parameter is in.
-	const param: Param = [p, pAt, cx.base];
+	const param: Param = [p, pAt, cx.base, doc(p, described)];
 	if (slot >= 0) out[slot] = param;
 	else out.push(param);
 }
@@ -449,6 +524,7 @@ function headers(cx: Ctx, response: JsonObject, at: string): Ty | undefined {
 	for (const [name, raw] of objectAt(declared, base, "headers").entries) {
 		if (name.toLowerCase() === "content-type") continue;
 		const hAt = child(base, name);
+		const described = refDescription(cx, raw);
 		cx.derefIn(raw, hAt, (value) => {
 			const h = objectAt(value, hAt, "a header");
 			props.push(
@@ -456,7 +532,7 @@ function headers(cx: Ctx, response: JsonObject, at: string): Ty | undefined {
 					name,
 					paramType(cx, h, hAt, "header"),
 					!booleanAt(h, hAt, "required"),
-					doc(h),
+					doc(h, described),
 				),
 			);
 		});

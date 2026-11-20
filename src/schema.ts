@@ -50,6 +50,12 @@ const IGNORED: [keyword: string, message: string][] = [
 		"dependentSchemas cannot be expressed in TypeScript; ignored",
 	],
 	[
+		"dependentRequired",
+		"dependentRequired cannot be expressed in TypeScript; ignored",
+	],
+	["propertyNames", "propertyNames cannot be expressed in TypeScript; ignored"],
+	["contains", "contains cannot be expressed in TypeScript; ignored"],
+	[
 		"unevaluatedProperties",
 		"unevaluatedProperties cannot be expressed in TypeScript; ignored",
 	],
@@ -81,11 +87,35 @@ function convert(cx: Ctx, v: JsonObject, at: string): Ty {
 	return t;
 }
 
-/** JSDoc text from `description` and `deprecated`. */
-export function doc(v: Value): string | undefined {
+/**
+ * JSDoc text from an object's `description` and `deprecated`; `description` may be one
+ * that replaces the object's (next to the `$ref` that reached it, in 3.1 and 3.2).
+ */
+export function doc(
+	v: JsonObject,
+	description = v.str("description"),
+): string | undefined {
+	return docText(description, v.get("deprecated") === true);
+}
+
+/**
+ * A schema's JSDoc: in 3.0 the keywords next to `$ref` are ignored, `deprecated` among
+ * them; `description` is read there too (docs/types.md).
+ */
+export function schemaDoc(cx: Ctx, v: Value): string | undefined {
 	if (!(v instanceof JsonObject)) return undefined;
-	const desc = v.str("description")?.trim() || undefined;
-	const deprecated = v.get("deprecated") === true;
+	const siblings = cx.refSiblings || v.get("$ref") === undefined;
+	return docText(
+		v.str("description"),
+		siblings && v.get("deprecated") === true,
+	);
+}
+
+function docText(
+	description: string | undefined,
+	deprecated: boolean,
+): string | undefined {
+	const desc = description?.trim() || undefined;
 	if (!deprecated) return desc;
 	return desc === undefined ? "@deprecated" : `${desc}\n@deprecated`;
 }
@@ -395,24 +425,48 @@ function isBinaryString(v: JsonObject): boolean {
 	);
 }
 
+/**
+ * An array, or a tuple where `prefixItems`, `minItems` or `maxItems` say more: the first
+ * `minItems` items are required, `prefixItems` types the first ones and `items` the rest
+ * (absent means any; false, next to `prefixItems`, none). `maxItems` closes the tuple where
+ * it is not past the items already written: TypeScript has no other bound on a length, and
+ * writing out `maxItems: 5000` items is no type to read.
+ */
 function array(cx: Ctx, v: JsonObject, at: string): Ty {
 	const items = v.get("items");
 	const prefix = v.get("prefixItems");
-	if (!Array.isArray(prefix)) {
-		return arrayTy(
-			items === undefined ? UNKNOWN : schema(cx, items, child(at, "items")),
-		);
-	}
-	// prefixItems: items past minItems may be missing; `items` describes the rest
-	// (absent means any, false means none).
-	const tupleItems = list(cx, prefix, child(at, "prefixItems"));
-	const minItems = v.get("minItems");
-	const n = minItems instanceof JsonNumber ? Number(minItems.text) : 0;
-	const min = Number.isInteger(n) && n > 0 ? Math.min(n, tupleItems.length) : 0;
-	if (items === false) return { kind: "tuple", items: tupleItems, min };
+	const head = Array.isArray(prefix)
+		? list(cx, prefix, child(at, "prefixItems"))
+		: [];
 	const rest =
-		items === undefined ? UNKNOWN : schema(cx, items, child(at, "items"));
-	return { kind: "tuple", items: tupleItems, min, rest };
+		items === undefined
+			? UNKNOWN
+			: items === false && Array.isArray(prefix)
+				? undefined
+				: schema(cx, items, child(at, "items"));
+	const min = count(v, "minItems") ?? 0;
+	const max = count(v, "maxItems");
+	if (!Array.isArray(prefix) && min === 0 && (max === undefined || max > 0))
+		return arrayTy(rest as Ty);
+	if (max !== undefined && max < min) return NEVER;
+	const written = Math.max(head.length, min);
+	if (rest === undefined && written > head.length) return NEVER;
+	const tupleItems = Array.from(
+		{ length: written },
+		(_, i) => head[i] ?? (rest as Ty),
+	);
+	if (max !== undefined && max <= written)
+		return { kind: "tuple", items: tupleItems.slice(0, max), min };
+	return rest === undefined
+		? { kind: "tuple", items: tupleItems, min }
+		: { kind: "tuple", items: tupleItems, min, rest };
+}
+
+/** A count keyword (`minItems`, `maxItems`): a non-negative integer, or undefined. */
+function count(v: JsonObject, key: string): number | undefined {
+	const n = v.get(key);
+	const value = n instanceof JsonNumber ? Number(n.text) : Number.NaN;
+	return Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
 /**
@@ -492,7 +546,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 			optional: !required.includes(key),
 		};
 		if (!p.optional) p.present = true;
-		const d = doc(s);
+		const d = schemaDoc(cx, s);
 		if (d !== undefined) p.doc = d;
 		props.push(p);
 	}

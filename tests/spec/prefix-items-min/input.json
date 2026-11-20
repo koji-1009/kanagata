@@ -4,7 +4,7 @@
   "components": {
     "schemas": {
       "Two": { "prefixItems": [{ "type": "string" }, { "type": "number" }], "minItems": 2.0, "items": false },
-      "Clamped": { "prefixItems": [{ "type": "string" }], "minItems": 5 },
+      "PastPrefix": { "prefixItems": [{ "type": "string" }], "minItems": 5 },
       "Fraction": { "prefixItems": [{ "type": "string" }], "minItems": 1.5 },
       "Negative": { "prefixItems": [{ "type": "string" }], "minItems": -1 },
       "NotNumber": { "prefixItems": [{ "type": "string" }], "minItems": "1" }

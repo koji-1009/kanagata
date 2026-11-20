@@ -2,3 +2,6 @@
 #/components/schemas/Cond/dependentSchemas: dependentSchemas cannot be expressed in TypeScript; ignored
 #/components/schemas/Cond/unevaluatedProperties: unevaluatedProperties cannot be expressed in TypeScript; ignored
 #/components/schemas/Dyn/$dynamicRef: $dynamicRef is not supported; ignored
+#/components/schemas/Names/propertyNames: propertyNames cannot be expressed in TypeScript; ignored
+#/components/schemas/Contains/contains: contains cannot be expressed in TypeScript; ignored
+#/components/schemas/DepReq/dependentRequired: dependentRequired cannot be expressed in TypeScript; ignored
