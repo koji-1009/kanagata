@@ -6,6 +6,7 @@
 - An `in: querystring` parameter (3.2) is `parameters.querystring`, without its name, which is not sent; it is defined by `content`, so it is typed as above.
 - A schema with a `readOnly` / `writeOnly` property (on it or on a schema it references) gets a second type for what is sent to the API (a path's request, a webhook's responses), `UserInput`.
 - `description` and `deprecated` become JSDoc.
+- A path parameter is required whatever its `required` says (OpenAPI requires it to be `true`): the path cannot be built without it. Other parameters, request bodies and headers are required where `required` is `true`.
 - Header parameters named `Accept`, `Content-Type` or `Authorization`, and a response header `Content-Type`, are ignored, as OpenAPI requires.
 - A field OpenAPI requires is an error where it is missing: a parameter's `name` and `in`, a parameter's or header's `schema` or `content` (one of the two, and `content` with exactly one media type, as OpenAPI requires), a request body's `content` (an empty one describes no representation, so it is `content: {}`, which no body matches), a server's `url`. So is a path item, operation, parameter, request body, response, header, media type, `responses`, `headers` or `content` that is not an object, `parameters` or `servers` that is not an array, an `operationId` that is not a string, and a `required` that is not a boolean.
 - The `servers` of a path's operation, or of its path item, are `servers: ["https://uploads.example.com"]` in its type; a URL with variables (`{region}`) is `string`.

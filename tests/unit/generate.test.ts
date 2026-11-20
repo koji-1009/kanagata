@@ -192,6 +192,10 @@ test("a field OpenAPI requires, missing or of another kind, is an error at its o
 			`${p}/parameters/0/required: required must be a boolean`,
 		],
 		[
+			param(`{"name":"a","in":"path","required":"yes","schema":{}}`),
+			`${p}/parameters/0/required: required must be a boolean`,
+		],
+		[
 			paths(
 				`"/a":{"post":{"requestBody":{"required":1,"content":{"text/plain":{}}}}}`,
 			),

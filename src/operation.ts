@@ -241,7 +241,9 @@ function operation(
 		const props: Prop[] = [];
 		for (const [p, pAt, base] of params) {
 			if (p.str("in") !== loc) continue;
-			const optional = loc !== "path" && !booleanAt(p, pAt, "required");
+			// OpenAPI requires a path parameter's required to be true: the path needs it.
+			const required = booleanAt(p, pAt, "required");
+			const optional = loc !== "path" && !required;
 			const whole = loc === "querystring";
 			const ty = cx.inMode(sent, () =>
 				cx.withBase(base, () => paramType(cx, p, pAt, "parameter")),
