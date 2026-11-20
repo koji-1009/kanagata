@@ -1,0 +1,18 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "NonEmpty": { "description": "minItems items are required.", "type": "array", "items": { "type": "string" }, "minItems": 1 },
+      "Pair": { "description": "maxItems not past them closes the tuple.", "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+      "Some": { "description": "A larger maxItems is not written out.", "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 5000 },
+      "Few": { "description": "Nor is maxItems alone.", "type": "array", "items": { "type": "string" }, "maxItems": 3 },
+      "Empty": { "description": "maxItems 0 admits only the empty array.", "type": "array", "items": { "type": "string" }, "maxItems": 0 },
+      "Contradiction": { "description": "maxItems below minItems admits nothing.", "type": "array", "minItems": 3, "maxItems": 2 },
+      "Head": { "description": "With prefixItems, maxItems not past them closes the tuple.", "prefixItems": [{ "type": "string" }, { "type": "number" }], "maxItems": 2 },
+      "Short": { "description": "maxItems inside prefixItems leaves out the rest of them.", "prefixItems": [{ "type": "string" }, { "type": "number" }], "maxItems": 1 },
+      "Long": { "description": "minItems past prefixItems requires items of the items schema.", "prefixItems": [{ "type": "string" }], "items": { "type": "number" }, "minItems": 3 },
+      "Unreachable": { "description": "minItems past prefixItems with items false admits nothing.", "prefixItems": [{ "type": "string" }], "items": false, "minItems": 2 }
+    }
+  }
+}

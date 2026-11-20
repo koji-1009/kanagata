@@ -53,7 +53,7 @@ Types follow what the schema accepts, not another generator's output.
 | `type` with `const` / `enum`, and these with each other                                                             | the values all allow: `type: string, enum: ["a", 1]` is `"a"`; a contradiction is `never`                                                                             |
 | `type: integer`                                                                                                     | `number`; non-integer `enum` / `const` values are dropped                                                                                                             |
 | `format: binary`; binary `contentMediaType` without `contentEncoding`                                               | `Blob`                                                                                                                                                                |
-| `prefixItems`                                                                                                       | tuple; items past `minItems` are optional, `items` gives the rest                                                                                                     |
+| `prefixItems`, `minItems`, `maxItems`                                                                               | a tuple where they say more than an array; see [Array length](#array-length)                                                                                          |
 | `required` key without a property schema, or whose property schema admits any value (`{}`, `true`, a `$ref` to one) | `key: {} \| null` (any value but `undefined`; `Anything & ({} \| null)` for a reference), so another member's type for it holds: `{ a?: string } & { a: {} \| null }` |
 | `additionalProperties`, `patternProperties`                                                                         | an index signature that also admits the declared properties (TypeScript cannot check the pattern)                                                                     |
 | `additionalProperties: false` with no properties, `const: {}`, `maxProperties: 0`                                   | `{ [key: string]: never }`; with `maxProperties: 0` and a required key, `never`                                                                                       |
@@ -63,6 +63,16 @@ Types follow what the schema accepts, not another generator's output.
 | `readOnly` / `writeOnly` property                                                                                   | left out of what is sent to the API / what it sends                                                                                                                   |
 | `not`, `if` / `then` / `else`, `dependentSchemas`, `unevaluated*`, `$dynamicRef`                                    | ignored, with a warning                                                                                                                                               |
 | `dependentRequired`, `propertyNames`, `contains`                                                                    | ignored, with a warning                                                                                                                                               |
+
+## Array length
+
+An array is `T[]` until `prefixItems`, `minItems` or `maxItems` say more; then it is a tuple.
+
+- The first `minItems` items are required: `{ items: string, minItems: 1 }` is `[string, ...string[]]`. `prefixItems` types the first items and `items` the rest (absent, any value; `false` next to `prefixItems`, no more items): `{ prefixItems: [string], items: number, minItems: 3 }` is `[string, number, number, ...number[]]`.
+- `maxItems` closes the tuple where it is not past the items already written, those of `prefixItems` and `minItems`: `{ minItems: 2, maxItems: 2 }` is `[T, T]`, `{ prefixItems: [string, number], maxItems: 1 }` is `[string?]`, and `maxItems: 0` is `[]`.
+- A larger `maxItems` is ignored: TypeScript bounds a length only by writing out every item, and real documents have `maxItems: 5000`. So `{ minItems: 1, maxItems: 100 }` is `[T, ...T[]]`, and `{ maxItems: 3 }` alone is `T[]`.
+- `maxItems` below `minItems`, or `minItems` past `prefixItems` with `items: false`, admits no array: `never`.
+- A `minItems` or `maxItems` that is not a non-negative integer is ignored.
 
 ## `oneOf`
 
