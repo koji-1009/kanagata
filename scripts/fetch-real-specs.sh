@@ -21,6 +21,8 @@ stripe=6360907ca278d6aecff118df90167e94aaba1437
 
 oas="https://raw.githubusercontent.com/OAI/learn.openapis.org/$oai/examples/v3.0"
 gh="https://raw.githubusercontent.com/github/rest-api-description/$github/descriptions/api.github.com"
+# OpenAPI 3.1, with webhooks (some with form-encoded requests).
+ghnext="https://raw.githubusercontent.com/github/rest-api-description/$github/descriptions-next/api.github.com"
 st="https://raw.githubusercontent.com/stripe/openapi/$stripe/openapi"
 
 # Each document in both of the forms its publisher provides.
@@ -29,5 +31,6 @@ for ext in json yaml; do
   fetch "petstore-expanded.$ext" "$oas/petstore-expanded.$ext"
   fetch "github.$ext" "$gh/api.github.com.$ext"
   fetch "github-2026-03-10.$ext" "$gh/api.github.com.2026-03-10.$ext"
+  fetch "github-next.$ext" "$ghnext/api.github.com.$ext"
   fetch "stripe.$ext" "$st/spec3.$ext"
 done
