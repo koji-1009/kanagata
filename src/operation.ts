@@ -26,7 +26,7 @@ const RESERVED_HEADERS = ["accept", "content-type", "authorization"];
 
 export interface Paths {
 	paths: Prop[];
-	/** Present only when the document has `webhooks` (3.1 and later). */
+	/** Present only when the document has `webhooks` and is 3.1 or later. */
 	webhooks?: Prop[];
 	operations: Prop[];
 }
@@ -53,7 +53,9 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
 		paths: pathItems(cx, root, "paths", operations),
 		operations: [],
 	};
-	if (root.get("webhooks") !== undefined)
+	// `webhooks` is an OpenAPI 3.1 field, no field of a 3.0 document.
+	const v30 = (root.get("openapi") as string).startsWith("3.0.");
+	if (!v30 && root.get("webhooks") !== undefined)
 		out.webhooks = pathItems(cx, root, "webhooks", operations);
 	out.operations = [...operations.values()].map((o) => o.prop);
 	return out;

@@ -1,0 +1,18 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "webhooks": {
+    "newPet": {
+      "post": {
+        "description": "webhooks is an OpenAPI 3.1 field, no field of a 3.0 document.",
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } } },
+        "responses": { "204": { "description": "Received." } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Pet": { "type": "object", "properties": { "name": { "type": "string" } } }
+    }
+  }
+}

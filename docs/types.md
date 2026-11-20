@@ -13,7 +13,7 @@
 
 ## Webhooks
 
-A webhook (`webhooks`, 3.1 and 3.2) is a request the API sends to a receiver the API consumer implements, and the responses the API expects back. A webhook's types are a path operation's with the directions swapped:
+A webhook (`webhooks`, 3.1 and 3.2) is a request the API sends to a receiver the API consumer implements, and the responses the API expects back. `webhooks` is read in 3.1 and 3.2 documents only: it is no field of OpenAPI 3.0. A webhook's types are a path operation's with the directions swapped:
 
 - Its parameters and request body are the read view, and its responses (headers and content) the write view: `readOnly` properties are kept and `writeOnly` ones left out of the request, the other way round in the responses, so a schema with either is `User` in the request and `UserInput` in the responses.
 - A form in its request is `string`, read as its text as a form response is; a form in its responses is its schema.
