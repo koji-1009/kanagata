@@ -55,7 +55,7 @@ kanagata generate - < openapi.yaml > src/api/schema.d.ts       # stdin to stdout
 kanagata init -o src/api/client.ts                             # copy the client into your project
 ```
 
-`--loose-nullable` reads 3.0 `nullable: true` as "this schema or null" (see [Generated types](#generated-types)). Every option, the exit codes and messages, and `generate` as a library: [docs/cli.md](docs/cli.md).
+`--loose-nullable` reads 3.0 `nullable: true` as "this schema or null" (see [Generated types](#generated-types)). The file's first line names the kanagata version that wrote it (`--omit-version` leaves it out): after upgrading, a regenerated file that differs only in that line has the same types. Every option, the exit codes and messages, and `generate` as a library: [docs/cli.md](docs/cli.md).
 
 ## Client
 
