@@ -1,0 +1,14 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/pets": {
+      "$ref": "#/components/pathItems/Pets",
+      "get": { "responses": { "204": { "description": "Next to $ref." } } }
+    }
+  },
+  "components": {
+    "pathItems": {
+      "Pets": { "get": { "responses": { "200": { "description": "In the Path Item $ref refers to." } } } }
+    }
+  }
+}

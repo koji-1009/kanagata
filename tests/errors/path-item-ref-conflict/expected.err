@@ -1,0 +1,1 @@
+#/paths/~1pets/get: get is both next to $ref and in the Path Item it refers to; OpenAPI leaves which one applies undefined
