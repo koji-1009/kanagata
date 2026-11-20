@@ -304,6 +304,9 @@ export function inter(items: Ty[]): Ty {
 	};
 	items.forEach(push);
 	const out = members.out;
+	const arrays = out.filter(isArrayTy);
+	if (arrays.length > 1)
+		return inter([...out.filter((t) => !isArrayTy(t)), meetArrays(arrays)]);
 	const narrowed = narrow(out);
 	// Narrowing can make members equal (`"a" & ("a" | 1) & string`); normalize again.
 	// Each round drops a member or shrinks a set of values, so this ends.
@@ -314,6 +317,40 @@ export function inter(items: Ty[]): Ty {
 	return out.length === 1 && only !== undefined
 		? only
 		: { kind: "inter", items: out };
+}
+
+type ArrayTy = Extract<Ty, { kind: "array" | "tuple" }>;
+
+const isArrayTy = (t: Ty): t is ArrayTy =>
+	t.kind === "array" || t.kind === "tuple";
+
+/**
+ * Arrays and tuples meet item by item: `string[]` and `[unknown, unknown, ...unknown[]]`
+ * are `[string, string, ...string[]]`. TypeScript reads an item of their intersection
+ * as the tuple's alone (`unknown`). A tuple without `rest` closes the others at its
+ * length, and requiring more items than that admits nothing.
+ */
+function meetArrays(arrays: ArrayTy[]): Ty {
+	const rows = arrays.map((t) =>
+		t.kind === "tuple" ? t : { items: [], min: 0, rest: t.elem },
+	);
+	const min = Math.max(...rows.map((r) => r.min));
+	const closed = rows.filter((r) => r.rest === undefined);
+	const length = Math.min(
+		Math.max(...rows.map((r) => r.items.length)),
+		...closed.map((r) => r.items.length),
+	);
+	if (min > length) return NEVER;
+	// Below `length`, a closed tuple has the item and an open one its item or `rest`.
+	const items = Array.from({ length }, (_, i) =>
+		inter(rows.map((r) => r.items[i] ?? (r.rest as Ty))),
+	);
+	if (items.slice(0, min).some((t) => t.kind === "never")) return NEVER;
+	if (closed.length > 0) return { kind: "tuple", items, min };
+	const rest = inter(rows.map((r) => r.rest as Ty));
+	return length === 0
+		? { kind: "array", elem: rest }
+		: { kind: "tuple", items, min, rest };
 }
 
 /** A kind of JSON value; `integer` is the whole numbers among `number`. */

@@ -15,7 +15,7 @@ export type Email = string;
 
 export type Age = number;
 
-export type Tags = [string, ...string[]];
+export type Tags = [string, string?, string?, string?, string?];
 
 export type Shape = {
   kind?: string;

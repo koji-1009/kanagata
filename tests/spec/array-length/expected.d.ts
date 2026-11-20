@@ -7,14 +7,28 @@ export interface operations {}
 export interface schemas {
   NonEmpty: NonEmpty;
   Pair: Pair;
-  Some: Some;
+  UpToTwo: UpToTwo;
   Few: Few;
+  Ten: Ten;
+  Eleven: Eleven;
+  Some: Some;
+  Many: Many;
   Empty: Empty;
   Contradiction: Contradiction;
   Head: Head;
   Short: Short;
+  HeadUpTo: HeadUpTo;
+  LongHead: LongHead;
   Long: Long;
   Unreachable: Unreachable;
+  AtLeastTwo: AtLeastTwo;
+  AtMostOne: AtMostOne;
+  Split: Split;
+  SplitMax: SplitMax;
+  SplitItems: SplitItems;
+  SplitClosed: SplitClosed;
+  SplitRef: SplitRef;
+  NotArray: NotArray;
 }
 
 /** minItems items are required. */
@@ -23,11 +37,23 @@ export type NonEmpty = [string, ...string[]];
 /** maxItems not past them closes the tuple. */
 export type Pair = [number, number];
 
+/** Items past minItems up to maxItems are optional. */
+export type UpToTwo = [string, string?];
+
+/** maxItems alone too. */
+export type Few = [string?, string?, string?];
+
+/** Up to 10 items are written. */
+export type Ten = [string?, string?, string?, string?, string?, string?, string?, string?, string?, string?];
+
 /** A larger maxItems is not written out. */
+export type Eleven = string[];
+
+/** Nor next to minItems. */
 export type Some = [string, ...string[]];
 
-/** Nor is maxItems alone. */
-export type Few = string[];
+/** A larger minItems requires the first 10. */
+export type Many = [string, string, string, string, string, string, string, string, string, string, ...string[]];
 
 /** maxItems 0 admits only the empty array. */
 export type Empty = [];
@@ -41,8 +67,38 @@ export type Head = [string?, number?];
 /** maxItems inside prefixItems leaves out the rest of them. */
 export type Short = [string?];
 
+/** maxItems past prefixItems adds optional items of the items schema. */
+export type HeadUpTo = [string, number?, number?];
+
+/** prefixItems are all written, however many. */
+export type LongHead = [unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, string?];
+
 /** minItems past prefixItems requires items of the items schema. */
 export type Long = [string, number, number, ...number[]];
 
 /** minItems past prefixItems with items false admits nothing. */
 export type Unreachable = never;
+
+/** minItems without type is an array. */
+export type AtLeastTwo = [unknown, unknown, ...unknown[]];
+
+/** So is maxItems. */
+export type AtMostOne = [unknown?];
+
+/** allOf members meet item by item. */
+export type Split = [string, string, ...string[]];
+
+/** maxItems in another member closes the tuple. */
+export type SplitMax = [string];
+
+/** Items meet too. */
+export type SplitItems = "a"[];
+
+/** minItems past a closed tuple in another member admits nothing. */
+export type SplitClosed = never;
+
+/** A reference stays a reference. */
+export type SplitRef = NonEmpty & [unknown?];
+
+/** Array keywords next to another type admit nothing. */
+export type NotArray = never;

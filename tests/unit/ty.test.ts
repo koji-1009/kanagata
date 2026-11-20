@@ -89,10 +89,6 @@ test("type keywords narrow sets of values", () => {
 test("narrowing leaves other intersections alone", () => {
 	const a = schemaRef("A");
 	assert.deepEqual(inter([STRING, a]), { kind: "inter", items: [STRING, a] });
-	assert.deepEqual(inter([array(STRING), tuple([lit("1")])]), {
-		kind: "inter",
-		items: [array(STRING), tuple([lit("1")])],
-	});
 	assert.deepEqual(inter([lit('"a"'), a]), {
 		kind: "inter",
 		items: [lit('"a"'), a],
@@ -101,6 +97,23 @@ test("narrowing leaves other intersections alone", () => {
 		kind: "inter",
 		items: [STRING, union([lit('"a"'), a])],
 	});
+});
+
+test("arrays and tuples meet item by item", () => {
+	assert.deepEqual(
+		inter([array(STRING), tuple([union([lit('"a"'), lit("1")])])]),
+		tuple([lit('"a"')]),
+	);
+	// a required item no value meets admits nothing
+	assert.equal(inter([array(STRING), tuple([lit("1")])]), NEVER);
+	// an optional one only shortens the tuple
+	assert.deepEqual(
+		inter([
+			array(STRING),
+			{ kind: "tuple", items: [STRING, lit("1")], min: 1 },
+		]),
+		{ kind: "tuple", items: [STRING, NEVER], min: 1 },
+	);
 });
 
 test("union flattens and removes duplicates", () => {
