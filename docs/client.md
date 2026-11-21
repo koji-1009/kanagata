@@ -49,18 +49,16 @@ A method of `additionalOperations` (3.2) is called through `api.request`, named 
 
 ## Result
 
-`{ status, ok, data, response }`, a union over the statuses the operation documents. `ResultOf<paths, "get", "/users/{id}">` is its type for `api.get("/users/{id}", …)`, `ResultOf<paths, "COPY", "/files/{name}">` for `api.request("COPY", "/files/{name}", …)`, and `ResultOf<paths, "get", "/users/{id}", "text">` with `parseAs: "text"`. `Result<Operation, ParseAs, Method>` is the same by operation; without the method, a HEAD result keeps the declared body.
+`{ status, ok, data, response }`, a union over the statuses fetch returns (0, and 200 to 999: the Fetch Standard's, but 1xx, which fetch does not return): each status the operation documents, the statuses of each range (`4XX`) it does not document on their own, and `default`'s, the statuses nothing else covers. Without `default`, the statuses the operation does not document are a result too, with `data: unknown`. `ResultOf<paths, "get", "/users/{id}">` is its type for `api.get("/users/{id}", …)`, `ResultOf<paths, "COPY", "/files/{name}">` for `api.request("COPY", "/files/{name}", …)`, and `ResultOf<paths, "get", "/users/{id}", "text">` with `parseAs: "text"`. `Result<Operation, ParseAs, Method>` is the same by operation; without the method, a HEAD result keeps the declared body.
 
-- **`data`** is parsed by the response's content-type: JSON, text, or `Blob` for binary types. An empty body gives `undefined`. fetch gives HEAD responses and 204, 205 and 304 no body, so their `data` is typed `undefined` whatever the document declares. A status that declares `content` but sends none also gives `undefined`; check for it in `onData`.
+- **`data`** is parsed by the response's content-type: JSON, text, or `Blob` for binary types. An empty body gives `undefined`. fetch gives HEAD responses, 204, 205 and 304, and an opaque response (status 0: `mode: "no-cors"`, or a redirect with `redirect: "manual"` in a browser) no body, so their `data` is typed `undefined` whatever the document declares, within a range or `default` too. A status that declares `content` but sends none also gives `undefined`; check for it in `onData`.
   - The content-type the server sends decides, not the document: content typed by a wildcard (`*/*`) is typed by its schema but read as whatever arrives, and a response without a content-type is text (`parseAs: "blob"` keeps its bytes).
   - `data` is read once the whole body has arrived; for a stream that stays open (`text/event-stream`), use `parseAs: "stream"`.
 - **`parseAs`** reads the body its way for one call and types `data` to match: `text` a string, `blob` a `Blob`, `arrayBuffer` an `ArrayBuffer`, `stream` the body (`null` when there is none), `json` the parsed JSON (`undefined` when empty), typed by the schemas of JSON and wildcard media types and `unknown` for the others.
-- **`ok`** is fetch's: `true` for 2xx. For `default` (every status the operation does not list, 2xx included) it is `boolean`.
-- **Narrowing:** compare `status` with `===` (or `switch` on it), or check `ok`; each leaves the statuses that can match.
-- **Undocumented statuses:** TypeScript has no type for "any number but the documented statuses", so the types cannot tell a status the document does not list from the documented ones:
-  - Without `default`, such a status is still returned, in a branch the types do not give it: with 200 and 404 documented, a gateway's 502 lands in the `else` of `if (res.status === 200)`, typed as the 404 body, and in the branch the types call unreachable once every documented status is checked.
-  - With `default`, whose `status` is `number`, `default` stays wherever a status could match: with 200 and `default` documented, `data` is still `{ id } | { message }` after `res.status === 200`, and after `res.ok` too, since `default`'s `ok` is `boolean`. Neither check narrows to the success body alone. A range (`4XX`, `5XX`) also has `status: number`.
-  - List the statuses with `default` or a range in the document and their bodies are typed. An operation that documents no responses gives `status: number`, `ok: boolean` and `data: unknown`.
+- **`ok`** is fetch's: `true` for 2xx. A range, `default` and the undocumented statuses are split at that line, so `ok` narrows them too.
+- **Narrowing:** compare `status` with `===` (or `switch` on it), or check `ok`; each leaves the statuses that can match. With 200 and `default` documented, `data` is `{ id }` after `res.status === 200` and `default`'s body after `res.status === 201`; after `res.ok` it is either, since a 201 is `default`'s.
+- **Undocumented statuses:** a document need not list every status a server answers with. Without `default`, the others are typed `data: unknown`: with 200 and 404 documented, a gateway's 502 is in the `else` of `if (res.status === 404)`, and `res.ok` leaves `{ id } | unknown`, which is `unknown`, since an undocumented 201 is ok too. Compare `status` to read a documented body; `default` or `2XX` in the document types the others. An operation that documents no responses has only these.
+- **Redirects:** fetch follows a redirect (301, 302, 303, 307, 308) unless `redirect` says otherwise, so what arrives is the target's response, which the operation does not document unless it lists that status: an operation that documents only 302 gives `data: unknown` for the 200 that arrives.
 - **Response headers** are typed in the declarations (`responses[200].headers`); read them from `res.response.headers`.
 
 ## Wrapping a call
@@ -85,7 +83,7 @@ async function get<
 
 For `api.request`, the method takes the place of `"get"`: `ArgsOf<paths, "COPY", Path>`.
 
-`OkResult<R>` and `NotOkResult<R>` are the results `if (res.ok)` leaves on each side. `default` is on both, since it covers an undocumented 2xx; `Extract<R, { ok: true }>` would drop it. A wrapper that throws the others returns `OkResult<…>["data"]`:
+`OkResult<R>` and `NotOkResult<R>` are the results `if (res.ok)` leaves on each side. An undocumented 2xx is among the successes, so without `2XX` or `default` covering it, `OkResult<…>["data"]` is `unknown`. A wrapper that throws the others returns it:
 
 ```ts
 import type { ArgsOf, OkResult, PathsOf, ResultOf } from "kanagata/client";

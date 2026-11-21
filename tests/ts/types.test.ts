@@ -65,7 +65,7 @@ export async function methods32(): Promise<void> {
 
 	// additionalOperations go through request, by the method as written.
 	const copied = await m.request("COPY", "/r");
-	expectType<Equal<typeof copied.status, 204>>();
+	if (copied.status === 204) expectType<Equal<typeof copied.data, undefined>>();
 	expectType<Equal<typeof copied, ResultOf<Methods32.paths, "COPY", "/r">>>();
 	await m.request("LINK", "/r", { body: "x", contentType: "text/plain" });
 	// @ts-expect-error LINK's body is required
@@ -138,10 +138,14 @@ export async function narrowing(): Promise<void> {
 	if (res.status === 200) {
 		expectType<Equal<typeof res.data, Basic.User>>();
 		expectType<Equal<typeof res.ok, true>>();
-	} else {
-		expectType<Equal<typeof res.status, 404>>();
+	} else if (res.status === 404) {
 		expectType<Equal<typeof res.data, Basic.Error>>();
 		expectType<Equal<typeof res.ok, false>>();
+	} else {
+		// A status the document does not list: any body, ok as fetch sets it.
+		expectType<Equal<typeof res.data, unknown>>();
+		expectType<Equal<502 extends typeof res.status ? true : false, true>>();
+		expectType<Equal<200 extends typeof res.status ? true : false, false>>();
 	}
 	expectType<Equal<typeof res.response, Response>>();
 }
@@ -170,7 +174,12 @@ export async function resultType(): Promise<void> {
 	const n = createClient<NoBodyPaths>({ baseUrl: "https://api.test" });
 	const head = await n.head("/n");
 	expectType<Equal<typeof head, ResultOf<NoBodyPaths, "head", "/n">>>();
-	expectType<Equal<Result<NoBodyPaths["/n"]["head"]>["data"], { a: number }>>();
+	expectType<
+		Equal<
+			Extract<Result<NoBodyPaths["/n"]["head"]>, { status: 200 }>["data"],
+			{ a: number }
+		>
+	>();
 	// @ts-expect-error a path without the method
 	type Missing = ResultOf<Api.paths, "trace", "/things/{id}">;
 	void (null as unknown as Missing);
@@ -225,30 +234,35 @@ export async function wrapping(): Promise<void> {
 
 export async function statusRanges(): Promise<void> {
 	const res = await api.get("/things/{id}", { path: { id: 1 } });
-	if (res.status === 404) {
-		// 404 also matches the "2XX" and "4XX" entries (status: number); 200 is excluded.
-		expectType<Equal<typeof res.data, string | Api.Problem>>();
-	}
+	// A range covers its statuses the document does not list on their own.
+	if (res.status === 404) expectType<Equal<typeof res.data, Api.Problem>>();
+	if (res.status === 201) expectType<Equal<typeof res.data, string>>();
+	if (res.status === 418) expectType<Equal<typeof res.data, Api.Problem>>();
+	// fetch gives 204 and 205 no body, within a range too.
+	if (res.status === 204) expectType<Equal<typeof res.data, undefined>>();
+	if (res.status === 500) expectType<Equal<typeof res.data, unknown>>();
 	if (res.ok) {
-		// 200 and "2XX" are ok: true.
-		expectType<Equal<typeof res.data, Api.Thing | string>>();
+		// 200 and "2XX" are every 2xx, so nothing undocumented is ok.
+		expectType<Equal<typeof res.data, Api.Thing | string | undefined>>();
 	} else {
-		// 404 and "4XX" are ok: false.
-		expectType<Equal<typeof res.data, Api.Problem>>();
+		// 404, "4XX", and the statuses the document does not list.
+		expectType<Equal<typeof res.data, unknown>>();
 	}
 
 	const del = await api.delete("/things/{id}", { path: { id: 1 } });
-	// default covers every undocumented status, 2xx included, so its ok is fetch's: boolean.
+	// default covers every status the document does not list, 2xx included.
 	if (del.ok) {
 		expectType<Equal<typeof del.data, undefined | Api.Problem>>();
 	} else {
-		expectType<Equal<typeof del.data, Api.Problem>>();
-		expectType<Equal<typeof del.status, number>>();
+		expectType<Equal<typeof del.data, Api.Problem | undefined>>();
+		expectType<Equal<500 extends typeof del.status ? true : false, true>>();
+		expectType<Equal<204 extends typeof del.status ? true : false, false>>();
 	}
-	if (del.status === 204) {
-		// default (status: number) also matches 204.
-		expectType<Equal<typeof del.data, undefined | Api.Problem>>();
-	}
+	// default does not cover 204, which the document lists.
+	if (del.status === 204) expectType<Equal<typeof del.data, undefined>>();
+	if (del.status === 201) expectType<Equal<typeof del.data, Api.Problem>>();
+	// An opaque response (no-cors, or a redirect with redirect: "manual") has status 0, no body.
+	if (del.status === 0) expectType<Equal<typeof del.data, undefined>>();
 
 	const head = await api.head("/things/{id}", { path: { id: 1 } });
 	expectType<Equal<typeof head.data, undefined>>();
@@ -257,21 +271,20 @@ export async function statusRanges(): Promise<void> {
 export async function okResults(): Promise<void> {
 	// docs/client.md: OkResult and NotOkResult are the results `if (res.ok)` leaves on each side.
 	type Get = ResultOf<Api.paths, "get", "/things/{id}">;
-	expectType<Equal<OkResult<Get>["data"], Api.Thing | string>>();
-	expectType<Equal<NotOkResult<Get>["data"], Api.Problem>>();
+	expectType<Equal<OkResult<Get>["data"], Api.Thing | string | undefined>>();
+	expectType<Equal<NotOkResult<Get>["data"], unknown>>();
 	expectType<Equal<OkResult<Get>["ok"], true>>();
 	expectType<Equal<NotOkResult<Get>["ok"], false>>();
-	// default (ok: boolean) is on both sides, as an undocumented 2xx may arrive.
+	// default is on both sides, split by its statuses.
 	type Delete = ResultOf<Api.paths, "delete", "/things/{id}">;
 	expectType<Equal<OkResult<Delete>["data"], undefined | Api.Problem>>();
-	expectType<Equal<NotOkResult<Delete>["data"], Api.Problem>>();
-	expectType<Equal<NotOkResult<Delete>["status"], number>>();
+	expectType<Equal<NotOkResult<Delete>["data"], Api.Problem | undefined>>();
 	type Default = ResultOf<DefaultOnly, "get", "/d">;
-	expectType<Equal<OkResult<Default>["data"], { n: number }>>();
-	expectType<Equal<NotOkResult<Default>["data"], { n: number }>>();
-	// Only successes, or only failures: the other side is never.
+	expectType<Equal<OkResult<Default>["data"], { n: number } | undefined>>();
+	expectType<Equal<NotOkResult<Default>["data"], { n: number } | undefined>>();
+	// A status the document does not list may fail, so a HEAD with only 200 has both sides.
 	type Head = ResultOf<NoBodyPaths, "head", "/n">;
-	expectType<Equal<NotOkResult<Head>, never>>();
+	expectType<Equal<NotOkResult<Head>["data"], undefined>>();
 	type Basic404 = Extract<
 		ResultOf<Basic.paths, "get", "/users/{id}">,
 		{ status: 404 }
@@ -288,7 +301,7 @@ export async function okResults(): Promise<void> {
 		return res.data;
 	}
 	const data = await getOk("/things/{id}", { path: { id: 1 } });
-	expectType<Equal<typeof data, Api.Thing | string>>();
+	expectType<Equal<typeof data, Api.Thing | string | undefined>>();
 	// ArgsOf's parseAs argument defaults to undefined, as ResultOf's does.
 	expectType<
 		Equal<
@@ -355,7 +368,7 @@ export async function readWriteViews(): Promise<void> {
 	// @ts-expect-error id is readOnly
 	await rw.post("/users", { body: { name: "a", password: "p", id: 1 } });
 	// The response is the read view: id is there, password is not.
-	expectType<Equal<typeof res.data, ReadWrite.User>>();
+	if (res.status === 201) expectType<Equal<typeof res.data, ReadWrite.User>>();
 	expectType<
 		Equal<"password" extends keyof ReadWrite.User ? true : false, false>
 	>();
@@ -379,6 +392,25 @@ interface DefaultOnly {
 			};
 		};
 	};
+}
+
+interface RedirectPaths {
+	"/logs": {
+		get: { responses: { 302: Record<never, never> } };
+	};
+}
+
+export async function redirect(): Promise<void> {
+	// fetch follows the 302 (redirect: "follow"), so what arrives is the target's response,
+	// which the document does not describe.
+	const logs = createClient<RedirectPaths>({ baseUrl: "https://api.test" });
+	const res = await logs.get("/logs", { parseAs: "blob" });
+	if (res.status === 200) {
+		expectType<Equal<typeof res.data, Blob>>();
+		expectType<Equal<typeof res.ok, true>>();
+	}
+	// With redirect: "manual", Node returns the 302 itself.
+	if (res.status === 302) expectType<Equal<typeof res.ok, false>>();
 }
 
 export async function defaultAlone(): Promise<void> {
@@ -533,7 +565,7 @@ export async function unionOfPaths(path: "/a" | "/b/{id}"): Promise<void> {
 	// @ts-expect-error "/b/{id}" needs its path parameter
 	await u.get(path, {});
 	const res = await u.get(path, { path: { id: "1" }, query: { q: "x" } });
-	expectType<Equal<typeof res.data, string | number>>();
+	if (res.status === 200) expectType<Equal<typeof res.data, string | number>>();
 	// @ts-expect-error unknown keys are still rejected
 	await u.get(path, { path: { id: "1" }, other: 1 });
 	// A single path needs only its own.
@@ -628,12 +660,12 @@ export async function binary(): Promise<void> {
 		contentType: "application/octet-stream",
 	});
 	const res = await api.get("/files/{name}", { path: { name: "a" } });
-	expectType<Equal<typeof res.data, Blob>>();
+	if (res.status === 200) expectType<Equal<typeof res.data, Blob>>();
 }
 
 export async function parseAs(): Promise<void> {
 	const auto = await api.get("/events");
-	expectType<Equal<typeof auto.data, string>>();
+	if (auto.status === 200) expectType<Equal<typeof auto.data, string>>();
 	const stream = await api.get("/events", { parseAs: "stream" });
 	expectType<Equal<typeof stream.data, ReadableStream<Uint8Array> | null>>();
 	const text = await api.get("/things/{id}", {
@@ -652,7 +684,7 @@ export async function parseAs(): Promise<void> {
 		body: { name: "x" },
 		parseAs: "json",
 	});
-	expectType<Equal<typeof json.data, Api.Item>>();
+	if (json.status === 201) expectType<Equal<typeof json.data, Api.Item>>();
 	// @ts-expect-error unknown parseAs
 	await api.get("/events", { parseAs: "xml" });
 }
@@ -691,8 +723,9 @@ export async function parseAsJson(): Promise<void> {
 		path: { id: 1 },
 		parseAs: "json",
 	});
-	if (thing.status === 404)
-		// 404 also matches "2XX" (text/plain, so unknown) and "4XX" (problem+json).
+	if (thing.status === 404) expectType<Equal<typeof thing.data, Api.Problem>>();
+	if (thing.status === 201)
+		// "2XX" is text/plain, so unknown.
 		expectType<Equal<typeof thing.data, unknown>>();
 }
 
@@ -714,7 +747,8 @@ interface JsonOnlyPaths {
 export async function parseAsJsonKeepsJsonSchemas(): Promise<void> {
 	const j = createClient<JsonOnlyPaths>({ baseUrl: "https://api.test" });
 	const res = await j.get("/j", { parseAs: "json" });
-	expectType<Equal<typeof res.data, { a: number } | { b: number }>>();
+	if (res.status === 200)
+		expectType<Equal<typeof res.data, { a: number } | { b: number }>>();
 }
 
 interface JsonVariantPaths {
@@ -764,24 +798,29 @@ export async function noBody(): Promise<void> {
 	const head = await n.head("/n");
 	expectType<Equal<typeof head.data, undefined>>();
 	const del = await n.delete("/n");
-	expectType<Equal<typeof del.data, undefined>>();
+	if (del.status === 204 || del.status === 205 || del.status === 304)
+		expectType<Equal<typeof del.data, undefined>>();
 	// parseAs reads that empty body as it says.
 	const text = await n.head("/n", { parseAs: "text" });
 	expectType<Equal<typeof text.data, string>>();
 	const json = await n.delete("/n", { parseAs: "json" });
-	expectType<Equal<typeof json.data, undefined>>();
+	if (json.status === 204) expectType<Equal<typeof json.data, undefined>>();
 	const stream = await n.head("/n", { parseAs: "stream" });
 	expectType<Equal<typeof stream.data, ReadableStream<Uint8Array> | null>>();
 	// The same content on a GET 200 is read.
 	const get = await n.get("/n");
-	expectType<Equal<typeof get.data, { a: number }>>();
+	if (get.status === 200) expectType<Equal<typeof get.data, { a: number }>>();
 }
 
 export async function noResponses(): Promise<void> {
 	const none = createClient<NoResponses.paths>({ baseUrl: "https://api.test" });
 	// Nothing documented: whatever comes back, typed as fetch gives it.
 	const res = await none.get("/a");
-	expectType<Equal<typeof res.status, number>>();
+	expectType<
+		Equal<200 | 0 | 999 extends typeof res.status ? true : false, true>
+	>();
+	// fetch returns no 1xx response.
+	expectType<Equal<100 extends typeof res.status ? true : false, false>>();
 	expectType<Equal<typeof res.ok, boolean>>();
 	expectType<Equal<typeof res.data, unknown>>();
 	expectType<Equal<typeof res.response, Response>>();

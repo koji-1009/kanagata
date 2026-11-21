@@ -78,7 +78,7 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 ```
 
 - `api.get`, `api.post`, … take the path template and the operation's parameters and body; a method of `additionalOperations` (3.2) goes through `api.request("COPY", …)`.
-- The result is `{ status, ok, data, response }`, a union over the statuses the operation documents: checking `status` or `ok` narrows `data`. In an operation with `default`, neither narrows to the success body alone: `default`'s `status` is `number` and its `ok` is `boolean`, so its `data` stays after `res.status === 200` and after `res.ok`. HTTP error statuses never throw.
+- The result is `{ status, ok, data, response }`, a union over the statuses fetch returns: each one the operation documents, the others of a range (`4XX`) or `default`, and without `default`, the undocumented ones, whose `data` is `unknown`. Comparing `status` narrows `data` to that status's body; `ok` narrows to the 2xx results, which include an undocumented 2xx unless `2XX` or `default` covers it. HTTP error statuses never throw.
 - `kanagata init` copies the client's source into your project to edit as you like.
 
 Config, call options, results, typing a wrapper, how requests are built, and errors: [docs/client.md](docs/client.md).
