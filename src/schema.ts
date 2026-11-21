@@ -165,15 +165,13 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (c !== undefined) out.push(literal(c));
 	const e = v.get("enum");
 	if (Array.isArray(e)) out.push(union(e.map(literal)));
+	// Every member is the same object: a property one member leaves out of this view
+	// stays out even where another member lists it as required.
+	const group = leftOutKeys(cx, v);
+	for (const k of cx.leftOutIn(v)) group.add(k);
 	const allOf = v.get("allOf");
 	if (Array.isArray(allOf)) {
-		// Every member is the same object: a property one member leaves out of this
-		// view stays out even where another member lists it as required.
-		const group = leftOutKeys(cx, v);
-		for (const k of cx.leftOutIn(v)) group.add(k);
-		const members = cx.withLeftOut(allOf, group, () =>
-			list(cx, allOf, child(at, "allOf")),
-		);
+		const members = membersIn(cx, allOf, group, child(at, "allOf"));
 		out.push(...passing(cx, v, allOf, admitted(allOf, members)));
 	}
 	// A closed object admits no key its $ref target or members have but it does not;
@@ -196,13 +194,13 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 			closedAmong(
 				cx,
 				members,
-				admitted(members, list(cx, members, child(at, key))),
+				admitted(members, membersIn(cx, members, group, child(at, key))),
 			),
 		);
 		out.push(
 			union(
 				key === "oneOf"
-					? shared(exclusive(cx, members, tys, child(at, key)))
+					? shared(exclusive(cx, members, tys, child(at, key), group))
 					: tys,
 			),
 		);
@@ -547,6 +545,44 @@ function typeless(m: JsonObject): boolean {
 	);
 }
 
+/**
+ * Members, converted knowing the keys the group leaves out of this view. A member that
+ * is only a `$ref` to a schema naming one of them is written out without it: the
+ * reference's own view would have it.
+ */
+function membersIn(
+	cx: Ctx,
+	members: Value[],
+	group: ReadonlySet<string>,
+	at: string,
+): Ty[] {
+	return cx.withLeftOut(members, group, () =>
+		members.map((m, i) => {
+			const where = child(at, String(i));
+			const r = str(m, "$ref");
+			if (
+				r === undefined ||
+				!(m as JsonObject).entries.every(
+					([k]) => k === "$ref" || isAnnotation(k),
+				)
+			)
+				return schema(cx, m, where);
+			const { value, base, uri, where: there } = cx.locate(r, where);
+			const named = cx.withBase(base, () => namedKeys(cx, value));
+			const own = cx.withBase(base, () => leftOutKeys(cx, value));
+			if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
+				return schema(cx, m, where);
+			try {
+				return cx.withBase(base, () =>
+					cx.withLeftOut([value], group, () => schema(cx, value, there)),
+				);
+			} finally {
+				cx.leave();
+			}
+		}),
+	);
+}
+
 /** A closed oneOf / anyOf member admits no key another member names. */
 function closedAmong(cx: Ctx, members: Value[], tys: Ty[]): Ty[] {
 	const named = members.map((m) => namedKeys(cx, m));
@@ -631,8 +667,17 @@ function byKind(m: Ty, value: Ty): boolean {
  * all of another's keys admits nothing. Other members stay as they are: TypeScript
  * cannot say what they do not admit.
  */
-function exclusive(cx: Ctx, members: Value[], tys: Ty[], at: string): Ty[] {
-	const keys = members.map((m, i) => keysOnly(cx, m, child(at, String(i))));
+function exclusive(
+	cx: Ctx,
+	members: Value[],
+	tys: Ty[],
+	at: string,
+	left: ReadonlySet<string>,
+): Ty[] {
+	// A key left out of this view is required on the other side only.
+	const keys = members.map((m, i) =>
+		keysOnly(cx, m, child(at, String(i)))?.filter((k) => !left.has(k)),
+	);
 	const without = (key: string, ty: Ty): Prop => ({ key, ty, optional: true });
 	return tys.map((t, i) => {
 		const own = keys[i];
@@ -1072,24 +1117,25 @@ function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
  */
 function leftOutKeys(cx: Ctx, v: Value, seen = new Set<string>()): Set<string> {
 	const keys = new Set<string>();
-	const props = get(v, "properties");
-	if (props instanceof JsonObject)
-		for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
-	const allOf = get(v, "allOf");
-	for (const m of Array.isArray(allOf) ? allOf : []) {
-		const r = str(m, "$ref");
-		if (r === undefined) {
+	const r = str(v, "$ref");
+	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
+	// are one schema.
+	if (r === undefined || cx.refSiblings) {
+		const props = get(v, "properties");
+		if (props instanceof JsonObject)
+			for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
+		const allOf = get(v, "allOf");
+		for (const m of Array.isArray(allOf) ? allOf : [])
 			for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
-			continue;
-		}
-		const target = cx.tryLocate(r);
-		if (target === undefined || seen.has(target.uri)) continue;
-		const { value, base, uri } = target;
-		seen.add(uri);
-		// The target's own $refs resolve against the document it is in.
-		for (const k of cx.withBase(base, () => leftOutKeys(cx, value, seen)))
-			keys.add(k);
 	}
+	const target = r === undefined ? undefined : cx.tryLocate(r);
+	if (target === undefined || seen.has(target.uri)) return keys;
+	seen.add(target.uri);
+	// The target's own $refs resolve against the document it is in.
+	for (const k of cx.withBase(target.base, () =>
+		leftOutKeys(cx, target.value, seen),
+	))
+		keys.add(k);
 	return keys;
 }
 
