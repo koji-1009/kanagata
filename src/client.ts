@@ -176,11 +176,13 @@ export interface RequestOptions extends FetchOptions {
 }
 
 /**
- * Where operation O is sent: an operation that declares servers is served by one of
- * them, named as the call's baseUrl; any other by the client's baseUrl.
+ * Where operation O is sent: an operation that declares servers is not served by the
+ * client's baseUrl, so the call names where it is: one of them, which are offered, or
+ * wherever this deployment serves it (servers are where the document says it is served,
+ * not the only URLs that serve it). Any other operation goes to the client's baseUrl.
  */
 type Server<O> = O extends { servers: infer S extends readonly unknown[] }
-	? { baseUrl: S[number] }
+	? { baseUrl: S[number] | (string & {}) }
 	: { baseUrl?: never };
 
 /** What a call's options must hold for operation O: its parameters, body and server. */
