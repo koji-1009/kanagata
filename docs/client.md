@@ -36,16 +36,16 @@ A method of `additionalOperations` (3.2) is called through `api.request`, named 
 
 ## Call options
 
-| Key                                 | Meaning                                                                                       |
-| ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| `baseUrl`                           | required for an operation that declares `servers`: one of them, used in place of the config's |
-| `path`, `query`, `header`, `cookie` | the parameters the operation declares                                                         |
-| `querystring`                       | the operation's `in: querystring` parameter (3.2), the whole query; see [Details](#details)   |
-| `body`, `contentType`               | the request body and which of the operation's media types it is                               |
-| `parseAs`                           | `json`, `text`, `blob`, `arrayBuffer` or `stream`: read the response this way                 |
-| `headers`                           | headers for this call                                                                         |
-| `arrayFormat`, `objectFormat`       | override the client's                                                                         |
-| fetch options                       | as in the config; a call's win. The client sets `method`, `headers` and `body` itself         |
+| Key                                 | Meaning                                                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `baseUrl`                           | required for an operation that declares `servers`: where it is served, in place of the config's |
+| `path`, `query`, `header`, `cookie` | the parameters the operation declares                                                           |
+| `querystring`                       | the operation's `in: querystring` parameter (3.2), the whole query; see [Details](#details)     |
+| `body`, `contentType`               | the request body and which of the operation's media types it is                                 |
+| `parseAs`                           | `json`, `text`, `blob`, `arrayBuffer` or `stream`: read the response this way                   |
+| `headers`                           | headers for this call                                                                           |
+| `arrayFormat`, `objectFormat`       | override the client's                                                                           |
+| fetch options                       | as in the config; a call's win. The client sets `method`, `headers` and `body` itself           |
 
 ## Result
 
@@ -100,7 +100,7 @@ async function getOk<Path extends PathsOf<paths, "get">>(
 
 ## Details
 
-- **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. So does a URL without an origin, such as `localhost:3000/api` (a URL of the scheme `localhost:`) or a `file:` URL: write its scheme (`http://localhost:3000/api`). `""` is the origin of the page's base URL. Its own query is kept, before the call's. An operation that declares `servers` (or whose path item does) is served there, not by the document's servers, so its call names one of them as `baseUrl`; other operations take the config's and cannot be given one.
+- **baseUrl:** a relative one resolves on every call as fetch resolves it: against the page's base URL, or the worker's location. Where there is neither (Node), it throws a TypeError. So does a URL without an origin, such as `localhost:3000/api` (a URL of the scheme `localhost:`) or a `file:` URL: write its scheme (`http://localhost:3000/api`). `""` is the origin of the page's base URL. Its own query is kept, before the call's. An operation that declares `servers` (or whose path item does) is not served by the document's servers, so its call names where it is as `baseUrl`: one of its servers, which the editor offers, or any other URL that serves it in this deployment (GitHub Enterprise Server, a proxy, a mock, or the origin of an `upload_url` read at run time). Its servers are where the document says it is served, not the only URLs that serve it, so the type takes any string; a trailing slash makes no difference, since the path goes after the base's path. Other operations take the config's and cannot be given one. The document's own `servers` are not read: `baseUrl` names where this client sends, which they do not limit.
 - **Headers:** the config's `headers`, then the call's header parameters, then its cookie parameters, then its `headers`; a later one replaces an earlier one of the same name. Cookie parameters go in the `cookie` header, which browsers do not let fetch set. A `Date` is sent as its ISO string.
 - **content-type** comes from the body, never from the config's `headers` (with or without a body); one in the call's `headers` replaces it, except for a multipart body made from an object or a `FormData`, which needs its boundary.
 - **Request bodies:** a value is sent as JSON (strings included), URL-encoded, or as `FormData`, by its media type; text and binary bodies as they are. A call whose `body` is left out or `undefined` (an optional `requestBody`) sends no body and no content-type, whatever the method.

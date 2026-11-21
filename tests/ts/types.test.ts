@@ -513,8 +513,14 @@ export async function operationServers(): Promise<void> {
 	await s.post("/assets", { baseUrl: "https://uploads-eu.example.com" });
 	// @ts-expect-error its server must be given
 	await s.post("/assets");
-	// @ts-expect-error only a server it declares
-	await s.post("/assets", { baseUrl: "https://api.example.com" });
+	// The servers it declares are offered, and any other URL is where this deployment
+	// serves it: GitHub Enterprise Server, a proxy, a mock, an origin read at run time.
+	await s.post("/assets", { baseUrl: "https://ghes.example.com/api/uploads" });
+	await s.post("/assets", { baseUrl: "/uploads" });
+	const origin: string = new URL("https://uploads.example.com/a").origin;
+	await s.post("/assets", { baseUrl: origin });
+	// @ts-expect-error a URL is a string
+	await s.post("/assets", { baseUrl: undefined });
 	// Other operations go to the client's baseUrl.
 	await s.get("/items");
 	// @ts-expect-error an operation without servers takes no baseUrl
@@ -526,12 +532,11 @@ export async function generatedServers(): Promise<void> {
 	const g = createClient<Servers.paths>({ baseUrl: "https://api.example.com" });
 	await g.post("/uploads", { baseUrl: "https://uploads-eu.example.com" });
 	await g.put("/uploads", { baseUrl: "https://files.example.com/" });
-	// @ts-expect-error the operation's own servers replace its path item's
-	await g.put("/uploads", { baseUrl: "https://uploads.example.com" });
-	// A variable is its enum's values, or any string without one.
+	// A trailing slash is the same base: the path goes after the base's path.
+	await g.put("/uploads", { baseUrl: "https://files.example.com" });
+	// A variable is its enum's values, or any string without one; other URLs pass too.
 	await g.get("/regional", { baseUrl: "https://eu.example.com" });
 	await g.get("/regional", { baseUrl: "https://eu.example.com/v3" });
-	// @ts-expect-error fr is not in the enum
 	await g.get("/regional", { baseUrl: "https://fr.example.com/v3" });
 	// A relative URL resolves against where the document is served.
 	await g.get("/regional", { baseUrl: "https://api.example.com/local" });
