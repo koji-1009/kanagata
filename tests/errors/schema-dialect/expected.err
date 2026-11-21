@@ -1,0 +1,1 @@
+#/components/schemas/Legacy/$schema: "http://json-schema.org/draft-07/schema#" is a dialect kanagata does not read: it reads JSON Schema 2020-12, the OAS dialect

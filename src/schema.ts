@@ -66,11 +66,38 @@ function unevaluated(v: JsonObject, key: string): Value | undefined {
 		: undefined;
 }
 
+/**
+ * Accepts a `$schema` or `jsonSchemaDialect` that names the dialect kanagata reads: JSON
+ * Schema 2020-12, or the OAS dialect built on it. Another dialect's keywords mean other
+ * things (draft-07's array `items`, `dependencies`), so it is an error.
+ */
+export function readDialect(at: string, id: Value): void {
+	const text = String(id);
+	if (
+		OAS_DIALECTS.some((prefix) => text.startsWith(prefix)) ||
+		text.replace(/#$/, "") === "https://json-schema.org/draft/2020-12/schema"
+	)
+		return;
+	throw new DiagError(
+		at,
+		`${JSON.stringify(id)} is a dialect kanagata does not read: it reads JSON Schema 2020-12, the OAS dialect`,
+	);
+}
+
+const OAS_DIALECTS = [
+	"https://spec.openapis.org/oas/3.1/dialect/",
+	"https://spec.openapis.org/oas/3.2/dialect/",
+];
+
 /** Converts a schema. */
 export function schema(cx: Ctx, v: Value, at: string): Ty {
 	if (v === true) return UNKNOWN;
 	if (v === false) return NEVER;
 	if (!(v instanceof JsonObject)) return UNKNOWN; // not a schema
+	// A 3.0 Schema Object has no $schema.
+	const dialect = v.get("$schema");
+	if (dialect !== undefined && cx.refSiblings)
+		readDialect(child(at, "$schema"), dialect);
 	// This schema is where `raw` says; the schemas in it are elsewhere unless they say.
 	const saved = cx.here;
 	cx.here = cx.raw;

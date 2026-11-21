@@ -6,7 +6,7 @@ import { inputNames, typeNames } from "./ident.ts";
 import { get, JsonObject, parse, type Value } from "./json.ts";
 import { paths } from "./operation.ts";
 import { Ctx, child, type Diag, DiagError, type Hoisted } from "./pointer.ts";
-import { schema, schemaDoc } from "./schema.ts";
+import { readDialect, schema, schemaDoc } from "./schema.ts";
 import {
 	admitsAny,
 	bareRefs,
@@ -89,6 +89,11 @@ export function generate(
 		},
 		options.looseNullable === true,
 	);
+
+	// The default $schema of the document's schemas (3.1, 3.2).
+	const dialect = root.get("jsonSchemaDialect");
+	if (cx.refSiblings && dialect !== undefined)
+		readDialect("#/jsonSchemaDialect", dialect);
 
 	const p = paths(cx, root);
 

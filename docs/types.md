@@ -47,6 +47,8 @@ An operation's `callbacks` are requests the API sends to a URL its runtime expre
 
 Types follow what the schema accepts, not another generator's output.
 
+In 3.1 and 3.2, a Schema Object is JSON Schema 2020-12, the OAS dialect. A `$schema`, or the document's `jsonSchemaDialect`, that names another dialect (`http://json-schema.org/draft-07/schema#`, 2019-09) is an error, since its keywords mean other things (draft-07's array `items`); the OAS dialect ids (`https://spec.openapis.org/oas/3.1/dialect/base`) and `https://json-schema.org/draft/2020-12/schema` are read. A 3.0 Schema Object has no `$schema`, and 3.0 no `jsonSchemaDialect`: they are not read.
+
 | Schema                                                                                                                                           | TypeScript                                                                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `true`, `{}`                                                                                                                                     | `unknown`                                                                                                                                                                                     |
