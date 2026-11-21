@@ -32,4 +32,7 @@ export type Conditions = Empty | Path;
 
 export type OneKey = Record<string, unknown>;
 
-export type Untyped = unknown;
+/** Without type, maxProperties 0 is an object keyword like the others: the empty object. */
+export type Untyped = {
+  [key: string]: never;
+};

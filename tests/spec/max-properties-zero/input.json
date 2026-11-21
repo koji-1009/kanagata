@@ -9,7 +9,7 @@
       "Path": { "type": "object", "required": ["path"], "properties": { "path": { "type": "string" } } },
       "Conditions": { "oneOf": [{ "$ref": "#/components/schemas/Empty" }, { "$ref": "#/components/schemas/Path" }] },
       "OneKey": { "type": "object", "maxProperties": 1 },
-      "Untyped": { "maxProperties": 0 }
+      "Untyped": { "description": "Without type, maxProperties 0 is an object keyword like the others: the empty object.", "maxProperties": 0 }
     }
   }
 }

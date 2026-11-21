@@ -1466,7 +1466,9 @@ function hasObjectKeywords(v: JsonObject): boolean {
 			"additionalProperties",
 			"required",
 		].some((k) => v.get(k) !== undefined) ||
-		unevaluated(v, "unevaluatedProperties") !== undefined
+		unevaluated(v, "unevaluatedProperties") !== undefined ||
+		// maxProperties 0 says what keys an object has (none); other counts admit every object.
+		count(v, "maxProperties") === 0
 	);
 }
 
