@@ -251,6 +251,38 @@ export class Ctx {
 		}
 	}
 
+	/**
+	 * The schemas around the one being converted whose keywords apply to the same value:
+	 * it is their member (`allOf`, `if`, …) or `$ref` target, innermost last. A property's
+	 * or item's schema is another value, with none around it.
+	 */
+	around: readonly JsonObject[] = [];
+	/** What `around` is for the schema converted next. */
+	#nextAround: readonly JsonObject[] | undefined;
+
+	/** Converts with `parent` around the schema converted next, then restores. */
+	withAround<T>(parent: JsonObject, f: () => T): T {
+		const saved = this.#nextAround;
+		this.#nextAround = [...this.around, parent];
+		try {
+			return f();
+		} finally {
+			this.#nextAround = saved;
+		}
+	}
+
+	/** Converts a schema with what `withAround` gave it, or nothing, around it. */
+	inSchema<T>(f: () => T): T {
+		const saved = this.around;
+		this.around = this.#nextAround ?? [];
+		this.#nextAround = undefined;
+		try {
+			return f();
+		} finally {
+			this.around = saved;
+		}
+	}
+
 	/** Properties left out of the current view by the other members of the `allOf` a schema is in. */
 	readonly #leftOut = new Map<Value, ReadonlySet<string>>();
 

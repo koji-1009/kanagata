@@ -1,0 +1,168 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/accounts": {
+      "post": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Account" } } } },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Cat": { "type": "object", "properties": { "kind": { "type": "string" } } },
+      "Card": { "type": "object", "required": ["number"], "properties": { "number": { "type": "string" } } },
+      "Bank": { "type": "object", "required": ["iban"], "properties": { "iban": { "type": "string" } } },
+      "Extends": {
+        "description": "allOf and $ref evaluate their properties: the type is what it is without the keyword.",
+        "allOf": [{ "$ref": "#/components/schemas/Cat" }],
+        "properties": { "a": { "type": "string" } },
+        "unevaluatedProperties": false
+      },
+      "Outside": {
+        "description": "A key nothing evaluates is not admitted, even required.",
+        "allOf": [{ "$ref": "#/components/schemas/Cat" }],
+        "required": ["z"],
+        "unevaluatedProperties": false
+      },
+      "Either": {
+        "description": "A oneOf member's properties are evaluated where it is the member that matches.",
+        "type": "object",
+        "oneOf": [{ "$ref": "#/components/schemas/Card" }, { "$ref": "#/components/schemas/Bank" }],
+        "unevaluatedProperties": false
+      },
+      "Typed": {
+        "description": "A schema types the keys nothing else evaluates; non-objects pass it.",
+        "type": ["object", "string"],
+        "properties": { "a": { "type": "string" } },
+        "anyOf": [{ "properties": { "b": { "type": "string" } } }, { "type": "string" }],
+        "unevaluatedProperties": { "type": "integer" }
+      },
+      "Conditional": {
+        "description": "if and then evaluate where if admits the value, else where it does not.",
+        "type": "object",
+        "properties": { "kind": { "enum": ["a", "b"] } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "properties": { "x": { "type": "string" } } },
+        "else": { "properties": { "y": { "type": "string" } } },
+        "unevaluatedProperties": false
+      },
+      "Dependent": {
+        "description": "A dependent schema evaluates where its key is present.",
+        "type": "object",
+        "properties": { "card": { "type": "string" } },
+        "dependentSchemas": { "card": { "properties": { "billing": { "type": "string" } } } },
+        "unevaluatedProperties": false
+      },
+      "Nested": {
+        "description": "A member evaluates what its own members evaluate where they match.",
+        "type": "object",
+        "allOf": [{ "oneOf": [{ "properties": { "a": { "type": "string" } }, "required": ["a"] }, { "properties": { "b": { "type": "string" } }, "required": ["b"] }] }],
+        "unevaluatedProperties": false
+      },
+      "Everything": {
+        "description": "additionalProperties in a member evaluates every key, and so does a member's own unevaluatedProperties.",
+        "type": "object",
+        "allOf": [{ "additionalProperties": true }, { "unevaluatedProperties": { "type": "string" } }],
+        "unevaluatedProperties": false
+      },
+      "Patterned": {
+        "description": "A key a member's pattern matches is evaluated; one nothing names but required is not.",
+        "type": "object",
+        "allOf": [{ "patternProperties": { "^x-": { "type": "string" } } }],
+        "required": ["x-a", "b"],
+        "unevaluatedProperties": false
+      },
+      "Named": {
+        "description": "Keys dependentRequired and propertyNames name are left out where nothing evaluates them.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "dependentRequired": { "a": ["c"] },
+        "propertyNames": { "enum": ["a", "c", "d"] },
+        "allOf": [{}],
+        "unevaluatedProperties": false
+      },
+      "ElseOnly": {
+        "description": "Without then, if alone evaluates where it admits the value.",
+        "type": "object",
+        "properties": { "kind": { "enum": ["a", "b"] } },
+        "if": { "properties": { "kind": { "const": "a" }, "w": { "type": "string" } } },
+        "else": { "properties": { "y": { "type": "string" } } },
+        "unevaluatedProperties": false
+      },
+      "ThenOnly": {
+        "description": "Without else, nothing more is evaluated where if does not admit the value.",
+        "type": "object",
+        "if": { "required": ["a"] },
+        "then": { "properties": { "x": { "type": "string" } } },
+        "unevaluatedProperties": false
+      },
+      "Deep": {
+        "description": "A member's members evaluate where both match.",
+        "type": "object",
+        "oneOf": [
+          { "oneOf": [{ "properties": { "a": { "type": "string" } }, "required": ["a"] }, { "properties": { "b": { "type": "string" } }, "required": ["b"] }] },
+          { "properties": { "c": { "type": "string" } }, "required": ["c"] }
+        ],
+        "unevaluatedProperties": false
+      },
+      "BranchPattern": {
+        "description": "A member's patterns evaluate the keys they match where it matches.",
+        "type": "object",
+        "required": ["x-a"],
+        "anyOf": [{ "patternProperties": { "^x-": { "type": "string" } } }, { "properties": { "a": { "type": "string" } } }],
+        "unevaluatedProperties": false
+      },
+      "Account": {
+        "description": "A member's own keyword sees only what the member evaluates, in the view it is in: not the id its parent declares.",
+        "type": "object",
+        "properties": { "id": { "type": "string", "readOnly": true } },
+        "allOf": [{ "oneOf": [{ "properties": { "a": { "type": "string" } } }, { "properties": { "b": { "type": "string" } } }], "unevaluatedProperties": false }]
+      },
+      "Alone": {
+        "description": "Without an applicator they are additionalProperties and items, which say the value is an object or an array.",
+        "oneOf": [{ "unevaluatedProperties": { "type": "string" } }, { "unevaluatedItems": { "type": "number" } }]
+      },
+      "Prefix": {
+        "description": "Items past those prefixItems evaluate are not admitted.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "allOf": [{ "prefixItems": [{ "type": "string" }, { "type": "number" }] }],
+        "unevaluatedItems": false
+      },
+      "Alternatives": {
+        "description": "Each member evaluates its own prefix where it matches; the others are typed by the keyword.",
+        "type": "array",
+        "oneOf": [{ "prefixItems": [{ "const": "one" }] }, { "prefixItems": [{ "const": "two" }, { "type": "string" }] }],
+        "unevaluatedItems": { "type": "boolean" }
+      },
+      "DeepItems": {
+        "description": "A member that evaluates every item, and a member's member that evaluates a prefix.",
+        "type": "array",
+        "anyOf": [{ "anyOf": [{ "prefixItems": [{ "type": "string" }] }] }, { "items": { "type": "number" } }],
+        "unevaluatedItems": false
+      },
+      "AllItems": {
+        "description": "items in a member evaluates every item.",
+        "type": "array",
+        "allOf": [{ "items": { "type": "string" } }],
+        "unevaluatedItems": false
+      },
+      "Contains": {
+        "description": "contains evaluates the items that match it, which no type says.",
+        "type": "array",
+        "allOf": [{ "contains": { "type": "string" } }],
+        "unevaluatedItems": false
+      },
+      "Undecided": {
+        "description": "else evaluates where if does not admit the value, which TypeScript cannot say here.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "properties": { "x": { "type": "string" } } },
+        "else": { "properties": { "y": { "type": "string" } } },
+        "unevaluatedProperties": false
+      }
+    }
+  }
+}

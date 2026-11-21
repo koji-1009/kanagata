@@ -1,0 +1,3 @@
+#/components/schemas/Integer/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/Count/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/Unread/if: if / then / else cannot be expressed in TypeScript; ignored

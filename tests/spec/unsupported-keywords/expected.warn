@@ -1,4 +1,3 @@
 #/components/schemas/Cond/if: if / then / else cannot be expressed in TypeScript; ignored
-#/components/schemas/Cond/dependentSchemas: dependentSchemas cannot be expressed in TypeScript; ignored
 #/components/schemas/Cond/unevaluatedProperties: unevaluatedProperties next to an applicator cannot be expressed in TypeScript; ignored
 #/components/schemas/Contains/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

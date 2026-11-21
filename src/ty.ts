@@ -539,13 +539,24 @@ function narrow(items: Ty[]): Ty[] {
 
 /** The kinds of value a type admits, where its form says so: `{ a: A }` objects, `string | A[]` strings and arrays. */
 function kindSet(t: Ty): ValueKind[] | undefined {
-	const one = (m: Ty): ValueKind | undefined =>
-		kindsOf(m)?.[0] ??
-		valueKind(m) ??
-		(m.kind === "null" ? "null" : m.kind === "array" ? "array" : undefined);
+	if (t.kind === "inter") {
+		// The kinds every member it says them of allows.
+		const sets = t.items.map(kindSet).filter((s) => s !== undefined);
+		return sets.length === 0
+			? undefined
+			: sets.reduce((a, b) => a.filter((k) => b.some((o) => meets(k, o))));
+	}
+	const one = (m: Ty): ValueKind[] | undefined => {
+		if (m.kind === "inter") return kindSet(m);
+		const k =
+			kindsOf(m)?.[0] ??
+			valueKind(m) ??
+			(m.kind === "null" ? "null" : m.kind === "array" ? "array" : undefined);
+		return k === undefined ? undefined : [k];
+	};
 	const kinds = (t.kind === "union" ? t.items : [t]).map(one);
 	return kinds.every((k) => k !== undefined)
-		? (kinds as ValueKind[])
+		? (kinds as ValueKind[][]).flat()
 		: undefined;
 }
 
@@ -633,6 +644,13 @@ function valueKey(m: Ty): string {
 		e++;
 	}
 	return `#${sign}${digits}e${e}`;
+}
+
+/** Whether two types of JSON values are the same value: literals by value (`1` and `1.0`), others by structure. */
+export function equalValues(a: Ty, b: Ty): boolean {
+	return a.kind === "lit" && b.kind === "lit"
+		? valueKey(a) === valueKey(b)
+		: equal(a, b);
 }
 
 /** Whether a value (`"a"`, `1.5`, `null`, an exact object) is of one of these kinds. */

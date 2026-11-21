@@ -13,7 +13,11 @@ export interface schemas {
 
 export type Cond = {
   kind?: string;
-};
+} & ({
+  kind?: never;
+} | {
+  x: {} | null;
+});
 
 export type Names = {
   a?: unknown;
