@@ -12,7 +12,15 @@ export interface paths {
   };
   "/regional": {
     get: {
-      servers: [string, "/local"];
+      servers: [`https://${string}.example.com`, `https://${"us" | "eu"}.example.com/${string}`, `${string}/local`, `${string}/v2/${"beta"}`, `https://x.example.com/\`$${string}\``];
+      responses: {
+        204: {};
+      };
+    };
+  };
+  "/here": {
+    get: {
+      servers: [string];
       responses: {
         204: {};
       };

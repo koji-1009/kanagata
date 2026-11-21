@@ -112,7 +112,23 @@ type BodyVariant<K, T> =
 				?
 						| { contentType: K; body: BodyOf<T> }
 						| { contentType?: K; body: URLSearchParams }
-				: { contentType: K; body: BodyOf<T> };
+				: RangeVariant<K, T>;
+
+/**
+ * A media type range (`image/*`) is named as written, or as a media type it covers
+ * (`image/png`), which is sent. Under `*\/*` and `application/*` a covered type may be
+ * one the client encodes a value by (JSON, a form), so naming it takes a raw body.
+ */
+type RangeVariant<K, T> = K extends `${infer R}/*` | `${infer R}/*;${string}`
+	? R extends "*" | "application"
+		?
+				| { contentType: K; body: BodyOf<T> }
+				| {
+						contentType: R extends "*" ? string : `application/${string}`;
+						body: string | RawBinary;
+				  }
+		: { contentType: K | `${R}/${string}`; body: BodyOf<T> }
+	: { contentType: K; body: BodyOf<T> };
 
 type BodyVariants<B> = B extends { content: infer C }
 	? { [K in keyof C & string]: BodyVariant<K, C[K]> }[keyof C & string]

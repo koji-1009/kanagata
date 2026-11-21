@@ -526,8 +526,15 @@ export async function generatedServers(): Promise<void> {
 	await g.put("/uploads", { baseUrl: "https://files.example.com/" });
 	// @ts-expect-error the operation's own servers replace its path item's
 	await g.put("/uploads", { baseUrl: "https://uploads.example.com" });
-	// A URL with variables is any string.
+	// A variable is its enum's values, or any string without one.
 	await g.get("/regional", { baseUrl: "https://eu.example.com" });
+	await g.get("/regional", { baseUrl: "https://eu.example.com/v3" });
+	// @ts-expect-error fr is not in the enum
+	await g.get("/regional", { baseUrl: "https://fr.example.com/v3" });
+	// A relative URL resolves against where the document is served.
+	await g.get("/regional", { baseUrl: "https://api.example.com/local" });
+	await g.get("/regional", { baseUrl: "/local" });
+	await g.get("/here", { baseUrl: "https://api.example.com/docs/" });
 	await g.get("/plain");
 }
 
@@ -611,6 +618,39 @@ export async function wildcard(): Promise<void> {
 	await w.post("/upload", { body: "x" });
 	// @ts-expect-error the body follows the media type's schema
 	await w.post("/upload", { body: 1, contentType: "*/*" });
+	// A media type the range covers can be named, and is sent, with a raw body.
+	await w.post("/upload", { body: new Blob([]), contentType: "image/png" });
+	const r = createClient<RangePaths>({ baseUrl: "https://api.test" });
+	await r.post("/image", { body: new Blob([]), contentType: "image/png" });
+	await r.post("/image", { body: new Blob([]), contentType: "image/*" });
+	// @ts-expect-error text/plain is not an image
+	await r.post("/image", { body: new Blob([]), contentType: "text/plain" });
+	await r.post("/text", { body: "a,b", contentType: "text/csv" });
+	await r.post("/app", { body: { a: 1 }, contentType: "application/*" });
+	await r.post("/app", { body: "<a/>", contentType: "application/xml" });
+	// @ts-expect-error a value the client would encode by its media type needs the range
+	await r.post("/app", { body: { a: 1 }, contentType: "application/xml" });
+}
+
+interface RangePaths {
+	"/image": {
+		post: {
+			requestBody: { content: { "image/*": Blob } };
+			responses: { 204: Record<never, never> };
+		};
+	};
+	"/text": {
+		post: {
+			requestBody: { content: { "text/*": string } };
+			responses: { 204: Record<never, never> };
+		};
+	};
+	"/app": {
+		post: {
+			requestBody: { content: { "application/*": { a: number } } };
+			responses: { 204: Record<never, never> };
+		};
+	};
 }
 
 export async function plusJson(): Promise<void> {

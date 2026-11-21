@@ -17,8 +17,17 @@
       "get": {
         "servers": [
           { "url": "https://{region}.example.com", "variables": { "region": { "default": "us" } } },
-          { "url": "/local" }
+          { "url": "https://{region}.example.com/{version}", "variables": { "region": { "enum": ["us", "eu"], "default": "us" }, "version": { "default": "v1" } } },
+          { "url": "/local" },
+          { "url": "../v2/{stage}", "variables": { "stage": { "enum": ["beta"], "default": "beta" } } },
+          { "url": "https://x.example.com/`${a}`" }
         ],
+        "responses": { "204": { "description": "ok" } }
+      }
+    },
+    "/here": {
+      "get": {
+        "servers": [{ "url": "./" }],
         "responses": { "204": { "description": "ok" } }
       }
     },

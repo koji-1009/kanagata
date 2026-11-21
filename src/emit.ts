@@ -49,6 +49,7 @@ export class Out {
 				this.buf += "Record<string, unknown>";
 				break;
 			case "lit":
+			case "template":
 				this.buf += t.text;
 				break;
 			case "ref":

@@ -29,6 +29,8 @@ export type Ty =
 	| { kind: "record" }
 	/** Literal in JSON notation: `"admin"` with quotes, `1`, `true`. */
 	| { kind: "lit"; text: string }
+	/** A template literal type, as printed: `` `https://${"us" | "eu"}.example.com` ``. */
+	| { kind: "template"; text: string }
 	/** A component schema, by its key in `components.schemas`; named when emitted. */
 	| { kind: "ref"; schema: string; view: View }
 	/** `operations[id]` */
@@ -112,7 +114,8 @@ export function equal(
 		});
 	switch (a.kind) {
 		case "lit":
-			return b.kind === "lit" && a.text === b.text;
+		case "template":
+			return b.kind === a.kind && a.text === (b as { text: string }).text;
 		case "ref":
 			return (
 				b.kind === "ref" &&

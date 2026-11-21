@@ -1,7 +1,7 @@
 // Paths, webhooks and operations → `Ty`.
 
 import { isBinaryMedia, isFormMedia, isTextMedia, METHODS } from "./client.ts";
-import { JsonObject, type Value } from "./json.ts";
+import { get, JsonObject, type Value } from "./json.ts";
 import { type Ctx, child, DiagError } from "./pointer.ts";
 import { doc, schema } from "./schema.ts";
 import {
@@ -377,8 +377,10 @@ function operation(
 }
 
 /**
- * The URLs of a non-empty `servers`, as literals; a URL with variables (`{region}`) is
- * any string, since TypeScript cannot check the template.
+ * The URLs of a non-empty `servers`: a literal, or a template where a variable is the
+ * values its `enum` lists (any string without one). A relative URL resolves against
+ * where the document is served, which the types do not know: it is any URL that ends
+ * the way it does (`/v2` is `` `${string}/v2` ``).
  */
 function serverUrls(owner: JsonObject, ownerAt: string): Ty[] | undefined {
 	const at = child(ownerAt, "servers");
@@ -388,8 +390,36 @@ function serverUrls(owner: JsonObject, ownerAt: string): Ty[] | undefined {
 		const url = s instanceof JsonObject ? s.str("url") : undefined;
 		if (url === undefined)
 			throw new DiagError(child(at, String(i)), "a server must have a url");
-		return url.includes("{") ? STRING : lit(JSON.stringify(url));
+		return serverUrl(url, get(s, "variables"));
 	});
+}
+
+function serverUrl(url: string, variables: Value | undefined): Ty {
+	// A URL with a scheme is absolute; otherwise what is left past ./ and ../ ends it.
+	const absolute = /^[a-z][a-z0-9+.-]*:/i.test(url);
+	const end = absolute
+		? url
+		: url.replace(/^(\.{1,2}\/)+/, "").replace(/^\//, "");
+	if (!absolute && end === "") return STRING;
+	const parts = end.split(/\{([^}]*)\}/);
+	if (absolute && parts.length === 1) return lit(JSON.stringify(url));
+	const text = (s: string) =>
+		s.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
+	const hole = (name: string) => {
+		const e = get(get(variables, name), "enum");
+		const values = Array.isArray(e)
+			? e.filter((x): x is string => typeof x === "string")
+			: [];
+		return values.length === 0
+			? "string"
+			: values.map((x) => JSON.stringify(x)).join(" | ");
+	};
+	const body = parts
+		.map((p, j) => (j % 2 === 0 ? text(p) : `\${${hole(p)}}`))
+		.join("");
+	// A relative URL starts with whatever leads to where it ends.
+	const lead = absolute ? "" : `\${${"string"}}/`;
+	return { kind: "template", text: `\`${lead}${body}\`` };
 }
 
 function collectParams(
