@@ -34,6 +34,10 @@ export interface schemas {
   ContainsNoString: ContainsNoString;
   ContainsFew: ContainsFew;
   ContainsNoX: ContainsNoX;
+  ContainsNoA: ContainsNoA;
+  ContainsNoShort: ContainsNoShort;
+  ContainsNoObject: ContainsNoObject;
+  ContainsPastPrefix: ContainsPastPrefix;
   NoDeps: NoDeps;
   OrNull: OrNull;
 }
@@ -136,6 +140,18 @@ export type ContainsFew = [unknown, ...unknown[]];
 
 /** As is maxContains 0 with a contains TypeScript cannot leave out. */
 export type ContainsNoX = string[];
+
+/** maxContains 0: the values items lists that contains rejects. */
+export type ContainsNoA = ("b" | "c")[];
+
+/** As contains's keywords read them. */
+export type ContainsNoShort = "bb"[];
+
+/** Not where they cannot tell. */
+export type ContainsNoObject = "a"[];
+
+/** Nor past prefixItems, whose items items does not list. */
+export type ContainsPastPrefix = [string?, ...("a" | "b")[]];
 
 /** dependentRequired with no keys asks nothing. */
 export type NoDeps = Record<string, unknown>;
