@@ -1,0 +1,1 @@
+#/jsonSchemaDialect: "https://json-schema.org/draft/2019-09/schema" is a dialect kanagata does not read: it reads JSON Schema 2020-12, the OAS dialect

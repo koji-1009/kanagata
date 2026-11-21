@@ -1,0 +1,12 @@
+{
+  "openapi": "3.0.3",
+  "paths": {
+    "/applications/{client_id}/grant": {
+      "delete": {
+        "parameters": [{ "name": "client_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "access_token": { "type": "string" } }, "required": ["access_token"] } } } },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  }
+}

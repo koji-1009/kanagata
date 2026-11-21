@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "jsonSchemaDialect": "http://json-schema.org/draft-07/schema#",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Draft": { "description": "A 3.0 Schema Object has no $schema, and 3.0 no jsonSchemaDialect: they are not read.", "$schema": "http://json-schema.org/draft-04/schema#", "type": "number", "maximum": 2, "exclusiveMaximum": true, "enum": [1, 2] }
+    }
+  }
+}

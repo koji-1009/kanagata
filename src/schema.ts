@@ -66,11 +66,38 @@ function unevaluated(v: JsonObject, key: string): Value | undefined {
 		: undefined;
 }
 
+/**
+ * Accepts a `$schema` or `jsonSchemaDialect` that names the dialect kanagata reads: JSON
+ * Schema 2020-12, or the OAS dialect built on it. Another dialect's keywords mean other
+ * things (draft-07's array `items`, `dependencies`), so it is an error.
+ */
+export function readDialect(at: string, id: Value): void {
+	const text = String(id);
+	if (
+		OAS_DIALECTS.some((prefix) => text.startsWith(prefix)) ||
+		text.replace(/#$/, "") === "https://json-schema.org/draft/2020-12/schema"
+	)
+		return;
+	throw new DiagError(
+		at,
+		`${JSON.stringify(id)} is a dialect kanagata does not read: it reads JSON Schema 2020-12, the OAS dialect`,
+	);
+}
+
+const OAS_DIALECTS = [
+	"https://spec.openapis.org/oas/3.1/dialect/",
+	"https://spec.openapis.org/oas/3.2/dialect/",
+];
+
 /** Converts a schema. */
 export function schema(cx: Ctx, v: Value, at: string): Ty {
 	if (v === true) return UNKNOWN;
 	if (v === false) return NEVER;
 	if (!(v instanceof JsonObject)) return UNKNOWN; // not a schema
+	// A 3.0 Schema Object has no $schema.
+	const dialect = v.get("$schema");
+	if (dialect !== undefined && cx.refSiblings)
+		readDialect(child(at, "$schema"), dialect);
 	// This schema is where `raw` says; the schemas in it are elsewhere unless they say.
 	const saved = cx.here;
 	cx.here = cx.raw;
@@ -560,22 +587,54 @@ function keywordParts(
 			child(at, "propertyNames"),
 			"propertyNames cannot be expressed in TypeScript; ignored",
 		);
-	// contains requires minContains items (1 if not given) that match it; TypeScript can say how many.
-	if (v.get("contains") !== undefined) {
+	// contains requires from minContains (1 if not given) to maxContains items that match
+	// it; TypeScript can say how many, and which where every item matches or, for none,
+	// where it can say the values contains does not admit.
+	const contains = v.get("contains");
+	if (contains !== undefined) {
 		const min = count(v, "minContains") ?? 1;
-		if (min > 0)
-			parts.push(
-				widen(cx, v, "array", {
-					kind: "tuple",
-					items: Array.from({ length: min }, () => UNKNOWN),
-					min,
-					rest: UNKNOWN,
-				}),
+		const max = count(v, "maxContains");
+		const none = max === 0 ? negation(contains) : undefined;
+		const items = (n: number): Ty[] => Array.from({ length: n }, () => UNKNOWN);
+		if (max !== undefined && min > max)
+			parts.push(widen(cx, v, "array", NEVER));
+		else if (negation(contains) === NEVER) {
+			// Every item matches: the length is from min to max.
+			if (max !== undefined)
+				parts.push(
+					widen(cx, v, "array", { kind: "tuple", items: items(max), min }),
+				);
+			else if (min > 0)
+				parts.push(
+					widen(cx, v, "array", {
+						kind: "tuple",
+						items: items(min),
+						min,
+						rest: UNKNOWN,
+					}),
+				);
+		} else if (none !== undefined)
+			parts.push(widen(cx, v, "array", arrayTy(none)));
+		else {
+			if (min > 0)
+				parts.push(
+					widen(cx, v, "array", {
+						kind: "tuple",
+						items: items(min),
+						min,
+						rest: UNKNOWN,
+					}),
+				);
+			cx.warn(
+				child(at, "contains"),
+				"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
 			);
-		cx.warn(
-			child(at, "contains"),
-			"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
-		);
+			if (max !== undefined)
+				cx.warn(
+					child(at, "maxContains"),
+					"maxContains cannot be expressed in TypeScript; ignored",
+				);
+		}
 	}
 	const n = v.get("not");
 	if (n !== undefined) {

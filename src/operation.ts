@@ -166,6 +166,7 @@ function pathItemsIn(
 					at: opAt,
 					sent,
 					body,
+					...(byApi ? {} : { path }),
 				}),
 			);
 			const opDoc = doc(op);
@@ -300,12 +301,14 @@ interface OperationAt {
 	sent: View;
 	/** Whether the request can have a body, so `requestBody` is read. */
 	body: boolean;
+	/** The path template, for a path's operation (not a webhook's name or a callback's expression). */
+	path?: string;
 }
 
 function operation(
 	cx: Ctx,
 	operations: Operations,
-	{ layers, itemAt, op: o, at, sent, body: hasBody }: OperationAt,
+	{ layers, itemAt, op: o, at, sent, body: hasBody, path }: OperationAt,
 ): Ty {
 	const fields: Prop[] = [];
 	const received: View = sent === "write" ? "read" : "write";
@@ -327,6 +330,13 @@ function operation(
 	for (const l of layers)
 		cx.withBase(l.base, () => collectParams(cx, params, l.item, itemAt));
 	collectParams(cx, params, o, at);
+	// Each template expression names a path parameter (OpenAPI requires it), which the call fills in.
+	for (const [, name] of (path ?? "").matchAll(/\{([^}]*)\}/g))
+		if (!params.some(([p]) => p.str("in") === "path" && p.str("name") === name))
+			throw new DiagError(
+				at,
+				`the path has {${name}}, which no path parameter declares; OpenAPI requires one for each`,
+			);
 	const groups: Prop[] = [];
 	for (const loc of LOCATIONS) {
 		// `in: querystring` is OpenAPI 3.2.

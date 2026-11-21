@@ -6,4 +6,7 @@
 #/components/schemas/PatternNames/propertyNames: propertyNames cannot be expressed in TypeScript; ignored
 #/components/schemas/MixedNames/propertyNames: propertyNames cannot be expressed in TypeScript; ignored
 #/components/schemas/ContainsNone/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
-#/components/schemas/ContainsEmpty/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/ContainsFew/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/ContainsFew/maxContains: maxContains cannot be expressed in TypeScript; ignored
+#/components/schemas/ContainsNoX/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/ContainsNoX/maxContains: maxContains cannot be expressed in TypeScript; ignored

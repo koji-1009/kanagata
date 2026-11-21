@@ -29,6 +29,11 @@ export interface schemas {
   MixedNames: MixedNames;
   ContainsNone: ContainsNone;
   ContainsEmpty: ContainsEmpty;
+  ContainsAtMost: ContainsAtMost;
+  ContainsTooMany: ContainsTooMany;
+  ContainsNoString: ContainsNoString;
+  ContainsFew: ContainsFew;
+  ContainsNoX: ContainsNoX;
   NoDeps: NoDeps;
   OrNull: OrNull;
 }
@@ -116,6 +121,21 @@ export type ContainsNone = string[];
 
 /** An item is more than maxItems 0 admits. */
 export type ContainsEmpty = never;
+
+/** Every item matches contains: maxContains bounds the length. */
+export type ContainsAtMost = [string, string?];
+
+/** minContains above maxContains admits no array. */
+export type ContainsTooMany = never;
+
+/** maxContains 0: no item is of the kind contains names. */
+export type ContainsNoString = number[];
+
+/** Other maxContains is ignored. */
+export type ContainsFew = [unknown, ...unknown[]];
+
+/** As is maxContains 0 with a contains TypeScript cannot leave out. */
+export type ContainsNoX = string[];
 
 /** dependentRequired with no keys asks nothing. */
 export type NoDeps = Record<string, unknown>;
