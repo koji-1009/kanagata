@@ -1,7 +1,81 @@
 // Turns `Ty` into TypeScript source text.
 
 import { isIdent, isNumericKey } from "./ident.ts";
-import type { Keyed, Prop, Ty, View } from "./ty.ts";
+import { equal, type Keyed, type Prop, type Ty, type View } from "./ty.ts";
+
+/**
+ * The helper types the output declares where it uses them. Their names are lower case,
+ * which no schema's name is (see `typeNames`).
+ */
+const HELPERS = {
+	repeated: `/** \`N\` times the items of \`T\`, by the digits \`D\` of \`N\`: \`repeated<[string?], 3>\` is \`[string?, string?, string?]\`. */
+export type repeated<T extends unknown[], N extends number, D extends string = \`\${N}\`, R extends unknown[] = []> = D extends \`\${infer F extends number}\${infer E}\`
+  ? repeated<T, N, E, [...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...[[], T, [...T, ...T], [...T, ...T, ...T], [...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T]][F]]>
+  : R;
+`,
+	integers: `/** The integers the decimal texts \`S\` spell: \`\`integers<\`1\${0 | 1}\`>\`\` is \`10 | 11\`. */
+export type integers<S extends string> = S extends \`\${infer N extends number}\` ? N : never;
+`,
+};
+
+type Helper = keyof typeof HELPERS;
+
+/** An integer literal TypeScript reads back from its text (`${infer N extends number}`), as a number. */
+function integerOf(t: Ty): number | undefined {
+	if (
+		t.kind !== "lit" ||
+		!/^-?(0|[1-9][0-9]*)$/.test(t.text) ||
+		t.text === "-0"
+	)
+		return undefined;
+	const n = Number(t.text);
+	return Number.isSafeInteger(n) ? n : undefined;
+}
+
+/** Template literal types of the decimal texts of the integers from `lo` to `hi`. */
+function spell(lo: number, hi: number): string[] {
+	const out: string[] = [];
+	if (lo < 0)
+		for (const s of unsigned(Math.max(1, -hi), -lo)) out.push(`-${s}`);
+	if (hi >= 0) out.push(...unsigned(Math.max(0, lo), hi));
+	return out.map((s) => `\`${s}\``);
+}
+
+/** The texts of the non-negative integers from `lo` to `hi`, by their number of digits. */
+function unsigned(lo: number, hi: number): string[] {
+	const [a, b] = [String(lo), String(hi)];
+	const out: string[] = [];
+	for (let n = a.length; n <= b.length; n++)
+		out.push(
+			...sameLength(
+				n === a.length ? a : `1${"0".repeat(n - 1)}`,
+				n === b.length ? b : "9".repeat(n),
+			),
+		);
+	return out;
+}
+
+/** The texts from `lo` to `hi`, of one length, as digits and sets of digits. */
+function sameLength(lo: string, hi: string): string[] {
+	if (lo === "") return [""];
+	const [a, b] = [Number(lo[0]), Number(hi[0])];
+	const [restLo, restHi] = [lo.slice(1), hi.slice(1)];
+	if (a === b) return sameLength(restLo, restHi).map((r) => `${a}${r}`);
+	const zeros = "0".repeat(restLo.length);
+	const nines = "9".repeat(restLo.length);
+	// The first and last digits take every rest only from or up to the bound.
+	const from = restLo === zeros ? a : a + 1;
+	const to = restHi === nines ? b : b - 1;
+	const out: string[] = [];
+	if (from !== a) out.push(...sameLength(restLo, nines).map((r) => `${a}${r}`));
+	if (from <= to) {
+		const set = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+		const d = set.length === 1 ? `${from}` : `\${${set.join(" | ")}}`;
+		out.push(...sameLength(zeros, nines).map((r) => `${d}${r}`));
+	}
+	if (to !== b) out.push(...sameLength(zeros, restHi).map((r) => `${b}${r}`));
+	return out;
+}
 
 /** The first line, naming the kanagata version when one is given. */
 function header(version: string | undefined): string {
@@ -19,6 +93,8 @@ export type Namer = (schema: string, view: View) => string;
 export class Out {
 	buf = "";
 	depth = 0;
+	/** The helper types written so far. */
+	readonly used = new Set<Helper>();
 	readonly #name: Namer;
 
 	constructor(name: Namer) {
@@ -63,23 +139,7 @@ export class Out {
 				this.buf += "[]";
 				break;
 			case "tuple":
-				this.buf += "[";
-				t.items.forEach((item, i) => {
-					if (i > 0) this.buf += ", ";
-					if (i < t.min) {
-						this.ty(item, Prec.Union);
-					} else {
-						this.ty(item, Prec.Postfix);
-						this.buf += "?";
-					}
-				});
-				if (t.rest !== undefined) {
-					if (t.items.length > 0) this.buf += ", ";
-					this.buf += "...";
-					this.ty(t.rest, Prec.Postfix);
-					this.buf += "[]";
-				}
-				this.buf += "]";
+				this.tuple(t);
 				break;
 			case "object":
 				this.object(t.props);
@@ -88,7 +148,7 @@ export class Out {
 				this.object(t.props, t.index, t.keyed);
 				break;
 			case "union":
-				this.list(t.items, " | ", ctx > Prec.Union, Prec.Union);
+				this.union(t.items, ctx > Prec.Union);
 				break;
 			case "inter":
 				this.list(t.items, " & ", ctx > Prec.Inter, Prec.Inter);
@@ -96,13 +156,100 @@ export class Out {
 		}
 	}
 
-	private list(items: Ty[], sep: string, paren: boolean, inner: Prec): void {
+	/** A type as text, written as it would be here. */
+	private text(t: Ty, ctx: Prec): string {
+		const outer = this.buf;
+		this.buf = "";
+		this.ty(t, ctx);
+		const text = this.buf;
+		this.buf = outer;
+		return text;
+	}
+
+	/** Types, or text written as it is, joined by `sep`. */
+	private list(
+		items: (Ty | string)[],
+		sep: string,
+		paren: boolean,
+		inner: Prec,
+	): void {
 		if (paren) this.buf += "(";
 		items.forEach((item, i) => {
 			if (i > 0) this.buf += sep;
-			this.ty(item, inner);
+			if (typeof item === "string") this.buf += item;
+			else this.ty(item, inner);
 		});
 		if (paren) this.buf += ")";
+	}
+
+	/**
+	 * `[A, B?, ...R[]]`. TypeScript bounds a length only item by item, so equal items in a
+	 * row are `...repeated<[T], n>` where that is shorter than writing each.
+	 */
+	private tuple(t: Extract<Ty, { kind: "tuple" }>): void {
+		const parts: (Ty | string)[] = [];
+		for (let i = 0; i < t.items.length; ) {
+			const first = t.items[i] as Ty;
+			const required = i < t.min;
+			let j = i + 1;
+			while (
+				j < t.items.length &&
+				j < t.min === required &&
+				equal(t.items[j] as Ty, first)
+			)
+				j++;
+			const item = required
+				? this.text(first, Prec.Union)
+				: `${this.text(first, Prec.Postfix)}?`;
+			const n = j - i;
+			const run = `...repeated<[${item}], ${n}>`;
+			if (run.length < n * item.length + (n - 1) * 2) {
+				this.used.add("repeated");
+				parts.push(run);
+			} else for (let k = 0; k < n; k++) parts.push(item);
+			i = j;
+		}
+		if (t.rest !== undefined)
+			parts.push(`...${this.text(t.rest, Prec.Postfix)}[]`);
+		this.buf += "[";
+		this.list(parts, ", ", false, Prec.Union);
+		this.buf += "]";
+	}
+
+	/**
+	 * Members joined by `|`. Integers in a row are `integers<…>`, spelled by their digits,
+	 * where that is shorter than listing each.
+	 */
+	private union(items: Ty[], paren: boolean): void {
+		const parts: (Ty | string)[] = [];
+		for (let i = 0; i < items.length; ) {
+			const first = integerOf(items[i] as Ty);
+			let j = i + 1;
+			if (first !== undefined)
+				while (
+					j < items.length &&
+					integerOf(items[j] as Ty) === first + (j - i)
+				)
+					j++;
+			const run = items.slice(i, j);
+			i = j;
+			if (run.length > 1) {
+				// An integer literal is written as its text.
+				const listed = run.reduce(
+					(n, t) => n + (t as { text: string }).text.length + 3,
+					-3,
+				);
+				const last = (first as number) + run.length - 1;
+				const spelled = `integers<${spell(first as number, last).join(" | ")}>`;
+				if (spelled.length < listed) {
+					this.used.add("integers");
+					parts.push(spelled);
+					continue;
+				}
+			}
+			parts.push(...run);
+		}
+		this.list(parts, " | ", paren && parts.length > 1, Prec.Union);
 	}
 
 	object(props: Prop[], index?: Ty, keyed: Keyed[] = []): void {
@@ -211,5 +358,7 @@ export function render(
 		out.ty(decl.ty, Prec.Union);
 		out.buf += ";\n";
 	}
+	for (const helper of Object.keys(HELPERS) as Helper[])
+		if (out.used.has(helper)) out.buf += `\n${HELPERS[helper]}`;
 	return out.buf;
 }

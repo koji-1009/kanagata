@@ -11,6 +11,7 @@ export interface schemas {
   Few: Few;
   Some: Some;
   Many: Many;
+  Objects: Objects;
   Empty: Empty;
   Contradiction: Contradiction;
   Head: Head;
@@ -41,11 +42,16 @@ export type UpToTwo = [string, string?];
 /** maxItems alone too. */
 export type Few = [string?, string?, string?];
 
-/** Every item up to maxItems is written out. */
-export type Some = [string, string?, string?, string?, string?, string?, string?, string?, string?, string?, string?, string?];
+/** Equal items in a row are repeated where that is shorter than writing each. */
+export type Some = [string, ...repeated<[string?], 11>];
 
-/** And every required one. */
-export type Many = [string, string, string, string, string, string, string, string, string, string, string, string, ...string[]];
+/** Required ones too. */
+export type Many = [...repeated<[string], 12>, ...string[]];
+
+/** An object type is written once. */
+export type Objects = [...repeated<[{
+  name: string;
+}?], 2>];
 
 /** maxItems 0 admits only the empty array. */
 export type Empty = [];
@@ -62,8 +68,8 @@ export type Short = [string?];
 /** maxItems past prefixItems adds optional items of the items schema. */
 export type HeadUpTo = [string, number?, number?];
 
-/** prefixItems are all written, however many. */
-export type LongHead = [unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, unknown?, string?];
+/** prefixItems are repeated where they are equal. */
+export type LongHead = [...repeated<[unknown?], 10>, string?];
 
 /** minItems past prefixItems requires items of the items schema. */
 export type Long = [string, number, number, ...number[]];
@@ -94,3 +100,8 @@ export type SplitRef = NonEmpty & [string];
 
 /** Array keywords constrain only arrays, so the strings type names pass them. */
 export type NotArray = string;
+
+/** `N` times the items of `T`, by the digits `D` of `N`: `repeated<[string?], 3>` is `[string?, string?, string?]`. */
+export type repeated<T extends unknown[], N extends number, D extends string = `${N}`, R extends unknown[] = []> = D extends `${infer F extends number}${infer E}`
+  ? repeated<T, N, E, [...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...[[], T, [...T, ...T], [...T, ...T, ...T], [...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T]][F]]>
+  : R;

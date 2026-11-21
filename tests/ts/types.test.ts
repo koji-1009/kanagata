@@ -13,10 +13,12 @@ import {
 	type ResultOf,
 } from "../../src/client.ts";
 import type * as AnyOf from "../spec/anyof/expected";
+import type * as ArrayLength from "../spec/array-length/expected";
 import type * as Basic from "../spec/basic/expected";
 import type * as Api from "../spec/client/expected";
 import type * as Composition from "../spec/composition-with-type/expected";
 import type * as Methods32 from "../spec/methods-32/expected";
+import type * as NumericRanges from "../spec/numeric-ranges/expected";
 import type * as Missing from "../spec/object-required-optional/expected";
 import type * as OneOfRequired from "../spec/oneof-required/expected";
 import type * as Cookies from "../spec/params-header-cookie/expected";
@@ -1020,4 +1022,80 @@ export function oneOfRequiredKeys(
 	const value = { a: 1, b: "x" };
 	const b: typeof mixed = value;
 	void [one, two, none, ab, ac, bc, abc, b];
+}
+
+/** 0 | 1 | … | N - 1. */
+type Below<N extends number, A extends number[] = []> = A["length"] extends N
+	? A[number]
+	: Below<N, [...A, A["length"]]>;
+
+export function repeatedItemsAndIntegers(): void {
+	// Equal items and integers in a row, written by the helpers, are the types written out.
+	expectType<
+		Equal<
+			ArrayLength.Some,
+			[
+				string,
+				string?,
+				string?,
+				string?,
+				string?,
+				string?,
+				string?,
+				string?,
+				string?,
+				string?,
+				string?,
+				string?,
+			]
+		>
+	>();
+	expectType<
+		Equal<
+			ArrayLength.Many,
+			[
+				string,
+				string,
+				string,
+				string,
+				string,
+				string,
+				string,
+				string,
+				string,
+				string,
+				string,
+				string,
+				...string[],
+			]
+		>
+	>();
+	expectType<
+		Equal<ArrayLength.Objects, [{ name: string }?, { name: string }?]>
+	>();
+	expectType<
+		Equal<
+			ArrayLength.LongHead,
+			[
+				unknown?,
+				unknown?,
+				unknown?,
+				unknown?,
+				unknown?,
+				unknown?,
+				unknown?,
+				unknown?,
+				unknown?,
+				unknown?,
+				string?,
+			]
+		>
+	>();
+	expectType<
+		Equal<
+			NumericRanges.Wide,
+			-12 | -11 | -10 | -9 | -8 | -7 | -6 | -5 | -4 | -3 | -2 | -1 | Below<346>
+		>
+	>();
+	expectType<Equal<NumericRanges.Offset, Exclude<Below<338>, Below<115>>>>();
 }

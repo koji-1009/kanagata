@@ -6,6 +6,8 @@
       "Range": { "type": "integer", "minimum": 1, "maximum": 5 },
       "Exclusive": { "type": "integer", "exclusiveMinimum": 0, "exclusiveMaximum": 4 },
       "Negative": { "type": "integer", "minimum": -2, "maximum": 1 },
+      "Wide": { "description": "Integers in a row are spelled by their digits where that is shorter than listing each.", "type": "integer", "minimum": -12, "maximum": 345 },
+      "Offset": { "description": "Digits past a bound's first are spelled from the bound.", "type": "integer", "minimum": 115, "maximum": 337 },
       "Fractional": { "description": "The integers between fractional bounds.", "type": "integer", "minimum": 0.5, "maximum": 3.5 },
       "Step": { "type": "integer", "minimum": 0, "maximum": 10, "multipleOf": 5 },
       "DecimalStep": { "description": "multipleOf makes a number range finite.", "type": "number", "minimum": 0, "maximum": 1, "multipleOf": 0.25 },

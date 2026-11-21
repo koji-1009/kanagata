@@ -1842,7 +1842,7 @@ function isBinaryString(v: JsonObject): boolean {
  * An array, or a tuple where `prefixItems`, `minItems` or `maxItems` say more: the first
  * `minItems` items are required, `prefixItems` types the first ones and `items` the rest
  * (absent means any; false, next to `prefixItems`, none), and `maxItems` closes the tuple,
- * which TypeScript bounds only by writing out every item.
+ * which TypeScript bounds only item by item.
  */
 function array(cx: Ctx, v: JsonObject, at: string): Ty {
 	// unevaluatedItems is items where nothing else evaluates the rest.
