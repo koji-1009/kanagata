@@ -176,7 +176,13 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 			),
 		);
 	}
-	return loose ? union([inter(out), NULL]) : inter(out);
+	// The schema's own keywords drop the literals (from const, enum, members) they reject.
+	const t = inter(out);
+	const members = t.kind === "union" ? t.items : [t];
+	const kept = members.every((m) => admitsLiteral(cx, v, m))
+		? t
+		: union(members.filter((m) => admitsLiteral(cx, v, m)));
+	return loose ? union([kept, NULL]) : kept;
 }
 
 /**
@@ -399,11 +405,11 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 function typed(cx: Ctx, v: JsonObject, t: string, at: string): Ty {
 	switch (t) {
 		case "string":
-			return isBinaryString(v) ? BLOB : STRING;
+			return isBinaryString(v) ? BLOB : text(v);
 		case "integer":
-			return INTEGER;
+			return numeric(cx, v, true);
 		case "number":
-			return NUMBER;
+			return numeric(cx, v, false);
 		case "boolean":
 			return BOOLEAN;
 		case "null":
@@ -416,6 +422,153 @@ function typed(cx: Ctx, v: JsonObject, t: string, at: string): Ty {
 			return UNKNOWN; // a type JSON Schema does not have says nothing
 	}
 }
+
+/** A string, unless its lengths admit only `""` (`maxLength: 0`) or none. */
+function text(v: JsonObject): Ty {
+	const max = count(v, "maxLength");
+	if (max === undefined) return STRING;
+	if ((count(v, "minLength") ?? 0) > max) return NEVER;
+	return max === 0 ? lit('""') : STRING;
+}
+
+/** A number (an integer if `integer`), unless its bounds admit only one or none. */
+function numeric(cx: Ctx, v: JsonObject, integer: boolean): Ty {
+	const { low, high } = bounds(cx, v);
+	if (low === undefined || high === undefined)
+		return integer ? INTEGER : NUMBER;
+	const order = compare(low.at, high.at);
+	if (order > 0 || (order === 0 && (low.open || high.open))) return NEVER;
+	if (!integer) return order === 0 ? lit(low.text) : NUMBER;
+	// The integers between the bounds: from the least one above low to the greatest below high.
+	const first = ceil(low.at) + (low.open && isWhole(low.at) ? 1n : 0n);
+	const last = floor(high.at) - (high.open && isWhole(high.at) ? 1n : 0n);
+	if (first > last) return NEVER;
+	return first === last ? lit(first.toString()) : INTEGER;
+}
+
+/** A bound on numbers: its value, as written, and whether it is exclusive. */
+interface Bound {
+	at: Decimal;
+	text: string;
+	open: boolean;
+}
+
+/**
+ * The tightest lower and upper bound. In 3.1 and 3.2 (JSON Schema 2020-12)
+ * `exclusiveMinimum` / `exclusiveMaximum` are numbers; in 3.0 they are booleans that
+ * make `minimum` / `maximum` exclusive.
+ */
+function bounds(cx: Ctx, v: JsonObject): { low?: Bound; high?: Bound } {
+	const num = (key: string, open: boolean): Bound | undefined => {
+		const n = v.get(key);
+		return n instanceof JsonNumber
+			? { at: decimal(n.text), text: n.text, open }
+			: undefined;
+	};
+	const side = (inclusive: string, exclusive: string, sign: number) => {
+		if (!cx.refSiblings) return num(inclusive, v.get(exclusive) === true);
+		const closed = num(inclusive, false);
+		const open = num(exclusive, true);
+		if (open === undefined) return closed;
+		// The exclusive one is tighter unless the inclusive one is past it.
+		return closed !== undefined && compare(closed.at, open.at) * sign > 0
+			? closed
+			: open;
+	};
+	const low = side("minimum", "exclusiveMinimum", 1);
+	const high = side("maximum", "exclusiveMaximum", -1);
+	return {
+		...(low === undefined ? {} : { low }),
+		...(high === undefined ? {} : { high }),
+	};
+}
+
+/**
+ * Whether a literal is one of the values a schema's own keywords for its kind admit:
+ * lengths and `pattern` for strings, bounds and `multipleOf` for numbers. A pattern
+ * JavaScript cannot read admits every string.
+ */
+function admitsLiteral(cx: Ctx, v: JsonObject, t: Ty): boolean {
+	if (t.kind !== "lit") return true;
+	if (t.text.startsWith('"')) {
+		const s = JSON.parse(t.text) as string;
+		const length = [...s].length;
+		if (length < (count(v, "minLength") ?? 0)) return false;
+		const max = count(v, "maxLength");
+		if (max !== undefined && length > max) return false;
+		const pattern = v.str("pattern");
+		return pattern === undefined || matches(pattern, s);
+	}
+	if (t.text === "true" || t.text === "false") return true;
+	const n = decimal(t.text);
+	const { low, high } = bounds(cx, v);
+	const beyond = (b: Bound | undefined, sign: number) => {
+		if (b === undefined) return false;
+		const order = compare(n, b.at) * sign;
+		return order < 0 || (order === 0 && b.open);
+	};
+	if (beyond(low, 1) || beyond(high, -1)) return false;
+	const m = v.get("multipleOf");
+	return !(m instanceof JsonNumber) || isMultiple(n, decimal(m.text));
+}
+
+/** Whether `s` matches an ECMA-262 pattern; true when JavaScript cannot read the pattern. */
+function matches(pattern: string, s: string): boolean {
+	try {
+		return new RegExp(pattern, "u").test(s);
+	} catch {
+		return true;
+	}
+}
+
+/** A JSON number exactly: `digits` × 10^-`scale`. */
+interface Decimal {
+	digits: bigint;
+	scale: number;
+}
+
+function decimal(text: string): Decimal {
+	// A JsonNumber's text is in JSON's grammar.
+	const [, int = "", frac = "", exp = "0"] =
+		/^(-?\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text) as RegExpExecArray;
+	const scale = frac.length - Number(exp);
+	const digits = BigInt(int + frac);
+	return scale >= 0
+		? { digits, scale }
+		: { digits: digits * 10n ** BigInt(-scale), scale: 0 };
+}
+
+/** a and b over one scale. */
+function aligned(a: Decimal, b: Decimal): [bigint, bigint] {
+	const scale = Math.max(a.scale, b.scale);
+	return [
+		a.digits * 10n ** BigInt(scale - a.scale),
+		b.digits * 10n ** BigInt(scale - b.scale),
+	];
+}
+
+function compare(a: Decimal, b: Decimal): number {
+	const [x, y] = aligned(a, b);
+	return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/** Whether a is a whole multiple of m; a `multipleOf` that is not positive admits all. */
+function isMultiple(a: Decimal, m: Decimal): boolean {
+	const [x, y] = aligned(a, m);
+	return y <= 0n || x % y === 0n;
+}
+
+const isWhole = (d: Decimal): boolean =>
+	d.digits % 10n ** BigInt(d.scale) === 0n;
+
+function floor(d: Decimal): bigint {
+	const unit = 10n ** BigInt(d.scale);
+	const q = d.digits / unit;
+	return d.digits < 0n && d.digits % unit !== 0n ? q - 1n : q;
+}
+
+const ceil = (d: Decimal): bigint =>
+	-floor({ digits: -d.digits, scale: d.scale });
 
 /**
  * Raw bytes: `format: binary` (3.0), or a binary `contentMediaType` without a

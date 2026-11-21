@@ -66,7 +66,7 @@ Types follow what the schema accepts, not another generator's output.
 | `readOnly` / `writeOnly` property                                                                                   | left out of what is sent to the API / what it sends                                                                                                                   |
 | `not`, `if` / `then` / `else`, `dependentSchemas`, `unevaluated*`, `$dynamicRef`                                    | ignored, with a warning                                                                                                                                               |
 | `dependentRequired`, `propertyNames`, `contains`                                                                    | ignored, with a warning                                                                                                                                               |
-| `pattern`, `minLength`, `maxLength`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`     | ignored, without a warning: the type admits every value they do, and more                                                                                             |
+| `pattern`, `minLength`, `maxLength`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`     | the `const` / `enum` values they reject are left out, and a string or number they admit one of (or none) is it; see [Values](#values)                                 |
 | `format` (other than `binary`), `uniqueItems`, `minProperties`, `maxProperties` (other than 0)                      | ignored, without a warning: the type admits every value they do, and more                                                                                             |
 
 ## Array length
@@ -79,6 +79,13 @@ An array is `T[]` until `prefixItems`, `minItems` or `maxItems` say more; then i
 - `maxItems` below `minItems`, or `minItems` past `prefixItems` with `items: false`, admits no array: `never`.
 - A `minItems` or `maxItems` that is not a non-negative integer is ignored.
 - Arrays and tuples in `allOf` (or next to each other) meet item by item: `{ allOf: [{ type: array, items: string }, { minItems: 2 }] }` is `[string, string, ...string[]]`. A `$ref` stays a reference, intersected: `{ allOf: [{ $ref: Tags }, { maxItems: 1 }] }` is `Tags & [unknown?]`, which checks the length, but TypeScript reads its items as `unknown`.
+
+## Values
+
+- `const` and `enum` values the schema's keywords for their kind reject are left out: `{ type: string, enum: [a, bbb], maxLength: 2 }` is `"a"`, and a `const` they reject is `never`. Lengths count characters (`"😀"` is one), `pattern` is an ECMA-262 pattern (one JavaScript cannot read leaves out nothing), and bounds and `multipleOf` compare decimal values (`0.3` is a multiple of `0.1`). A `multipleOf` that is not positive is not read.
+- In 3.0, `exclusiveMinimum` / `exclusiveMaximum` are booleans that make `minimum` / `maximum` exclusive; in 3.1 and 3.2 they are bounds of their own, and the tighter one applies.
+- `maxLength: 0` is `""`, and `minLength` above `maxLength` is `never`. Bounds that admit one number are it (`{ type: integer, minimum: 1.2, maximum: 2.5 }` is `2`), and bounds that admit none are `never`.
+- Other lengths are `string` and other ranges `number`, an integer range too (`{ type: integer, minimum: 1, maximum: 100 }` is `number`).
 
 ## `oneOf`
 
