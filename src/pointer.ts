@@ -118,6 +118,9 @@ const NO_KEYS: ReadonlySet<string> = new Set();
 /** Schema keywords a component may have next to `$ref` and still be another name for its target. */
 const ALIAS_KEYS = new Set(["$ref", "description", "title"]);
 
+/** Where bytes are bytes: a raw body, a multipart body (whose properties are its parts), a part. */
+export type RawPosition = "body" | "parts" | "part";
+
 /** A schema in another file that no component names, given a key of its own as if it were one. */
 export interface Hoisted {
 	key: string;
@@ -226,6 +229,26 @@ export class Ctx {
 
 	get warnings(): Diag[] {
 		return [...this.#warnings.values()];
+	}
+
+	/**
+	 * Where the schema converted next is: a raw body (a wildcard media type), a multipart
+	 * body's parts, or one part. A binary string is a `Blob` there, and text elsewhere
+	 * (inside JSON, a form, a parameter).
+	 */
+	raw: RawPosition | undefined = undefined;
+	/** Where the schema being converted is: `raw` when its conversion began. */
+	here: RawPosition | undefined = undefined;
+
+	/** Converts with `raw` as the position of the next schema, then restores it. */
+	withRaw<T>(pos: RawPosition | undefined, f: () => T): T {
+		const saved = this.raw;
+		this.raw = pos;
+		try {
+			return f();
+		} finally {
+			this.raw = saved;
+		}
 	}
 
 	/** Properties left out of the current view by the other members of the `allOf` a schema is in. */

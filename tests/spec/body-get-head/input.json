@@ -18,6 +18,17 @@
         "requestBody": { "content": { "application/x-www-form-urlencoded": { "schema": { "type": "object", "properties": { "expand": { "type": "string" } } } } } },
         "responses": { "204": { "description": "ok" } }
       }
+    },
+    "/search": {
+      "get": {
+        "requestBody": { "$ref": "#/components/requestBodies/Query" },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "requestBodies": {
+      "Query": { "required": true, "content": { "application/json": { "schema": { "type": "string" } } } }
     }
   },
   "webhooks": {

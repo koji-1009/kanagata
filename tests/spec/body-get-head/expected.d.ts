@@ -35,6 +35,13 @@ export interface paths {
       };
     };
   };
+  "/search": {
+    get: {
+      responses: {
+        204: {};
+      };
+    };
+  };
 }
 
 export interface webhooks {

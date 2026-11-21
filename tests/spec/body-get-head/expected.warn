@@ -1,0 +1,2 @@
+#/paths/~1items/head/requestBody: a required request body on GET or HEAD is left out: fetch cannot send one
+#/paths/~1search/get/requestBody: a required request body on GET or HEAD is left out: fetch cannot send one

@@ -17,7 +17,7 @@ import {
 	unescapeToken,
 	type Value,
 } from "./json.ts";
-import { type Ctx, child, DiagError } from "./pointer.ts";
+import { type Ctx, child, DiagError, type RawPosition } from "./pointer.ts";
 import {
 	array as arrayTy,
 	BLOB,
@@ -77,11 +77,65 @@ export function schema(cx: Ctx, v: Value, at: string): Ty {
 	if (v === true) return UNKNOWN;
 	if (v === false) return NEVER;
 	if (!(v instanceof JsonObject)) return UNKNOWN; // not a schema
-	// A schema with $id is a resource: $refs inside it resolve against its URI.
-	const id = v.str("$id");
-	if (id !== undefined && cx.refSiblings)
-		return cx.withBase(cx.baseOf(id), () => convert(cx, v, at));
-	return convert(cx, v, at);
+	// This schema is where `raw` says; the schemas in it are elsewhere unless they say.
+	const saved = cx.here;
+	cx.here = cx.raw;
+	try {
+		return cx.withRaw(undefined, () => {
+			// A schema with $id is a resource: $refs inside it resolve against its URI.
+			const id = v.str("$id");
+			if (id !== undefined && cx.refSiblings)
+				return cx.withBase(cx.baseOf(id), () => convert(cx, v, at));
+			return convert(cx, v, at);
+		});
+	} finally {
+		cx.here = saved;
+	}
+}
+
+/**
+ * Whether a schema has bytes where it is: a binary string as a body or a part, or a
+ * part that is one for a multipart body; through `$ref` and composition too.
+ */
+function binaryAt(
+	cx: Ctx,
+	v: Value,
+	pos: RawPosition,
+	seen = new Set<string>(),
+): boolean {
+	if (!(v instanceof JsonObject)) return false;
+	const r = v.str("$ref");
+	const target = r === undefined ? undefined : cx.tryLocate(r);
+	if (target !== undefined && !seen.has(target.uri)) {
+		seen.add(target.uri);
+		if (cx.withBase(target.base, () => binaryAt(cx, target.value, pos, seen)))
+			return true;
+	}
+	const inPlace = ["allOf", "oneOf", "anyOf"].flatMap((k) => {
+		const m = v.get(k);
+		return Array.isArray(m) ? m : [];
+	});
+	if (inPlace.some((m) => binaryAt(cx, m, pos, seen))) return true;
+	if (pos === "parts") {
+		const props = v.get("properties");
+		const pp = v.get("patternProperties");
+		return [
+			...(props instanceof JsonObject ? props.entries.map(([, s]) => s) : []),
+			...(pp instanceof JsonObject ? pp.entries.map(([, s]) => s) : []),
+			v.get("additionalProperties"),
+		].some((s) => s !== undefined && binaryAt(cx, s, "part", seen));
+	}
+	const t = v.get("type");
+	if (
+		(t === "string" || (Array.isArray(t) && t.includes("string"))) &&
+		isBinaryString(v)
+	)
+		return true;
+	if (pos !== "part") return false;
+	const prefix = v.get("prefixItems");
+	return [v.get("items"), ...(Array.isArray(prefix) ? prefix : [])].some(
+		(s) => s !== undefined && binaryAt(cx, s, "part", seen),
+	);
 }
 
 function convert(cx: Ctx, v: JsonObject, at: string): Ty {
@@ -568,30 +622,34 @@ function membersIn(
 	group: ReadonlySet<string>,
 	at: string,
 ): Ty[] {
+	// Members are the same value, so they are where it is.
+	const here = cx.here;
 	return cx.withLeftOut(members, group, () =>
-		members.map((m, i) => {
-			const where = child(at, String(i));
-			const r = str(m, "$ref");
-			if (
-				r === undefined ||
-				!(m as JsonObject).entries.every(
-					([k]) => k === "$ref" || isAnnotation(k),
+		members.map((m, i) =>
+			cx.withRaw(here, () => {
+				const where = child(at, String(i));
+				const r = str(m, "$ref");
+				if (
+					r === undefined ||
+					!(m as JsonObject).entries.every(
+						([k]) => k === "$ref" || isAnnotation(k),
+					)
 				)
-			)
-				return schema(cx, m, where);
-			const { value, base, uri, where: there } = cx.locate(r, where);
-			const named = cx.withBase(base, () => namedKeys(cx, value));
-			const own = cx.withBase(base, () => leftOutKeys(cx, value));
-			if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
-				return schema(cx, m, where);
-			try {
-				return cx.withBase(base, () =>
-					cx.withLeftOut([value], group, () => schema(cx, value, there)),
-				);
-			} finally {
-				cx.leave();
-			}
-		}),
+					return schema(cx, m, where);
+				const { value, base, uri, where: there } = cx.locate(r, where);
+				const named = cx.withBase(base, () => namedKeys(cx, value));
+				const own = cx.withBase(base, () => leftOutKeys(cx, value));
+				if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
+					return schema(cx, m, where);
+				try {
+					return cx.withBase(base, () =>
+						cx.withLeftOut([value], group, () => schema(cx, value, there)),
+					);
+				} finally {
+					cx.leave();
+				}
+			}),
+		),
 	);
 }
 
@@ -837,6 +895,14 @@ function literal(v: Value): Ty {
  * in another file, under a key of its own; any other target is expanded inline.
  */
 function reference(cx: Ctx, r: string, at: string): Ty {
+	// Where bytes are bytes, a schema with them is written out here: its named type,
+	// which is the same wherever it is used, has text.
+	const here = cx.here;
+	if (here !== undefined) {
+		const located = cx.locate(r, at);
+		if (cx.withBase(located.base, () => binaryAt(cx, located.value, here)))
+			return expand(cx, located, cx.componentKey(located.value));
+	}
 	if (r.startsWith(SCHEMA_PREFIX) && cx.inDocument) {
 		const rest = r.slice(SCHEMA_PREFIX.length);
 		if (!rest.includes("/")) {
@@ -847,7 +913,7 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 		}
 	}
 	const located = cx.locate(r, at);
-	const { value: target, base, uri, where } = located;
+	const { value: target, base, uri } = located;
 	// An $anchor, $id or file naming a component schema refers to that type (except
 	// in the component's own definition, which is what defines it).
 	const key = cx.componentKey(target);
@@ -856,11 +922,23 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 	} else if (cx.isFile(base) || cx.isHoisted(uri)) {
 		return ref(cx.hoist(target, located), cx.mode);
 	}
+	return expand(cx, located, key);
+}
+
+/** A `$ref`'s target written out where it is used, in the position the `$ref` is in. */
+function expand(
+	cx: Ctx,
+	located: ReturnType<Ctx["locate"]>,
+	key: string | undefined,
+): Ty {
+	const { value: target, base, uri, where } = located;
 	// A schema reached again while it is expanded inline is a cycle: a component is
 	// its name, another schema gets one, as a schema in another file does.
 	if (!cx.enter(uri)) return ref(key ?? cx.hoist(target, located), cx.mode);
 	try {
-		const t = cx.withBase(base, () => schema(cx, target, where));
+		const t = cx.withBase(base, () =>
+			cx.withRaw(cx.here, () => schema(cx, target, where)),
+		);
 		// It reached itself, so it has a name now: every view refers to it by that.
 		return cx.isHoisted(uri) ? ref(cx.hoist(target, located), cx.mode) : t;
 	} finally {
@@ -871,7 +949,10 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 function typed(cx: Ctx, v: JsonObject, t: string, at: string): Ty {
 	switch (t) {
 		case "string":
-			return isBinaryString(v) ? BLOB : text(v);
+			// Bytes are a Blob as a body or a part; in JSON, a form or a parameter, text.
+			return isBinaryString(v) && (cx.here === "body" || cx.here === "part")
+				? BLOB
+				: text(v);
 		case "integer":
 			return numeric(cx, v, true);
 		case "number":
@@ -1062,15 +1143,17 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 	const items =
 		key === "items" ? v.get("items") : unevaluated(v, "unevaluatedItems");
 	const prefix = v.get("prefixItems");
+	// The items of a part are parts: an array repeats the field.
+	const part = cx.here === "part" ? "part" : undefined;
 	const head = Array.isArray(prefix)
-		? list(cx, prefix, child(at, "prefixItems"))
+		? cx.withRaw(part, () => list(cx, prefix, child(at, "prefixItems")))
 		: [];
 	const rest =
 		items === undefined
 			? UNKNOWN
 			: items === false && Array.isArray(prefix)
 				? undefined
-				: schema(cx, items, child(at, key));
+				: cx.withRaw(part, () => schema(cx, items, child(at, key)));
 	const min = count(v, "minItems") ?? 0;
 	const max = count(v, "maxItems");
 	if (max !== undefined && max < min) return NEVER;
@@ -1153,6 +1236,8 @@ function leftOutKeys(cx: Ctx, v: Value, seen = new Set<string>()): Set<string> {
 }
 
 function object(cx: Ctx, v: JsonObject, at: string): Ty {
+	// A multipart body's properties are its parts.
+	const part = cx.here === "parts" ? "part" : undefined;
 	const req = v.get("required");
 	const required = Array.isArray(req)
 		? req.filter((n) => typeof n === "string")
@@ -1168,7 +1253,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (left.has(key)) continue;
 		const p: Prop = {
 			key,
-			ty: schema(cx, s, child(base, key)),
+			ty: cx.withRaw(part, () => schema(cx, s, child(base, key))),
 			optional: !required.includes(key),
 		};
 		if (!p.optional) p.present = true;
@@ -1199,7 +1284,8 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	let additional: Ty | undefined;
 	if (ap === false) additional = NEVER;
 	else if (ap === true) additional = UNKNOWN;
-	else if (ap !== undefined) additional = schema(cx, ap, child(at, apKey));
+	else if (ap !== undefined)
+		additional = cx.withRaw(part, () => schema(cx, ap, child(at, apKey)));
 	const pp = v.get("patternProperties");
 	const patterns =
 		pp instanceof JsonObject
@@ -1207,7 +1293,9 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 					([key, s]) =>
 						[
 							key,
-							schema(cx, s, child(child(at, "patternProperties"), key)),
+							cx.withRaw(part, () =>
+								schema(cx, s, child(child(at, "patternProperties"), key)),
+							),
 						] as const,
 				)
 			: [];

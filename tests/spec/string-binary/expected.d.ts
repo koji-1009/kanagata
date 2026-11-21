@@ -9,6 +9,6 @@ export interface schemas {
   Encoded: Encoded;
 }
 
-export type Upload = Blob;
+export type Upload = string;
 
 export type Encoded = string;

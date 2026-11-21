@@ -1,7 +1,7 @@
 // Paths, webhooks and operations → `Ty`.
 
 import { isBinaryMedia, isFormMedia, isTextMedia, METHODS } from "./client.ts";
-import { get, JsonObject, type Value } from "./json.ts";
+import { get, JsonObject, str, type Value } from "./json.ts";
 import { type Ctx, child, DiagError } from "./pointer.ts";
 import { doc, schema } from "./schema.ts";
 import {
@@ -347,6 +347,16 @@ function operation(
 				),
 			);
 		});
+	} else if (rawBody !== undefined) {
+		// fetch sends no body with GET or HEAD, so the call cannot be the request a
+		// required body asks for.
+		const r = str(rawBody, "$ref");
+		const body = r === undefined ? rawBody : cx.tryLocate(r)?.value;
+		if (get(body, "required") === true)
+			cx.warn(
+				child(at, "requestBody"),
+				"a required request body on GET or HEAD is left out: fetch cannot send one",
+			);
 	}
 
 	const responses: Prop[] = [];
@@ -592,11 +602,20 @@ function content(
 	return object(
 		media.entries.map(([mt, raw]) => {
 			const mAt = child(base, mt);
+			// Bytes are bytes in a body a wildcard names, which is sent as it is, and in
+			// a multipart body's parts; elsewhere they are text in JSON or a form.
+			const pos = mt.startsWith("multipart/")
+				? "parts"
+				: mt.includes("*")
+					? "body"
+					: undefined;
 			const ty = mediaType(cx, raw, mAt, (m) => {
 				const items = cx.v32 ? m.get("itemSchema") : undefined;
 				if (items !== undefined) schema(cx, items, child(mAt, "itemSchema"));
 				const s = m.get("schema");
-				return s === undefined ? UNKNOWN : schema(cx, s, child(mAt, "schema"));
+				return s === undefined
+					? UNKNOWN
+					: cx.withRaw(pos, () => schema(cx, s, child(mAt, "schema")));
 			});
 			const text = isTextMedia(mt) || (clientReads && isFormMedia(mt));
 			return prop(mt, isBinaryMedia(mt) ? BLOB : text ? STRING : ty);
