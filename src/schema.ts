@@ -326,7 +326,11 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 					x === m ||
 					(x as { text: string }).text === m.text),
 		);
-	const keep = (m: Ty) => admitsLiteral(cx, v, m) && !listed(m);
+	// The keywords are read where there are literals to drop.
+	const admits = members.some((m) => m.kind === "lit")
+		? admitting(cx, v)
+		: () => true;
+	const keep = (m: Ty) => admits(m) && !listed(m);
 	const kept = members.every(keep) ? t : union(members.filter(keep));
 	// A value `not` lists that a member may admit other than by listing it (`string` for
 	// "a", a reference) stays.
@@ -769,7 +773,7 @@ function accepts(cx: Ctx, s: JsonObject, x: Value): boolean | undefined {
 			if (!y.some((e) => sameValue(x, e))) return false;
 		} else return undefined;
 	}
-	return admitsLiteral(cx, s, t);
+	return admitting(cx, s)(t);
 }
 
 /** Whether a JSON value is of a kind `type` names. */
@@ -1018,11 +1022,11 @@ function evaluatingItems(
  * and items past those evaluated are as it says (none for `false`).
  */
 function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
-	if (APPLICATORS.every((k) => v.get(k) === undefined)) return [];
 	const up = v.get("unevaluatedProperties");
 	const ui = v.get("unevaluatedItems");
 	const asked = (x: Value | undefined) => x !== undefined && x !== true;
 	if (!asked(up) && !asked(ui)) return [];
+	if (APPLICATORS.every((k) => v.get(k) === undefined)) return [];
 	const ev = evaluates(cx, v, at, true, new Set());
 	const warn = (key: string, x: Value | undefined) => {
 		if (asked(x))
@@ -1159,6 +1163,7 @@ function membersIn(
 					const r = str(m, "$ref");
 					if (
 						r === undefined ||
+						group.size === 0 ||
 						!(m as JsonObject).entries.every(
 							([k]) => k === "$ref" || isAnnotation(k),
 						)
@@ -1586,11 +1591,30 @@ function text(v: JsonObject): Ty {
 }
 
 /**
+ * `numeric`'s type for each schema object, read once: a schema is converted again for
+ * each view and place it is reached from, and its values can be thousands.
+ */
+const numerics = new WeakMap<JsonObject, Map<string, Ty>>();
+
+/**
  * A number (an integer if `integer`), or the values its bounds admit where they are
  * finitely many: the integers, or the multiples of `multipleOf`, between them, as long
  * as TypeScript builds their union.
  */
 function numeric(cx: Ctx, v: JsonObject, integer: boolean): Ty {
+	// The bounds read the same in a document: as 3.0's or as 3.1's.
+	const key = `${integer} ${cx.refSiblings}`;
+	let known = numerics.get(v);
+	if (known === undefined) {
+		known = new Map();
+		numerics.set(v, known);
+	}
+	const ty = known.get(key) ?? valuesBetween(cx, v, integer);
+	known.set(key, ty);
+	return ty;
+}
+
+function valuesBetween(cx: Ctx, v: JsonObject, integer: boolean): Ty {
 	const { low, high } = bounds(cx, v);
 	const any = integer ? INTEGER : NUMBER;
 	if (low === undefined || high === undefined) return any;
@@ -1629,12 +1653,23 @@ function numeric(cx: Ctx, v: JsonObject, integer: boolean): Ty {
 	if (first > last) return NEVER;
 	if (last - first >= BigInt(MAX_UNION)) return any;
 	const values: Ty[] = [];
-	for (let k = first; k <= last; k++)
-		values.push(
-			lit(decimalText({ digits: k * unit.digits, scale: unit.scale })),
+	for (let k = first; k <= last; k++) {
+		const value = lit(
+			unit.scale === 0
+				? (k * unit.digits).toString()
+				: decimalText({ digits: k * unit.digits, scale: unit.scale }),
 		);
-	return union(values);
+		boundedBy.set(value, v);
+		values.push(value);
+	}
+	// Distinct literals in order are a union as it is.
+	return values.length === 1
+		? (values[0] as Ty)
+		: { kind: "union", items: values };
 }
+
+/** The schema whose bounds each of `valuesBetween`'s values comes from: they admit it already. */
+const boundedBy = new WeakMap<Ty, JsonObject>();
 
 function gcd(a: bigint, b: bigint): bigint {
 	return b === 0n ? a : gcd(b, a % b);
@@ -1691,39 +1726,62 @@ function bounds(cx: Ctx, v: JsonObject): { low?: Bound; high?: Bound } {
 /**
  * Whether a literal is one of the values a schema's own keywords for its kind admit:
  * lengths and `pattern` for strings, bounds and `multipleOf` for numbers. A pattern
- * JavaScript cannot read admits every string.
+ * JavaScript cannot read admits every string. The keywords are read once, for the many
+ * literals a schema can list.
  */
-function admitsLiteral(cx: Ctx, v: JsonObject, t: Ty): boolean {
-	if (t.kind !== "lit") return true;
-	if (t.text.startsWith('"')) {
-		const s = JSON.parse(t.text) as string;
-		const length = [...s].length;
-		if (length < (count(v, "minLength") ?? 0)) return false;
-		const max = count(v, "maxLength");
-		if (max !== undefined && length > max) return false;
-		const pattern = v.str("pattern");
-		return pattern === undefined || matches(pattern, s);
-	}
-	if (t.text === "true" || t.text === "false") return true;
-	const n = decimal(t.text);
+function admitting(cx: Ctx, v: JsonObject): (t: Ty) => boolean {
+	const minLength = count(v, "minLength") ?? 0;
+	const maxLength = count(v, "maxLength");
+	const pattern = v.str("pattern");
 	const { low, high } = bounds(cx, v);
-	const beyond = (b: Bound | undefined, sign: number) => {
+	const m = v.get("multipleOf");
+	const step = m instanceof JsonNumber ? decimal(m.text) : undefined;
+	// Without these keywords, every value is admitted: an enum's thousands are not looked at.
+	if (
+		minLength === 0 &&
+		maxLength === undefined &&
+		pattern === undefined &&
+		low === undefined &&
+		high === undefined &&
+		step === undefined
+	)
+		return () => true;
+	const beyond = (n: Decimal, b: Bound | undefined, sign: number) => {
 		if (b === undefined) return false;
 		const order = compare(n, b.at) * sign;
 		return order < 0 || (order === 0 && b.open);
 	};
-	if (beyond(low, 1) || beyond(high, -1)) return false;
-	const m = v.get("multipleOf");
-	return !(m instanceof JsonNumber) || isMultiple(n, decimal(m.text));
+	return (t) => {
+		if (t.kind !== "lit" || boundedBy.get(t) === v) return true;
+		if (t.text.startsWith('"')) {
+			const s = JSON.parse(t.text) as string;
+			const length = [...s].length;
+			if (length < minLength) return false;
+			if (maxLength !== undefined && length > maxLength) return false;
+			return pattern === undefined || matches(pattern, s);
+		}
+		if (t.text === "true" || t.text === "false") return true;
+		const n = decimal(t.text);
+		if (beyond(n, low, 1) || beyond(n, high, -1)) return false;
+		return step === undefined || isMultiple(n, step);
+	};
 }
+
+/** Patterns compiled once each; null for one JavaScript cannot read. */
+const compiled = new Map<string, RegExp | null>();
 
 /** Whether `s` matches an ECMA-262 pattern; true when JavaScript cannot read the pattern. */
 function matches(pattern: string, s: string): boolean {
-	try {
-		return new RegExp(pattern, "u").test(s);
-	} catch {
-		return true;
+	let re = compiled.get(pattern);
+	if (re === undefined) {
+		try {
+			re = new RegExp(pattern, "u");
+		} catch {
+			re = null;
+		}
+		compiled.set(pattern, re);
 	}
+	return re === null || re.test(s);
 }
 
 /** A JSON number exactly: `digits` × 10^-`scale`. */

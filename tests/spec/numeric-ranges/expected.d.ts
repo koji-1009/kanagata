@@ -12,6 +12,7 @@ export interface schemas {
   Step: Step;
   DecimalStep: DecimalStep;
   WholeDecimalStep: WholeDecimalStep;
+  NegativeStep: NegativeStep;
   OpenStep: OpenStep;
   NoStep: NoStep;
   TooMany: TooMany;
@@ -36,6 +37,8 @@ export type DecimalStep = 0 | 0.25 | 0.5 | 0.75 | 1;
 
 /** The integers that are multiples of 1.5. */
 export type WholeDecimalStep = 0 | 3 | 6;
+
+export type NegativeStep = -1 | -0.5 | 0;
 
 export type OpenStep = 0.5;
 

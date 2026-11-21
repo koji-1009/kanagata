@@ -112,6 +112,14 @@ export interface Location {
 	load: (url: string) => Value;
 }
 
+/** What a `$ref` reaches: the value, the base URI it lives under, and where it is, for messages. */
+interface Located {
+	value: Value;
+	base: string;
+	uri: string;
+	where: string;
+}
+
 const NO_KEYS: ReadonlySet<string> = new Set();
 
 /** Schema keywords a component may have next to `$ref` and still be another name for its target. */
@@ -405,10 +413,20 @@ export class Ctx {
 	 * optionally followed by a pointer into it (`defs/a.yaml#/b`). Returns the value,
 	 * the base URI it lives under, and where it is, for messages.
 	 */
-	locate(
-		r: string,
-		at: string,
-	): { value: Value; base: string; uri: string; where: string } {
+	locate(r: string, at: string): Located {
+		// What a $ref reaches from a base never changes: it is found once.
+		const key = `${this.base} ${r}`;
+		let found = this.#located.get(key);
+		if (found === undefined) {
+			found = this.#find(r, at);
+			this.#located.set(key, found);
+		}
+		return found;
+	}
+
+	readonly #located = new Map<string, Located>();
+
+	#find(r: string, at: string): Located {
 		const url = new URL(r, this.base);
 		const fragment = url.hash.slice(1);
 		// A reference by the URL the document was read from still means the document.
@@ -494,7 +512,7 @@ export class Ctx {
 	}
 
 	/** `locate`, or undefined where it would fail (the conversion reports the failure). */
-	tryLocate(r: string): ReturnType<Ctx["locate"]> | undefined {
+	tryLocate(r: string): Located | undefined {
 		try {
 			return this.locate(r, "");
 		} catch {
