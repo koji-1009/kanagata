@@ -1,7 +1,7 @@
 # Generated types
 
 - Every schema in `components.schemas` is a named type (`export type User = { … }`), referenced by name. Names are PascalCase, with `_` before one that would start with a digit, and `_` for one with no letter or digit (`-`); a taken or reserved name gets a number (`User2`). `export interface schemas` maps each original name to its type.
-- Operations are `paths[path][method]`, `webhooks[name][method]` (3.1 and 3.2; see [Webhooks](#webhooks)), and `operations[operationId]`. An Operation Object reached again through a Path Item that two paths share (a `$ref` or a YAML alias) is declared once there; one with an `operationId` reached again where its type differs (a YAML alias of the Operation Object under paths with different path-level parameters; a path's and a webhook's, see [Webhooks](#webhooks)) is an error, since `operations[operationId]` has one type. Another Operation Object with the same `operationId`, which OpenAPI requires to be unique, is an error, even when written alike. The methods are the Path Item's fields in OpenAPI's order (`get` … `trace`, then `query`), then the keys of `additionalOperations` (3.2) as written (`COPY`). A key that is a fixed field's method (`POST`), which OpenAPI forbids, or its name (`post`) is an error; methods are case-sensitive, so `Patch` is another method. The fields OpenAPI 3.2 adds (`$self`, `query`, `additionalOperations`, `in: querystring`, a `$ref` as a media type, `itemSchema`) are read in 3.2 documents only.
+- Operations are `paths[path][method]`, `webhooks[name][method]` (3.1 and 3.2; see [Webhooks](#webhooks)), an operation's `callbacks[name][expression][method]` (see [Callbacks](#callbacks)), and `operations[operationId]`. An Operation Object reached again through a Path Item that two paths share (a `$ref` or a YAML alias) is declared once there; one with an `operationId` reached again where its type differs (a YAML alias of the Operation Object under paths with different path-level parameters; a path's and a webhook's, see [Webhooks](#webhooks)) is an error, since `operations[operationId]` has one type. Another Operation Object with the same `operationId`, which OpenAPI requires to be unique, is an error, even when written alike. The methods are the Path Item's fields in OpenAPI's order (`get` … `trace`, then `query`), then the keys of `additionalOperations` (3.2) as written (`COPY`). A key that is a fixed field's method (`POST`), which OpenAPI forbids, or its name (`post`) is an error; methods are case-sensitive, so `Patch` is another method. The fields OpenAPI 3.2 adds (`$self`, `query`, `additionalOperations`, `in: querystring`, a `$ref` as a media type, `itemSchema`) are read in 3.2 documents only.
 - A parameter defined by `content` is the schema of its media type for `application/x-www-form-urlencoded`, which the client encodes as it does any parameter, and `string` for any other: the client has no document to serialize the value by, so the call passes the serialized text (`filter: JSON.stringify({ q: "a" })` for `application/json`). A response header defined by `content` keeps the schema.
 - An `in: querystring` parameter (3.2) is `parameters.querystring`, without its name, which is not sent; it is defined by `content`, so it is typed as above.
 - A schema with a `readOnly` / `writeOnly` property (on it or on a schema it references) gets a second type for what is sent to the API (a path's request, a webhook's responses), `UserInput`.
@@ -26,6 +26,10 @@ A webhook (`webhooks`, 3.1 and 3.2) is a request the API sends to a receiver the
 - An operation with an `operationId` that is both a path's and a webhook's (in a Path Item they share) is an error where its two types are declared differently, as they are when it has a `readOnly` / `writeOnly` property or refers to a schema with one (`User` in one, `UserInput` in the other): `operations[operationId]` has one type.
 
 A parameter or header defined by `content` is typed as a path's is (above). The client calls `paths` only (`createClient<paths>`): `webhooks` types the receiver you implement.
+
+## Callbacks
+
+An operation's `callbacks` are requests the API sends to a URL its runtime expression names, typed as webhooks are (above): `callbacks: { event: { "{$request.body#/callbackUrl}": { post: { requestBody: …; responses: … } } } }` in the operation's type. A Callback Object may be a `$ref` (to `components.callbacks`), and its `x-` keys are extensions, not expressions. An operation in a callback with an `operationId` is `operations[operationId]`, as a path's is.
 
 ## `$ref`
 
@@ -136,7 +140,7 @@ A literal or `null` two members admit is left out: `oneOf: [{ type: [string, nul
 | `*/*`, `application/*`, which name no representation       | its schema                                        |
 | any other (binary), other wildcards (`image/*`) included   | `Blob`                                            |
 
-A sequential media type's `itemSchema` (3.2) is checked like a schema but types nothing: the client reads the content whole, by the rules above (`application/jsonl` is `Blob`, `text/event-stream` `string`). Read it item by item with `parseAs: "stream"`.
+The client reads a sequential media type's content whole, by the rules above (`application/jsonl` is `Blob`, `text/event-stream` `string`); read it item by item with `parseAs: "stream"`. Its `itemSchema` (3.2) types each item, in `itemContent` beside `content` in the request body or response, in the view the content is in: `{ content: { "application/jsonl": Blob }; itemContent: { "application/jsonl": Event } }`.
 
 ## `nullable` (3.0)
 

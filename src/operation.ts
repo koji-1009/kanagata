@@ -115,15 +115,35 @@ function pathItems(
 	key: "paths" | "webhooks",
 	operations: Operations,
 ): Prop[] {
-	const out: Prop[] = [];
 	const entries = root.get(key);
-	if (entries === undefined) return out;
+	if (entries === undefined) return [];
 	if (!(entries instanceof JsonObject))
 		throw new DiagError(`#/${key}`, `${key} must be an object`);
-	for (const [path, rawItem] of entries.entries) {
-		// Paths may have specification extensions; webhooks is a plain map of names.
-		if (key === "paths" && path.startsWith("x-")) continue;
-		const itemAt = child(`#/${key}`, path);
+	// Paths may have specification extensions; webhooks is a plain map of names.
+	return pathItemsIn(
+		cx,
+		entries.entries.filter(([k]) => key === "webhooks" || !k.startsWith("x-")),
+		`#/${key}`,
+		key === "webhooks",
+		operations,
+	);
+}
+
+/**
+ * Path Items by name (a path, a webhook's name, a callback's expression). Those the API
+ * calls (`byApi`: webhooks, callbacks) are the other way round: the API sends the
+ * request and reads the response.
+ */
+function pathItemsIn(
+	cx: Ctx,
+	entries: [string, Value][],
+	at: string,
+	byApi: boolean,
+	operations: Operations,
+): Prop[] {
+	const out: Prop[] = [];
+	for (const [path, rawItem] of entries) {
+		const itemAt = child(at, path);
 		const layers = itemLayers(cx, rawItem, itemAt);
 		const ops = layers.flatMap((l) =>
 			itemOperations(cx, l.item, itemAt).map(
@@ -134,13 +154,19 @@ function pathItems(
 		const methods: Prop[] = [];
 		for (const [method, op, opAt, base] of ops) {
 			// A webhook is called by the API: it sends the request and reads the response.
-			const sent: View = key === "webhooks" ? "read" : "write";
+			const sent: View = byApi ? "read" : "write";
 			// fetch cannot send a body with GET or HEAD (OpenAPI 3.0 has consumers ignore
 			// one); a webhook's request is sent by the API, so it keeps its body.
-			const body =
-				key === "webhooks" || (method !== "get" && method !== "head");
+			const body = byApi || (method !== "get" && method !== "head");
 			const ty = cx.withBase(base, () =>
-				operation(cx, { layers, itemAt, op, at: opAt, sent, body }),
+				operation(cx, operations, {
+					layers,
+					itemAt,
+					op,
+					at: opAt,
+					sent,
+					body,
+				}),
 			);
 			const opDoc = doc(op);
 			const id = op.get("operationId");
@@ -278,6 +304,7 @@ interface OperationAt {
 
 function operation(
 	cx: Ctx,
+	operations: Operations,
 	{ layers, itemAt, op: o, at, sent, body: hasBody }: OperationAt,
 ): Ty {
 	const fields: Prop[] = [];
@@ -336,12 +363,14 @@ function operation(
 			if (body.get("content") === undefined)
 				throw new DiagError(bodyAt, "a request body must have content");
 			// An empty content describes no representation: no body can be passed.
-			const c =
-				cx.inMode(sent, () => content(cx, body, bodyAt, false)) ?? object([]);
+			const c = cx.inMode(sent, () => content(cx, body, bodyAt, false));
 			fields.push(
 				documented(
 					"requestBody",
-					object([prop("content", c)]),
+					object([
+						prop("content", c.content ?? object([])),
+						...(c.items === undefined ? [] : [prop("itemContent", c.items)]),
+					]),
 					!booleanAt(body, bodyAt, "required"),
 					doc(body, described),
 				),
@@ -376,12 +405,37 @@ function operation(
 			const c = cx.inMode(received, () =>
 				content(cx, r, rAt, received === "read"),
 			);
-			if (c !== undefined) parts.push(prop("content", c));
+			if (c.content !== undefined) parts.push(prop("content", c.content));
+			if (c.items !== undefined) parts.push(prop("itemContent", c.items));
 			return parts;
 		});
 		responses.push(prop(status, object(parts)));
 	}
 	fields.push(prop("responses", object(responses)));
+
+	// Callbacks: requests the API sends to an expression's URL, typed as webhooks are.
+	const callbacks = o.get("callbacks");
+	if (callbacks !== undefined) {
+		const cbAt = child(at, "callbacks");
+		const named: Prop[] = [];
+		for (const [name, raw] of objectAt(callbacks, cbAt, "callbacks").entries) {
+			const nameAt = child(cbAt, name);
+			const items = cx.derefIn(raw, nameAt, (value) =>
+				pathItemsIn(
+					cx,
+					// A Callback Object may have specification extensions.
+					objectAt(value, nameAt, "a callback").entries.filter(
+						([k]) => !k.startsWith("x-"),
+					),
+					nameAt,
+					true,
+					operations,
+				),
+			);
+			named.push(prop(name, object(items)));
+		}
+		fields.push(prop("callbacks", object(named)));
+	}
 
 	return object(fields);
 }
@@ -584,41 +638,44 @@ function headers(cx: Ctx, response: JsonObject, at: string): Ty | undefined {
  * `{ "<media type>": T }` for a non-empty `content`, keeping every media type.
  * A binary media type is `Blob` and a text one `string` whatever its schema says, as is
  * a form the client reads (`clientReads`, a path's response): that is what the client
- * reads and sends. The schema is still converted so its errors are reported, and so is
- * `itemSchema` (3.2): the client reads a sequential media type (`application/jsonl`,
- * `text/event-stream`) whole, as these rules say, not item by item.
+ * reads and sends. The schema is still converted so its errors are reported. The client
+ * reads a sequential media type (`application/jsonl`, `text/event-stream`) whole, as these
+ * rules say; its `itemSchema` (3.2) types each item, `{ "<media type>": Item }` in `items`.
  */
 function content(
 	cx: Ctx,
 	owner: JsonObject,
 	at: string,
 	clientReads: boolean,
-): Ty | undefined {
+): { content?: Ty; items?: Ty } {
 	const declared = owner.get("content");
-	if (declared === undefined) return undefined;
+	if (declared === undefined) return {};
 	const base = child(at, "content");
 	const media = objectAt(declared, base, "content");
-	if (media.entries.length === 0) return undefined;
-	return object(
-		media.entries.map(([mt, raw]) => {
-			const mAt = child(base, mt);
-			// Bytes are bytes in a body a wildcard names, which is sent as it is, and in
-			// a multipart body's parts; elsewhere they are text in JSON or a form.
-			const pos = mt.startsWith("multipart/")
-				? "parts"
-				: mt.includes("*")
-					? "body"
-					: undefined;
-			const ty = mediaType(cx, raw, mAt, (m) => {
-				const items = cx.v32 ? m.get("itemSchema") : undefined;
-				if (items !== undefined) schema(cx, items, child(mAt, "itemSchema"));
-				const s = m.get("schema");
-				return s === undefined
-					? UNKNOWN
-					: cx.withRaw(pos, () => schema(cx, s, child(mAt, "schema")));
-			});
-			const text = isTextMedia(mt) || (clientReads && isFormMedia(mt));
-			return prop(mt, isBinaryMedia(mt) ? BLOB : text ? STRING : ty);
-		}),
-	);
+	if (media.entries.length === 0) return {};
+	const items: Prop[] = [];
+	const props = media.entries.map(([mt, raw]) => {
+		const mAt = child(base, mt);
+		// Bytes are bytes in a body a wildcard names, which is sent as it is, and in
+		// a multipart body's parts; elsewhere they are text in JSON or a form.
+		const pos = mt.startsWith("multipart/")
+			? "parts"
+			: mt.includes("*")
+				? "body"
+				: undefined;
+		const ty = mediaType(cx, raw, mAt, (m) => {
+			const item = cx.v32 ? m.get("itemSchema") : undefined;
+			if (item !== undefined)
+				items.push(prop(mt, schema(cx, item, child(mAt, "itemSchema"))));
+			const s = m.get("schema");
+			return s === undefined
+				? UNKNOWN
+				: cx.withRaw(pos, () => schema(cx, s, child(mAt, "schema")));
+		});
+		const text = isTextMedia(mt) || (clientReads && isFormMedia(mt));
+		return prop(mt, isBinaryMedia(mt) ? BLOB : text ? STRING : ty);
+	});
+	return items.length === 0
+		? { content: object(props) }
+		: { content: object(props), items: object(items) };
 }

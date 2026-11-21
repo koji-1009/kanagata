@@ -35,6 +35,12 @@ export interface paths {
             "text/event-stream": string;
             "application/jsonl": Blob;
           };
+          itemContent: {
+            "text/event-stream": {
+              data?: never;
+            };
+            "application/jsonl": Item;
+          };
         };
       };
     };
