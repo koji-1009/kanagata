@@ -1,0 +1,1 @@
+#/paths/~1orgs~1{org}~1repos~1{repo}/get: the path has {repo}, which no path parameter declares; OpenAPI requires one for each
