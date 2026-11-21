@@ -9,6 +9,12 @@ export interface Prop {
 	present?: true;
 }
 
+/** An index signature by a template literal type: `[key: `x-${string}`]: ty`. */
+export interface Keyed {
+	key: Ty;
+	ty: Ty;
+}
+
 /** Which view of a component schema a reference means: as returned, or as sent. */
 export type View = "read" | "write";
 
@@ -29,6 +35,11 @@ export type Ty =
 	| { kind: "record" }
 	/** Literal in JSON notation: `"admin"` with quotes, `1`, `true`. */
 	| { kind: "lit"; text: string }
+	/**
+	 * A template literal type, as printed: `` `https://${"us" | "eu"}.example.com` ``; the
+	 * `pattern` it is from, if it is, tells which strings it admits.
+	 */
+	| { kind: "template"; text: string; pattern?: string }
 	/** A component schema, by its key in `components.schemas`; named when emitted. */
 	| { kind: "ref"; schema: string; view: View }
 	/** `operations[id]` */
@@ -41,8 +52,11 @@ export type Ty =
 	| { kind: "tuple"; items: Ty[]; min: number; rest?: Ty }
 	/** Object literal; `{}` when empty. */
 	| { kind: "object"; props: Prop[] }
-	/** Object literal with an index signature: `{ a: A; [key: string]: T }`. */
-	| { kind: "map"; props: Prop[]; index: Ty }
+	/**
+	 * Object literal with index signatures: `{ a: A; [key: `x-${string}`]: K; [key: string]: T }`,
+	 * `keyed` by template literal types, `index` by any string.
+	 */
+	| { kind: "map"; props: Prop[]; index?: Ty; keyed?: Keyed[] }
 	| { kind: "union"; items: Ty[] }
 	| { kind: "inter"; items: Ty[] };
 
@@ -112,7 +126,8 @@ export function equal(
 		});
 	switch (a.kind) {
 		case "lit":
-			return b.kind === "lit" && a.text === b.text;
+		case "template":
+			return b.kind === a.kind && a.text === (b as { text: string }).text;
 		case "ref":
 			return (
 				b.kind === "ref" &&
@@ -133,10 +148,14 @@ export function equal(
 			);
 		case "object":
 			return b.kind === "object" && props(a.props, b.props);
-		case "map":
-			return (
-				b.kind === "map" && props(a.props, b.props) && eq(a.index, b.index)
-			);
+		case "map": {
+			if (b.kind !== "map" || !props(a.props, b.props)) return false;
+			const keyed = (m: typeof a) => [
+				...(m.keyed ?? []).flatMap((k) => [k.key, k.ty]),
+				...(m.index === undefined ? [] : [STRING, m.index]),
+			];
+			return list(keyed(a), keyed(b));
+		}
 		case "union":
 		case "inter":
 			return b.kind === a.kind && list(a.items, b.items);
@@ -166,7 +185,8 @@ export function refs(t: Ty, out = new Set<string>()): Set<string> {
 			break;
 		case "map":
 			props(t.props);
-			refs(t.index, out);
+			for (const k of t.keyed ?? []) refs(k.ty, out);
+			if (t.index !== undefined) refs(t.index, out);
 			break;
 		case "union":
 		case "inter":
@@ -237,7 +257,14 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
 		case "object":
 			return { kind: "object", props: props(t.props) };
 		case "map":
-			return { kind: "map", props: props(t.props), index: go(t.index) };
+			return {
+				kind: "map",
+				props: props(t.props),
+				...(t.keyed === undefined
+					? {}
+					: { keyed: t.keyed.map((k) => ({ key: k.key, ty: go(k.ty) })) }),
+				...(t.index === undefined ? {} : { index: go(t.index) }),
+			};
 		case "union":
 		case "inter":
 			return { kind: t.kind, items: t.items.map(go) };
@@ -278,11 +305,13 @@ export function union(items: Ty[]): Ty {
 	let out = members.out;
 	if (out.some((t) => t.kind === "unknown")) return UNKNOWN;
 	const kinds = out.flatMap((t) => kindsOf(t) ?? []);
-	// `number` admits every whole number; a primitive admits its literals.
+	// `number` admits every whole number; a primitive admits its literals, `string` its templates.
 	out = out.filter((t) =>
 		t.kind === "integer"
 			? !kinds.includes("number")
-			: t.kind !== "lit" || !admits(kinds, t),
+			: t.kind === "template"
+				? !kinds.includes("string")
+				: t.kind !== "lit" || !admits(kinds, t),
 	);
 	if (out.length === 0) return NEVER;
 	const [only] = out;
@@ -307,11 +336,53 @@ export function inter(items: Ty[]): Ty {
 	const arrays = out.filter(isArrayTy);
 	if (arrays.length > 1)
 		return inter([...out.filter((t) => !isArrayTy(t)), meetArrays(arrays)]);
-	const narrowed = narrow(out);
+	// A union with arrays meets the other arrays member by member, so that their items
+	// read as both say: `(string | unknown[]) & (string | string[])` is `string | string[]`.
+	const arrayish = out.filter(hasArray);
+	if (arrayish.length > 1 && arrayish.some((t) => t.kind === "union")) {
+		const combos = arrayish.reduce<Ty[][]>(
+			(acc, t) =>
+				acc.flatMap((c) =>
+					(t.kind === "union" ? t.items : [t]).map((m) => [...c, m]),
+				),
+			[[]],
+		);
+		return inter([
+			...out.filter((t) => !arrayish.includes(t)),
+			union(combos.map((c) => inter(c))),
+		]);
+	}
+	const merged = mergeObjects(out);
+	if (merged !== out) return inter(merged);
+	// A union of object types meets the object type next to it member by member, each
+	// one object type: `{ a?: A } & ({ b: B } | { c: C })` is `{ a?: A; b: B } | { a?: A; c: C }`.
+	const objects = out.find((t) => t.kind === "object");
+	const alternatives = out.find(
+		(t): t is Extract<Ty, { kind: "union" }> =>
+			t.kind === "union" && t.items.every((m) => m.kind === "object"),
+	);
+	if (objects !== undefined && alternatives !== undefined) {
+		const rest = out.filter((t) => t !== alternatives && t !== objects);
+		return inter([
+			...rest,
+			union(alternatives.items.map((m) => inter([objects, m]))),
+		]);
+	}
+	const narrowed = prune(narrow(out));
 	// Narrowing can make members equal (`"a" & ("a" | 1) & string`); normalize again.
 	// Each round drops a member or shrinks a set of values, so this ends.
 	if (narrowed !== out) return inter(narrowed);
 	if (out.some((t) => t.kind === "never")) return NEVER;
+	// Members of kinds no value has both of meet nowhere: `null & string[]`.
+	const kinds = out.map(kindSet).filter((k) => k !== undefined);
+	if (
+		kinds.some((a, i) =>
+			kinds
+				.slice(i + 1)
+				.some((b) => !a.some((x) => b.some((y) => meets(x, y)))),
+		)
+	)
+		return NEVER;
 	if (out.length === 0) return UNKNOWN;
 	const [only] = out;
 	return out.length === 1 && only !== undefined
@@ -323,6 +394,46 @@ type ArrayTy = Extract<Ty, { kind: "array" | "tuple" }>;
 
 const isArrayTy = (t: Ty): t is ArrayTy =>
 	t.kind === "array" || t.kind === "tuple";
+
+/** An array or tuple, or a union with one. */
+const hasArray = (t: Ty): boolean =>
+	isArrayTy(t) || (t.kind === "union" && t.items.some(isArrayTy));
+
+/**
+ * Object types are one object type: each property's types met, required where one
+ * requires it (so that the items of arrays read as both say: TypeScript reads an item
+ * of `A[] & B[]` as `A`). A required property that admits nothing admits no object.
+ * Returns `items` itself when there is one object type at most.
+ */
+function mergeObjects(items: Ty[]): Ty[] {
+	const objects = items.filter(
+		(t): t is Extract<Ty, { kind: "object" }> => t.kind === "object",
+	);
+	if (objects.length < 2) return items;
+	const props: Prop[] = [];
+	for (const o of objects)
+		for (const p of o.props) {
+			const i = props.findIndex((q) => q.key === p.key);
+			const q = props[i];
+			if (q === undefined) {
+				props.push(p);
+				continue;
+			}
+			const met: Prop = {
+				...q,
+				ty: inter([q.ty, p.ty]),
+				optional: q.optional && p.optional,
+			};
+			if (p.present) met.present = true;
+			if (met.doc === undefined && p.doc !== undefined) met.doc = p.doc;
+			props[i] = met;
+		}
+	if (props.some((p) => !p.optional && p.ty.kind === "never")) return [NEVER];
+	return [
+		...items.filter((t) => t.kind !== "object"),
+		{ kind: "object", props },
+	];
+}
 
 /**
  * Arrays and tuples meet item by item: `string[]` and `[unknown, unknown, ...unknown[]]`
@@ -407,12 +518,17 @@ function valueKind(t: Ty): ValueKind | undefined {
  * within `number`). Sets of literals meet each other (numbers by value). Then the
  * sets of values keep what K allows, and the kind types go; with no values, one
  * type says what K is. So `type` next to `enum` gives `"a"`, not `string & "a"`,
- * and contradictions (`number & string`, `"a" & "b"`) are `never`.
+ * and contradictions (`number & string`, `"a" & "b"`) are `never`. A template
+ * (from `pattern`) is some strings: it meets kinds as `string` does and stands for them,
+ * and the values next to it keep the strings it admits.
  * Returns `items` itself when nothing changes.
  */
 function narrow(items: Ty[]): Ty[] {
-	const kindSets = items.map(kindsOf);
-	const present = kindSets.filter((k) => k !== undefined);
+	const strings = items.map(isStrings);
+	const templates = items.filter((_, i) => strings[i]);
+	const kindSets = items.map((t, i) => (strings[i] ? undefined : kindsOf(t)));
+	const present: ValueKind[][] = kindSets.filter((k) => k !== undefined);
+	if (templates.length > 0) present.push(["string"]);
 	const kinds = present.length === 0 ? undefined : present.reduce(meet);
 	const valueSets = items.map((t, i) =>
 		kindSets[i] === undefined ? valuesOf(t) : undefined,
@@ -422,7 +538,8 @@ function narrow(items: Ty[]): Ty[] {
 		.map((v) => new Set(v.map(valueKey)));
 	const keep = (m: Ty) =>
 		(kinds === undefined || admits(kinds, m)) &&
-		(!isLiteral(m) || literalSets.every((s) => s.has(valueKey(m))));
+		(!isLiteral(m) || literalSets.every((s) => s.has(valueKey(m)))) &&
+		templates.every((t) => admitsString(t, m));
 	const hasValues = valueSets.some((v) => v !== undefined);
 	let changed = false;
 	let literalsSeen = false;
@@ -430,7 +547,13 @@ function narrow(items: Ty[]): Ty[] {
 	const out: Ty[] = [];
 	items.forEach((t, i) => {
 		const values = valueSets[i];
-		if (values !== undefined) {
+		if (strings[i]) {
+			// Values say more; kinds without strings admit none of it.
+			if (hasValues || kinds?.length === 0) {
+				changed = true;
+				if (!hasValues) out.push(NEVER);
+			} else out.push(t);
+		} else if (values !== undefined) {
 			if (isLiterals(values)) {
 				// The first set of literals, narrowed by the others, stands for them all.
 				if (literalsSeen) {
@@ -446,7 +569,7 @@ function narrow(items: Ty[]): Ty[] {
 				out.push(union(kept));
 			}
 		} else if (kindSets[i] !== undefined) {
-			if (hasValues || kindsSeen) {
+			if (hasValues || kindsSeen || templates.length > 0) {
 				changed = true;
 				return;
 			}
@@ -457,6 +580,90 @@ function narrow(items: Ty[]): Ty[] {
 				out.push(union((kinds as ValueKind[]).map((k) => KIND_TY[k])));
 			}
 		} else out.push(t);
+	});
+	return changed ? out : items;
+}
+
+/** Whether a type admits some strings only, a template among them: `` `a${string}` ``, `` `a${string}` | "b" ``. */
+function isStrings(t: Ty): boolean {
+	const members = t.kind === "union" ? t.items : [t];
+	return (
+		members.some((m) => m.kind === "template") &&
+		members.every((m) => m.kind === "template" || valueKind(m) === "string")
+	);
+}
+
+/**
+ * Whether a type of some strings admits a string literal: a template by its pattern (the
+ * templates values meet are from `pattern`), a literal by its text.
+ */
+function admitsString(t: Ty, m: Ty): boolean {
+	const text = (m as { text: string }).text;
+	const s = JSON.parse(text) as string;
+	return (t.kind === "union" ? t.items : [t]).some((x) =>
+		x.kind === "template"
+			? new RegExp(x.pattern as string, "u").test(s)
+			: (x as { text: string }).text === text,
+	);
+}
+
+/** The kinds of value a type admits, where its form says so: `{ a: A }` objects, `string | A[]` strings and arrays. */
+function kindSet(t: Ty): ValueKind[] | undefined {
+	if (t.kind === "inter") {
+		// The kinds every member it says them of allows.
+		const sets = t.items.map(kindSet).filter((s) => s !== undefined);
+		return sets.length === 0
+			? undefined
+			: sets.reduce((a, b) => a.filter((k) => b.some((o) => meets(k, o))));
+	}
+	const one = (m: Ty): ValueKind[] | undefined => {
+		if (m.kind === "inter") return kindSet(m);
+		const k =
+			kindsOf(m)?.[0] ??
+			valueKind(m) ??
+			(m.kind === "null"
+				? "null"
+				: m.kind === "array"
+					? "array"
+					: m.kind === "template"
+						? "string"
+						: undefined);
+		return k === undefined ? undefined : [k];
+	};
+	const kinds = (t.kind === "union" ? t.items : [t]).map(one);
+	return kinds.every((k) => k !== undefined)
+		? (kinds as ValueKind[][]).flat()
+		: undefined;
+}
+
+const meets = (a: ValueKind, b: ValueKind): boolean =>
+	a === b ||
+	(a === "integer" && b === "number") ||
+	(a === "number" && b === "integer");
+
+/**
+ * Drops the members of a union another member of the intersection rules out by kind:
+ * `{ a?: string } & (Cat | string)` is `{ a?: string } & Cat`. Returns `items` itself
+ * when nothing changes.
+ */
+function prune(items: Ty[]): Ty[] {
+	const sets = items.map(kindSet);
+	let changed = false;
+	const out = items.map((t, i) => {
+		if (t.kind !== "union") return t;
+		const others = sets.filter(
+			(s, j): s is ValueKind[] => j !== i && s !== undefined,
+		);
+		const kept = t.items.filter((m) => {
+			const own = kindSet(m);
+			return (
+				own === undefined ||
+				others.every((s) => own.some((k) => s.some((o) => meets(k, o))))
+			);
+		});
+		if (kept.length === t.items.length) return t;
+		changed = true;
+		return union(kept);
 	});
 	return changed ? out : items;
 }
@@ -513,6 +720,13 @@ function valueKey(m: Ty): string {
 		e++;
 	}
 	return `#${sign}${digits}e${e}`;
+}
+
+/** Whether two types of JSON values are the same value: literals by value (`1` and `1.0`), others by structure. */
+export function equalValues(a: Ty, b: Ty): boolean {
+	return a.kind === "lit" && b.kind === "lit"
+		? valueKey(a) === valueKey(b)
+		: equal(a, b);
 }
 
 /** Whether a value (`"a"`, `1.5`, `null`, an exact object) is of one of these kinds. */

@@ -18,10 +18,7 @@ export type RequiresUndeclared = never;
 
 export type Campaign = {
   name?: string;
-  code?: string;
-} & {
-  code: {} | null;
-} & {
+  code: string;
   secret?: never;
 };
 
@@ -30,27 +27,22 @@ export type Secret = {
 };
 
 export type ThroughRef = {
-  a?: string;
-} & {
-  a: {} | null;
+  a: string;
+  secret?: never;
 };
 
 export type AllOfUndeclared = never;
 
 export type Open = {
-  code?: string;
-} & ({
-  code: {} | null;
-} & {
+  code: string;
   secret?: never;
 } | {
-  secret: {} | null;
-} & {
   code?: never;
-});
+  secret: {} | null;
+};
 
 export type Patterned = {
   code?: string;
-  "x-id": {} | null;
-  [key: string]: unknown;
+  "x-id": string;
+  [key: `x-${string}`]: string;
 };

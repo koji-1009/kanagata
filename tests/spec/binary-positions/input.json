@@ -1,0 +1,62 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/upload": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "description": "A part is bytes; an object part is JSON text.",
+                "type": "object",
+                "properties": {
+                  "file": { "$ref": "#/components/schemas/Upload" },
+                  "files": { "type": "array", "items": { "$ref": "#/components/schemas/Upload" } },
+                  "meta": { "type": "object", "properties": { "inner": { "$ref": "#/components/schemas/Upload" } } },
+                  "info": { "$ref": "#/components/schemas/Meta" },
+                  "album": { "$ref": "#/components/schemas/Files" },
+                  "either": { "$ref": "#/components/schemas/Either" },
+                  "maybe": { "$ref": "#/components/schemas/Maybe" },
+                  "pair": { "$ref": "#/components/schemas/Pair" }
+                }
+              }
+            },
+            "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Upload" } } } },
+            "*/*": { "schema": { "$ref": "#/components/schemas/Upload" } }
+          }
+        },
+        "responses": {
+          "200": { "description": "ok", "content": { "application/json": { "schema": { "type": "object", "properties": { "raw": { "type": "string", "format": "binary" } } } } } }
+        }
+      }
+    },
+    "/forms": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": { "schema": { "$ref": "#/components/schemas/Form" } },
+            "multipart/mixed": { "schema": { "$ref": "#/components/schemas/Patterned" } },
+            "multipart/related": { "schema": { "$ref": "#/components/schemas/Extra" } },
+            "*/*": { "schema": { "$ref": "#/components/schemas/Meta" } }
+          }
+        },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Upload": { "description": "Bytes are a string in JSON.", "type": "string", "format": "binary" },
+      "Meta": { "description": "A part without bytes stays a reference.", "type": "object", "properties": { "name": { "type": "string" } } },
+      "Files": { "description": "Parts an array repeats.", "type": "array", "items": { "type": "string", "format": "binary" } },
+      "Either": { "description": "Bytes in a member are bytes.", "oneOf": [{ "type": "string", "format": "binary" }, { "type": "integer" }] },
+      "Maybe": { "description": "So with null too.", "type": ["string", "null"], "format": "binary" },
+      "Pair": { "description": "And in prefixItems.", "type": "array", "prefixItems": [{ "$ref": "#/components/schemas/Upload" }, true] },
+      "Patterned": { "description": "Pattern properties are parts too.", "type": "object", "patternProperties": { "^f": { "$ref": "#/components/schemas/Upload" } }, "additionalProperties": false },
+      "Extra": { "description": "And additional ones.", "type": "object", "properties": { "any": true }, "additionalProperties": { "$ref": "#/components/schemas/Upload" } },
+      "Form": { "description": "A form with a file part, written out where it is the parts.", "type": "object", "properties": { "file": { "$ref": "#/components/schemas/Upload" }, "name": { "type": "string" } } }
+    }
+  }
+}

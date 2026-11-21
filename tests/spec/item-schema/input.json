@@ -1,0 +1,30 @@
+{
+  "openapi": "3.2.0",
+  "paths": {
+    "/events": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "The client reads each content whole; itemSchema types each item.",
+            "content": {
+              "application/jsonl": { "itemSchema": { "$ref": "#/components/schemas/Event" } },
+              "text/event-stream": {
+                "itemSchema": { "type": "object", "required": ["data"], "properties": { "data": { "type": "string" }, "event": { "type": "string" } } }
+              },
+              "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Event" } } }
+            }
+          }
+        }
+      },
+      "post": {
+        "requestBody": { "content": { "application/x-ndjson": { "itemSchema": { "$ref": "#/components/schemas/Event" } } } },
+        "responses": { "204": { "description": "Items sent are the write view." } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Event": { "type": "object", "properties": { "id": { "type": "string", "readOnly": true }, "name": { "type": "string" } } }
+    }
+  }
+}

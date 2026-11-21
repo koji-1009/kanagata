@@ -1,0 +1,50 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/cards": {
+      "post": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Card" } } } },
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Card" } } } } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Required": {
+        "description": "A key present asks what its schema asks: here, another key.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "dependentSchemas": { "a": { "required": ["b"] } }
+      },
+      "Typed": {
+        "description": "Its schema can type keys too, and other kinds the type names pass.",
+        "type": ["object", "null"],
+        "properties": { "card": { "type": "string" } },
+        "dependentSchemas": { "card": { "properties": { "billing": { "type": "string" } }, "required": ["billing"] } }
+      },
+      "Closed": {
+        "description": "A schema no object with the key matches leaves the key out.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "dependentSchemas": { "a": false }
+      },
+      "Open": {
+        "description": "A schema every object matches asks nothing.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "dependentSchemas": { "a": true }
+      },
+      "Card": {
+        "description": "A key left out of the view is not asked for: id is not sent, created is not returned.",
+        "type": "object",
+        "properties": {
+          "number": { "type": "string" },
+          "id": { "type": "string", "readOnly": true },
+          "created": { "type": "string", "writeOnly": true }
+        },
+        "dependentSchemas": { "number": { "required": ["id", "created"] } },
+        "dependentRequired": { "number": ["id", "created"] }
+      }
+    }
+  }
+}

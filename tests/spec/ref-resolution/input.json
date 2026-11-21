@@ -1,0 +1,31 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "IdRes": {
+        "$id": "https://example.com/idres",
+        "type": "object",
+        "$defs": { "s": { "type": "string" } },
+        "properties": { "p": { "$ref": "#/$defs/s" } }
+      },
+      "PathRef": { "description": "A pointer into a schema with $id resolves the $refs there against it.", "$ref": "#/components/schemas/IdRes/properties/p" },
+      "IdList": { "$id": "https://example.com/idlist", "allOf": [{ "$defs": { "n": { "type": "number" } }, "properties": { "q": { "$ref": "#/allOf/0/$defs/n" } } }] },
+      "ItemRef": { "description": "Through arrays too.", "$ref": "#/components/schemas/IdList/allOf/0/properties/q" },
+      "Plain": { "$anchor": "plain", "type": "boolean" },
+      "ToPlain": { "description": "A $dynamicRef to a plain $anchor is a $ref.", "$dynamicRef": "#plain" },
+      "Node": { "description": "A $dynamicAnchor is a name a $ref can reach.", "$dynamicAnchor": "node", "type": "object", "properties": { "next": { "$ref": "#node" } } },
+      "List": { "description": "A $dynamicRef no other $dynamicAnchor can answer is a $ref.", "$id": "https://example.com/list", "$dynamicAnchor": "item", "type": "array", "items": { "$dynamicRef": "#item" } },
+      "Pointer": { "description": "So is one with a pointer.", "type": "object", "properties": { "p": { "$dynamicRef": "#/components/schemas/Node" } } },
+      "A": { "$id": "https://example.com/a", "$dynamicAnchor": "meta", "type": "object" },
+      "B": { "$id": "https://example.com/b", "$dynamicAnchor": "meta", "type": "object", "properties": { "x": { "$dynamicRef": "#meta" } } },
+      "Tree": {
+        "description": "A cycle among schemas expanded inline gets a name.",
+        "$defs": {
+          "node": { "type": "object", "properties": { "value": { "type": "string" }, "children": { "type": "array", "items": { "$ref": "#/components/schemas/Tree/$defs/node" } } } }
+        },
+        "$ref": "#/components/schemas/Tree/$defs/node"
+      }
+    }
+  }
+}

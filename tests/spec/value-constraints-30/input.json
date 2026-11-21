@@ -1,0 +1,11 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Below": { "description": "In 3.0, exclusiveMaximum makes maximum exclusive.", "type": "number", "enum": [1, 2], "maximum": 2, "exclusiveMaximum": true },
+      "Inclusive": { "description": "false leaves it inclusive.", "type": "number", "enum": [1, 2], "maximum": 2, "exclusiveMaximum": false },
+      "Point": { "description": "Bounds that meet, one of them exclusive, admit nothing.", "type": "integer", "minimum": 3, "maximum": 3, "exclusiveMinimum": true }
+    }
+  }
+}

@@ -28,18 +28,13 @@ export type HolderInput = {
 
 /** required next to allOf does not bring back a readOnly property when sending. */
 export type Derived = {
-  id?: string;
-  name?: string;
-} & {
-  id: {} | null;
-  name: {} | null;
+  id: string;
+  name: string;
 };
 
 /** required next to allOf does not bring back a readOnly property when sending. */
 export type DerivedInput = {
-  name?: string;
-} & {
-  name: {} | null;
+  name: string;
 };
 
 export type Stamped = {
@@ -49,16 +44,12 @@ export type Stamped = {
 export type StampedInput = Record<string, unknown>;
 
 /** Every allOf member counts, a $ref after an inline schema too. */
-export type Mixed = {
-  name?: string;
-} & Stamped & {
-  name: {} | null;
+export type Mixed = Stamped & {
+  name: string;
   stamp: {} | null;
 };
 
 /** Every allOf member counts, a $ref after an inline schema too. */
-export type MixedInput = {
-  name?: string;
-} & StampedInput & {
-  name: {} | null;
+export type MixedInput = StampedInput & {
+  name: string;
 };

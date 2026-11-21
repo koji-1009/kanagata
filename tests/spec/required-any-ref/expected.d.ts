@@ -47,7 +47,5 @@ export type Box = {
 };
 
 export type Narrowed = {
-  a: Anything & ({} | null);
-} & {
-  a?: string;
+  a: Anything & string;
 };

@@ -112,7 +112,23 @@ type BodyVariant<K, T> =
 				?
 						| { contentType: K; body: BodyOf<T> }
 						| { contentType?: K; body: URLSearchParams }
-				: { contentType: K; body: BodyOf<T> };
+				: RangeVariant<K, T>;
+
+/**
+ * A media type range (`image/*`) is named as written, or as a media type it covers
+ * (`image/png`), which is sent. Under `*\/*` and `application/*` a covered type may be
+ * one the client encodes a value by (JSON, a form), so naming it takes a raw body.
+ */
+type RangeVariant<K, T> = K extends `${infer R}/*` | `${infer R}/*;${string}`
+	? R extends "*" | "application"
+		?
+				| { contentType: K; body: BodyOf<T> }
+				| {
+						contentType: R extends "*" ? string : `application/${string}`;
+						body: string | RawBinary;
+				  }
+		: { contentType: K | `${R}/${string}`; body: BodyOf<T> }
+	: { contentType: K; body: BodyOf<T> };
 
 type BodyVariants<B> = B extends { content: infer C }
 	? { [K in keyof C & string]: BodyVariant<K, C[K]> }[keyof C & string]
@@ -201,19 +217,31 @@ export type ArgsOf<
 		? [init?: Init<NeedsAll<Op<P, Path, M>>, A>]
 		: [init: Init<NeedsAll<Op<P, Path, M>>, A>];
 
-/** "2XX" and default have no single status. */
-type Status<S> = S extends number ? S : number;
-/** Whether a status key is a success: `200`…`299` or `"2XX"`. */
-type IsSuccess<S> = S extends number
-	? `${S}` extends `2${string}`
-		? true
-		: false
-	: S extends "2XX"
-		? true
-		: false;
-
-/** `ok` per status, as fetch sets it. `default` covers any undocumented status, 2xx included. */
-type Ok<S> = S extends "default" ? boolean : IsSuccess<S>;
+type Digit = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+type ToNumber<T> = T extends `${infer N extends number}` ? N : never;
+/** The statuses whose first digit is C: `Codes<4>` is `400 | 401 | … | 499`. */
+type Codes<C extends number> = ToNumber<`${C}${Digit}${Digit}`>;
+/**
+ * The statuses fetch resolves with: those of the Fetch Standard (0 to 999) but 1xx, which
+ * it does not return. 0 is an opaque response (`mode: "no-cors"`, or a redirect with
+ * `redirect: "manual"` in a browser).
+ */
+type AnyStatus = 0 | Codes<2 | 3 | 4 | 5 | 6 | 7 | 8 | 9>;
+/** The statuses a response key covers: its code, or every code of its range. */
+type Covered<K> = K extends number
+	? K
+	: K extends `${infer C extends number}XX`
+		? Codes<C>
+		: ToNumber<K>;
+/**
+ * The statuses of response key S among the keys K: a code itself, a range its codes K
+ * does not list, and `default` every status nothing else covers.
+ */
+type StatusesOf<S, K> = S extends "default"
+	? Exclude<AnyStatus, Covered<K>>
+	: S extends `${string}XX`
+		? Extract<Exclude<Covered<S>, Covered<Exclude<K, S>>>, AnyStatus>
+		: Covered<S>;
 
 /** `data` for a response object B (its `content`), read as parseAs A says. */
 type Parsed<A, B> = A extends "text"
@@ -228,20 +256,38 @@ type Parsed<A, B> = A extends "text"
 					? JsonContent<B>
 					: Content<B>;
 
-/** fetch gives HEAD responses and these statuses a null body, whatever is declared. */
-type NullBodyStatus = 204 | 205 | 304;
+/** fetch gives these statuses a null body, whatever is declared (0: an opaque response). */
+type NullBodyStatus = 0 | 204 | 205 | 304;
+/** The statuses for which fetch sets `ok`. */
+type OkStatus = Codes<2>;
 
-/** The response object as fetch delivers it: without content where fetch gives no body. */
-type Delivered<M, S, B> = [M] extends ["head"]
-	? Empty
-	: S extends NullBodyStatus
-		? Empty
-		: B;
-
-/** A response nothing documents: any status, any body. */
+/** A response nothing documents: any body. */
 type Undocumented = { content: Record<string, unknown> };
 
-/** Discriminated union over the documented statuses. */
+/** One result, for statuses St, unless there are none. */
+type Member<St, Ok, B, A> = [St] extends [never]
+	? never
+	: { status: St; ok: Ok; data: Parsed<A, B>; response: Response };
+
+/**
+ * The results for statuses St with response object B, split where fetch's `ok` differs
+ * and where it gives no body (HEAD, and the null body statuses).
+ */
+type Results<St, B, A, M> = [M] extends ["head"]
+	?
+			| Member<Extract<St, OkStatus>, true, Empty, A>
+			| Member<Exclude<St, OkStatus>, false, Empty, A>
+	:
+			| Member<Exclude<Extract<St, OkStatus>, NullBodyStatus>, true, B, A>
+			| Member<Extract<Extract<St, OkStatus>, NullBodyStatus>, true, Empty, A>
+			| Member<Exclude<Exclude<St, OkStatus>, NullBodyStatus>, false, B, A>
+			| Member<Extract<Exclude<St, OkStatus>, NullBodyStatus>, false, Empty, A>;
+
+/**
+ * A union over the statuses: each documented code, each range's codes the document does
+ * not list on their own, and `default`'s statuses, or without `default`, the statuses the
+ * document does not list, with any body.
+ */
 export type Result<
 	O,
 	A extends ParseAs | undefined = undefined,
@@ -249,21 +295,11 @@ export type Result<
 > = O extends {
 	responses: infer R;
 }
-	? [keyof R] extends [never]
-		? {
-				status: number;
-				ok: boolean;
-				data: Parsed<A, Undocumented>;
-				response: Response;
-			}
-		: {
-				[S in keyof R]: {
-					status: Status<S>;
-					ok: Ok<S>;
-					data: Parsed<A, Delivered<M, S, R[S]>>;
-					response: Response;
-				};
-			}[keyof R]
+	?
+			| { [S in keyof R]: Results<StatusesOf<S, keyof R>, R[S], A, M> }[keyof R]
+			| ("default" extends keyof R
+					? never
+					: Results<Exclude<AnyStatus, Covered<keyof R>>, Undocumented, A, M>)
 	: never;
 
 /**
@@ -279,22 +315,14 @@ export type ResultOf<
 > = Result<Op<P, Path, M>, A, M>;
 
 /**
- * The results of R that `if (res.ok)` leaves: the 2xx statuses, and `default`, which
- * covers an undocumented 2xx (its `ok` is `boolean`). `OkResult<ResultOf<…>>["data"]`
- * types what a wrapper returns when it throws the others.
+ * The results of R that `if (res.ok)` leaves: the 2xx statuses, among them those of a
+ * range, `default` or the undocumented ones. `OkResult<ResultOf<…>>["data"]` types what
+ * a wrapper returns when it throws the others.
  */
-export type OkResult<R> = R extends { ok: infer K }
-	? true extends K
-		? R & { ok: true }
-		: never
-	: never;
+export type OkResult<R> = R extends { ok: true } ? R : never;
 
-/** The results of R that `if (!res.ok)` leaves: the other statuses, and `default`. */
-export type NotOkResult<R> = R extends { ok: infer K }
-	? false extends K
-		? R & { ok: false }
-		: never
-	: never;
+/** The results of R that `if (!res.ok)` leaves: the other statuses. */
+export type NotOkResult<R> = R extends { ok: false } ? R : never;
 
 type MaybePromise<T> = T | Promise<T>;
 

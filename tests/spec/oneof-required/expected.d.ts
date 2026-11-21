@@ -18,39 +18,29 @@ export interface schemas {
 export type Anything = unknown;
 
 export type Targets = {
-  repositories?: string[];
-  lists?: string[];
-  owners?: string[];
-} & ({
-  repositories: {} | null;
-} & {
+  repositories: string[];
   lists?: never;
   owners?: never;
 } | {
-  lists: {} | null;
-} & {
   repositories?: never;
+  lists: string[];
   owners?: never;
 } | {
-  owners: {} | null;
-} & {
   repositories?: never;
   lists?: never;
-});
+  owners: string[];
+};
 
 export type Forms = {
   a: {} | null;
-} & {
   b?: never;
   c?: never;
 } | {
   b: {} | null;
-  c?: unknown;
+  c?: never;
   /** any */
   d?: Anything;
-} & {
   a?: never;
-  c?: never;
 } | ByC & {
   a?: never;
   b?: never;
@@ -63,26 +53,22 @@ export type ByC = {
 export type Pair = {
   a: {} | null;
   b: {} | null;
-} & {
   c?: never;
 } | {
   c: {} | null;
-} & {
-  a?: unknown;
-  b?: unknown;
-} & ({
   a?: never;
+  b?: unknown;
 } | {
+  c: {} | null;
+  a?: unknown;
   b?: never;
-});
+};
 
 export type Mixed = {
   a: {} | null;
-} & {
   c?: never;
 } | {
   c: {} | null;
-} & {
   a?: never;
 } | {
   b: number;

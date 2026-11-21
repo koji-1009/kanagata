@@ -1,0 +1,36 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Value": {
+        "description": "Unions meet member by member, so items read as the arrays both admit.",
+        "type": ["null", "string", "array"],
+        "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+      },
+      "OrNull": {
+        "description": "null meets null.",
+        "type": ["array", "null"],
+        "items": { "type": "string" },
+        "allOf": [{ "minItems": 1 }]
+      },
+      "OneOfLengths": {
+        "description": "An array meets each tuple of a union.",
+        "type": "array",
+        "items": { "type": "string" },
+        "anyOf": [{ "minItems": 2 }, { "maxItems": 0 }]
+      },
+      "Tags": { "type": "array", "items": { "type": "string" } },
+      "MinOne": { "type": "array", "minItems": 1 },
+      "RefLength": { "description": "A reference stays, and the items it reads are its own.", "allOf": [{ "$ref": "#/components/schemas/Tags" }, { "maxItems": 1 }] },
+      "Refs": { "description": "So do two.", "allOf": [{ "$ref": "#/components/schemas/Tags" }, { "$ref": "#/components/schemas/MinOne" }] },
+      "Steps": {
+        "description": "A property both members have meets as its arrays do.",
+        "allOf": [
+          { "type": "object", "properties": { "steps": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" } } } } } },
+          { "type": "object", "required": ["steps"], "properties": { "steps": { "description": "Steps of the job.", "type": "array", "items": { "type": "object", "properties": { "number": { "type": "integer" } } } } } }
+        ]
+      }
+    }
+  }
+}

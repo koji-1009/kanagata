@@ -6,23 +6,29 @@ export interface operations {}
 
 export interface schemas {
   Cond: Cond;
-  Dyn: Dyn;
   Names: Names;
   Contains: Contains;
   DepReq: DepReq;
 }
 
 export type Cond = {
+  kind?: never;
+} | {
   kind?: string;
+  x: {} | null;
 };
 
-export type Dyn = unknown;
+export type Names = {
+  a?: unknown;
+  b?: unknown;
+};
 
-export type Names = Record<string, unknown>;
-
-export type Contains = (string | number)[];
+export type Contains = [string | number, ...(string | number)[]];
 
 export type DepReq = {
-  a?: string;
+  a?: never;
   b?: string;
+} | {
+  a?: string;
+  b: string;
 };

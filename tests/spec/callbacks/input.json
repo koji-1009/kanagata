@@ -1,0 +1,45 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/subscriptions": {
+      "post": {
+        "operationId": "subscribe",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Subscription" } } } },
+        "responses": { "201": { "description": "ok" } },
+        "callbacks": {
+          "event": {
+            "{$request.body#/callbackUrl}": {
+              "description": "The API sends the request and reads the response, as for a webhook.",
+              "post": {
+                "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Event" } } } },
+                "responses": { "200": { "description": "received", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ack" } } } } }
+              }
+            },
+            "x-note": "an extension, not an expression"
+          },
+          "shared": { "$ref": "#/components/callbacks/Ping" }
+        }
+      }
+    }
+  },
+  "components": {
+    "callbacks": {
+      "Ping": { "{$request.body#/pingUrl}": { "get": { "operationId": "ping", "responses": { "204": { "description": "ok" } } } } }
+    },
+    "schemas": {
+      "Subscription": {
+        "type": "object",
+        "required": ["callbackUrl"],
+        "properties": { "callbackUrl": { "type": "string" }, "id": { "type": "string", "readOnly": true } }
+      },
+      "Event": {
+        "type": "object",
+        "properties": { "id": { "type": "string", "readOnly": true }, "secret": { "type": "string", "writeOnly": true } }
+      },
+      "Ack": {
+        "type": "object",
+        "properties": { "token": { "type": "string", "writeOnly": true }, "ok": { "type": "boolean" } }
+      }
+    }
+  }
+}

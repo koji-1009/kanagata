@@ -1,0 +1,4 @@
+#/components/schemas/Contains/allOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Contains/unevaluatedItems: unevaluatedItems next to an applicator cannot be expressed in TypeScript; ignored
+#/components/schemas/Undecided/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/Undecided/unevaluatedProperties: unevaluatedProperties next to an applicator cannot be expressed in TypeScript; ignored

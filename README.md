@@ -78,14 +78,14 @@ const events = await api.get("/events", { parseAs: "stream" }); // events.data: 
 ```
 
 - `api.get`, `api.post`, … take the path template and the operation's parameters and body; a method of `additionalOperations` (3.2) goes through `api.request("COPY", …)`.
-- The result is `{ status, ok, data, response }`, a union over the statuses the operation documents: checking `status` or `ok` narrows `data`. In an operation with `default`, neither narrows to the success body alone: `default`'s `status` is `number` and its `ok` is `boolean`, so its `data` stays after `res.status === 200` and after `res.ok`. HTTP error statuses never throw.
+- The result is `{ status, ok, data, response }`, a union over the statuses fetch returns: each one the operation documents, the others of a range (`4XX`) or `default`, and without `default`, the undocumented ones, whose `data` is `unknown`. Comparing `status` narrows `data` to that status's body; `ok` narrows to the 2xx results, which include an undocumented 2xx unless `2XX` or `default` covers it. HTTP error statuses never throw.
 - `kanagata init` copies the client's source into your project to edit as you like.
 
 Config, call options, results, typing a wrapper, how requests are built, and errors: [docs/client.md](docs/client.md).
 
 ## Generated types
 
-- Every schema in `components.schemas` is a named type; operations are `paths[path][method]`, `webhooks[name][method]` and `operations[operationId]`.
+- Every schema in `components.schemas` is a named type; operations are `paths[path][method]`, `webhooks[name][method]`, an operation's `callbacks[name][expression][method]` and `operations[operationId]`.
 - Types follow what the schema accepts, not another generator's output.
 - A schema with a `readOnly` / `writeOnly` property gets a second type for what is sent to the API (a path's request, a webhook's responses), `UserInput`.
 - In 3.0, `nullable: true` adds `null` to the `type` next to it, as OpenAPI 3.0.3 says, so it takes no effect without `type`, next to `$ref`, or past an `enum` without `null`. Many documents mean "this schema or null" instead; `--loose-nullable` reads them that way.
@@ -97,7 +97,7 @@ Every rule, with `$ref` resolution and media types: [docs/types.md](docs/types.m
 - Runtime validation (use `onData`), middleware (wrap `config.fetch`), per-operation functions, framework bindings, mocks.
 - Per-parameter `style` / `explode` / `encoding`: a server parses every query and form the same way, so one `arrayFormat` / `objectFormat` per client (or per call) matches it.
 - Serializing a parameter by its `content` media type: such a parameter (other than `application/x-www-form-urlencoded`) is typed `string`, and the call passes the serialized text.
-- An operation's `callbacks`, which are not read.
+- An operation's `security` (and the document's `securitySchemes`) and a response's `links`, which are not read: set credentials in `headers` or `config.fetch`.
 - Fetching `$ref`s over the network; finding another file by its `$self` (3.2), since files are read by where they are; Swagger 2.0.
 - Pathological inputs: looping `$ref`s outside schemas (a parameter that is a `$ref` to itself), nesting thousands of levels deep, or exponential expansion may crash (exit code 3) or not finish. A schema that is itself without an object, array or tuple in between (`A: { $ref: A }`) is an error ([docs/types.md](docs/types.md#ref)).
 

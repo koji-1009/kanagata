@@ -1,0 +1,95 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": { "type": "object", "properties": { "kind": { "enum": ["a", "b", "c"] } } },
+      "Never": {
+        "description": "if: false admits nothing: else applies.",
+        "type": "object",
+        "if": false,
+        "then": { "required": ["a"] },
+        "else": { "required": ["b"] }
+      },
+      "Always": {
+        "description": "if: true admits everything: then applies.",
+        "type": "object",
+        "if": true,
+        "then": { "required": ["a"] },
+        "else": false
+      },
+      "Properties": {
+        "description": "A property if rejects whole is present; one it admits whole asks nothing.",
+        "type": "object",
+        "if": { "description": "annotations say nothing", "properties": { "a": false, "b": true, "c": { "title": "any" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "Derived": {
+        "description": "The values meet where the schema and its $ref target declare them, and the target is read once.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Base",
+            "properties": { "kind": { "enum": ["a", "b"] } },
+            "if": { "properties": { "kind": { "const": "a" } } },
+            "then": { "required": ["x"] },
+            "else": { "required": ["y"] }
+          }
+        ],
+        "$ref": "#/components/schemas/Base"
+      },
+      "Listed": {
+        "description": "const, type: boolean and type: null list values too.",
+        "type": "object",
+        "properties": { "one": { "const": "a" }, "flag": { "type": "boolean" }, "none": { "type": "null" } },
+        "if": { "properties": { "one": { "const": "a" }, "flag": { "const": true }, "none": { "type": "null" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "Values": {
+        "description": "if is read value by value: bounds, patterns, types, values in arrays and objects.",
+        "type": "object",
+        "properties": {
+          "code": { "enum": [200, 404] },
+          "name": { "enum": ["ab", "cd"] },
+          "v": { "enum": ["a", 1, 1.5, null, true, [1], { "a": 1 }] },
+          "w": { "enum": [[1], { "a": 1 }] }
+        },
+        "if": {
+          "properties": {
+            "code": { "minimum": 400 },
+            "name": { "pattern": "^a", "format": "word" },
+            "v": { "type": ["string", "integer"] },
+            "w": { "const": [1] }
+          }
+        },
+        "then": { "required": ["x"] }
+      },
+      "Items": {
+        "description": "Array keywords without type let the other kinds the schema can be pass.",
+        "type": ["array", "null"],
+        "if": { "type": "array" },
+        "then": { "minItems": 1 }
+      },
+      "Integer": {
+        "description": "Not an integer is not a TypeScript type.",
+        "type": ["integer", "string"],
+        "if": { "type": "integer" },
+        "then": { "minimum": 0 }
+      },
+      "Count": {
+        "description": "A keyword if has that TypeScript cannot negate.",
+        "type": "object",
+        "if": { "minProperties": 1 },
+        "then": { "required": ["x"] }
+      },
+      "Unread": {
+        "description": "A keyword a property's schema has that values are not read for.",
+        "type": "object",
+        "properties": { "o": { "enum": [{ "a": 1 }] } },
+        "if": { "properties": { "o": { "minProperties": 1 } } },
+        "then": { "required": ["x"] }
+      }
+    }
+  }
+}

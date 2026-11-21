@@ -1,0 +1,97 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/finite": {
+      "post": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FiniteLeftOut" } } } },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Closed": {
+        "description": "Keys a pattern matches have its type; with additionalProperties: false, no others.",
+        "type": "object",
+        "properties": { "name": { "type": "string" } },
+        "patternProperties": { "^x-": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "Open": {
+        "description": "Without additionalProperties, other keys have any value.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "integer" } }
+      },
+      "OpenWithProperties": {
+        "type": "object",
+        "properties": { "name": { "type": "string" } },
+        "patternProperties": { "^x-": { "type": "integer" } }
+      },
+      "Others": {
+        "description": "The other keys have additionalProperties' type.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "string" } },
+        "additionalProperties": { "type": "integer" }
+      },
+      "Declared": {
+        "description": "A property a pattern matches has both types.",
+        "type": "object",
+        "properties": { "x-id": { "type": "string" } },
+        "patternProperties": { "^x-": { "const": "v" } }
+      },
+      "Finite": {
+        "description": "A pattern of some keys names them.",
+        "type": "object",
+        "patternProperties": { "^(a|b)$": { "type": "number" } },
+        "additionalProperties": false
+      },
+      "FiniteLeftOut": {
+        "description": "A key a pattern names that is left out of the view stays out.",
+        "type": "object",
+        "properties": { "a": { "type": "number", "readOnly": true } },
+        "patternProperties": { "^(a|b)$": { "type": "number" } },
+        "additionalProperties": false
+      },
+      "Unwritten": {
+        "description": "A pattern no type says joins the index signature.",
+        "type": "object",
+        "patternProperties": { "^[a-z]+$": { "type": "string" }, "^x-": { "type": "number" } },
+        "additionalProperties": false
+      },
+      "Names": {
+        "description": "propertyNames: { pattern } keys the object by it.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-" },
+        "additionalProperties": { "type": "string" }
+      },
+      "NamesDeclared": {
+        "description": "A property propertyNames does not admit is not there.",
+        "type": "object",
+        "properties": { "x-a": { "type": "string" }, "b": { "type": "string" } },
+        "propertyNames": { "pattern": "^x-" }
+      },
+      "NamesFinite": {
+        "type": "object",
+        "propertyNames": { "pattern": "^(a|b)$" },
+        "additionalProperties": { "type": "integer" }
+      },
+      "NamesAndPatterns": {
+        "description": "Both apply to a key: the narrower template has its own type.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-" },
+        "patternProperties": { "^x-a": { "type": "string" } },
+        "additionalProperties": { "type": "integer" }
+      },
+      "NamesRequired": {
+        "description": "A required key propertyNames does not admit admits nothing.",
+        "type": "object",
+        "required": ["b"],
+        "propertyNames": { "pattern": "^x-" }
+      },
+      "NamesUnwritten": {
+        "type": "object",
+        "propertyNames": { "pattern": "^[a-z]+$" }
+      }
+    }
+  }
+}

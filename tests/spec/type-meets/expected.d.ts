@@ -24,5 +24,5 @@ export type EnumsMeet = "b";
 /** No value is both: never. */
 export type Contradiction = never;
 
-/** Object keywords make an object, which a string is not. */
-export type NotAnObject = never;
+/** Object keywords constrain only objects, so the strings type names pass them. */
+export type NotAnObject = string;

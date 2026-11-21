@@ -9,6 +9,6 @@ export interface schemas {
   NonEmpty: NonEmpty;
 }
 
-export type NotString = unknown;
+export type NotString = number | boolean | null | unknown[] | Record<string, unknown>;
 
 export type NonEmpty = string;

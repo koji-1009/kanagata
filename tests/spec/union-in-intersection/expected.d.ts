@@ -24,10 +24,10 @@ export type Mixed = Base & (Extra | string);
 
 export type Tagged = {
   name: string;
-} & ({
   kind: "a";
 } | {
+  name: string;
   kind?: "b";
-});
+};
 
 export type List = ((Base | string) & Extra)[];

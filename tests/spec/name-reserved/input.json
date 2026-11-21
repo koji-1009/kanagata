@@ -1,6 +1,13 @@
 {
   "openapi": "3.0.3",
-  "paths": {},
+  "paths": {
+    "/files": {
+      "put": {
+        "requestBody": { "content": { "multipart/form-data": { "schema": { "$ref": "#/components/schemas/record" } } } },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
   "components": {
     "schemas": {
       "Blob": { "type": "string" },

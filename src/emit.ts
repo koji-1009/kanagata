@@ -1,7 +1,7 @@
 // Turns `Ty` into TypeScript source text.
 
 import { isIdent, isNumericKey } from "./ident.ts";
-import type { Prop, Ty, View } from "./ty.ts";
+import type { Keyed, Prop, Ty, View } from "./ty.ts";
 
 /** The first line, naming the kanagata version when one is given. */
 function header(version: string | undefined): string {
@@ -49,6 +49,7 @@ export class Out {
 				this.buf += "Record<string, unknown>";
 				break;
 			case "lit":
+			case "template":
 				this.buf += t.text;
 				break;
 			case "ref":
@@ -84,7 +85,7 @@ export class Out {
 				this.object(t.props);
 				break;
 			case "map":
-				this.object(t.props, t.index);
+				this.object(t.props, t.index, t.keyed);
 				break;
 			case "union":
 				this.list(t.items, " | ", ctx > Prec.Union, Prec.Union);
@@ -104,8 +105,8 @@ export class Out {
 		if (paren) this.buf += ")";
 	}
 
-	object(props: Prop[], index?: Ty): void {
-		if (props.length === 0 && index === undefined) {
+	object(props: Prop[], index?: Ty, keyed: Keyed[] = []): void {
+		if (props.length === 0 && index === undefined && keyed.length === 0) {
 			this.buf += "{}";
 			return;
 		}
@@ -118,6 +119,14 @@ export class Out {
 			if (p.optional) this.buf += "?";
 			this.buf += ": ";
 			this.ty(p.ty, Prec.Union);
+			this.buf += ";\n";
+		}
+		for (const k of keyed) {
+			this.indent();
+			this.buf += "[key: ";
+			this.ty(k.key, Prec.Union);
+			this.buf += "]: ";
+			this.ty(k.ty, Prec.Union);
 			this.buf += ";\n";
 		}
 		if (index !== undefined) {
