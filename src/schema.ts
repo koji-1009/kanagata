@@ -560,22 +560,54 @@ function keywordParts(
 			child(at, "propertyNames"),
 			"propertyNames cannot be expressed in TypeScript; ignored",
 		);
-	// contains requires minContains items (1 if not given) that match it; TypeScript can say how many.
-	if (v.get("contains") !== undefined) {
+	// contains requires from minContains (1 if not given) to maxContains items that match
+	// it; TypeScript can say how many, and which where every item matches or, for none,
+	// where it can say the values contains does not admit.
+	const contains = v.get("contains");
+	if (contains !== undefined) {
 		const min = count(v, "minContains") ?? 1;
-		if (min > 0)
-			parts.push(
-				widen(cx, v, "array", {
-					kind: "tuple",
-					items: Array.from({ length: min }, () => UNKNOWN),
-					min,
-					rest: UNKNOWN,
-				}),
+		const max = count(v, "maxContains");
+		const none = max === 0 ? negation(contains) : undefined;
+		const items = (n: number): Ty[] => Array.from({ length: n }, () => UNKNOWN);
+		if (max !== undefined && min > max)
+			parts.push(widen(cx, v, "array", NEVER));
+		else if (negation(contains) === NEVER) {
+			// Every item matches: the length is from min to max.
+			if (max !== undefined)
+				parts.push(
+					widen(cx, v, "array", { kind: "tuple", items: items(max), min }),
+				);
+			else if (min > 0)
+				parts.push(
+					widen(cx, v, "array", {
+						kind: "tuple",
+						items: items(min),
+						min,
+						rest: UNKNOWN,
+					}),
+				);
+		} else if (none !== undefined)
+			parts.push(widen(cx, v, "array", arrayTy(none)));
+		else {
+			if (min > 0)
+				parts.push(
+					widen(cx, v, "array", {
+						kind: "tuple",
+						items: items(min),
+						min,
+						rest: UNKNOWN,
+					}),
+				);
+			cx.warn(
+				child(at, "contains"),
+				"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
 			);
-		cx.warn(
-			child(at, "contains"),
-			"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
-		);
+			if (max !== undefined)
+				cx.warn(
+					child(at, "maxContains"),
+					"maxContains cannot be expressed in TypeScript; ignored",
+				);
+		}
 	}
 	const n = v.get("not");
 	if (n !== undefined) {
