@@ -149,6 +149,9 @@ export type Everything = {
 
 /** A key a member's pattern matches is evaluated; one nothing names but required is not. */
 export type Patterned = {
+  [key: `x-${string}`]: string;
+  [key: string]: unknown;
+} & {
   "x-a": {} | null;
   b: {} | null;
 } & {
@@ -248,11 +251,17 @@ export type Deep = ({
 /** A member's patterns evaluate the keys they match where it matches. */
 export type BranchPattern = {
   "x-a": {} | null;
-} & (Record<string, unknown> | {
+} & ({
+  [key: `x-${string}`]: string;
+  [key: string]: unknown;
+} | {
   a?: string;
 }) & ({
   "x-a"?: never;
-} | Record<string, unknown>) & ({
+} | {
+  [key: `x-${string}`]: string;
+  [key: string]: unknown;
+}) & ({
   a?: never;
 } | {
   a?: string;

@@ -15,28 +15,32 @@ export interface schemas {
 /** Keys matching a pattern are allowed even with additionalProperties: false. */
 export type P = {
   a?: string;
-  [key: string]: number | string | undefined;
+  [key: `x-${string}`]: number;
 };
 
 export type Q = {
-  [key: string]: number;
+  [key: `n${string}`]: number;
 };
 
 export type M = {
+  [key: `n${string}`]: number;
   [key: string]: boolean | number;
 };
 
-export type R = Record<string, unknown>;
+export type R = {
+  [key: `s${string}`]: string;
+  [key: string]: unknown;
+};
 
 export type Tagged = {
-  [key: string]: {
+  [key: `t${string}`]: {
     rid?: string;
     v?: string;
   };
 };
 
 export type TaggedInput = {
-  [key: string]: {
+  [key: `t${string}`]: {
     v?: string;
   };
 };

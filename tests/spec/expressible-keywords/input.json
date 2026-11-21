@@ -23,7 +23,7 @@
       "NoNames": { "description": "propertyNames false admits no key.", "type": "object", "propertyNames": false },
       "OneName": { "description": "propertyNames const or enum lists the keys.", "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } }, "patternProperties": { "^c": { "type": "integer" } }, "propertyNames": { "enum": ["a", "c"] } },
       "RequiredName": { "description": "A required key it does not list admits nothing.", "type": "object", "properties": { "a": { "type": "string" } }, "required": ["a"], "propertyNames": { "const": "b" } },
-      "PatternNames": { "description": "Other propertyNames have no type.", "type": "object", "propertyNames": { "pattern": "^a" } },
+      "PatternNames": { "description": "Other propertyNames have no type.", "type": "object", "propertyNames": { "pattern": "^[a-z]+$" } },
       "MixedNames": { "description": "Nor do names listed next to another keyword.", "type": "object", "propertyNames": { "enum": ["a"], "maxLength": 1 } },
       "ContainsNone": { "description": "minContains 0 asks for no item.", "type": "array", "items": { "type": "string" }, "contains": { "const": "x" }, "minContains": 0 },
       "ContainsEmpty": { "description": "An item is more than maxItems 0 admits.", "type": "array", "contains": {}, "maxItems": 0 },

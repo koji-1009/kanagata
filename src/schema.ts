@@ -18,6 +18,7 @@ import {
 	type Value,
 } from "./json.ts";
 import { type Ctx, child, DiagError, type RawPosition } from "./pointer.ts";
+import { MAX_UNION, patternType } from "./template.ts";
 import {
 	array as arrayTy,
 	BLOB,
@@ -25,6 +26,7 @@ import {
 	equalValues,
 	INTEGER,
 	inter,
+	type Keyed,
 	lit,
 	NEVER,
 	NULL,
@@ -547,7 +549,11 @@ function keywordParts(
 		parts.push(
 			widen(cx, v, "object", { kind: "map", props: [], index: NEVER }),
 		);
-	else if (names !== undefined && keyNames(names) === undefined)
+	else if (
+		names !== undefined &&
+		keyNames(names) === undefined &&
+		keyPattern(names) === undefined
+	)
 		cx.warn(
 			child(at, "propertyNames"),
 			"propertyNames cannot be expressed in TypeScript; ignored",
@@ -800,6 +806,16 @@ function anyKind(cx: Ctx, v: JsonObject, m: Value, ty: Ty): Ty {
  * schema and the schemas around it can be (their `type`s; any kind where none has one).
  */
 function orOther(cx: Ctx, v: JsonObject, kind: string, ty: Ty): Ty {
+	return union([
+		ty,
+		...contextKinds(cx, v)
+			.filter((k) => k !== kind)
+			.map((k) => KIND[k] as Ty),
+	]);
+}
+
+/** The kinds the schema and the schemas around it can be: those their `type`s all name; any where none has one. */
+function contextKinds(cx: Ctx, v: JsonObject): string[] {
 	let kinds = [
 		"string",
 		"number",
@@ -817,10 +833,7 @@ function orOther(cx: Ctx, v: JsonObject, kind: string, ty: Ty): Ty {
 					named.includes(k) || (k === "integer" && named.includes("number")),
 			);
 	}
-	return union([
-		ty,
-		...kinds.filter((k) => k !== kind).map((k) => KIND[k] as Ty),
-	]);
+	return kinds;
 }
 
 /**
@@ -1382,7 +1395,21 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 		return union(type.map((t) => typed(cx, v, t as string, at)));
 	if (hasObjectKeywords(v)) return object(cx, v, at);
 	if (hasArrayKeywords(v)) return array(cx, v, at);
-	return UNKNOWN;
+	// Keywords for strings and numbers without type constrain those kinds alone.
+	const s = text(v);
+	const n = numeric(cx, v, false);
+	if (s === STRING && n === NUMBER) return UNKNOWN;
+	return union(
+		contextKinds(cx, v).map((k) =>
+			k === "string"
+				? s
+				: k === "number"
+					? n
+					: k === "integer"
+						? numeric(cx, v, true)
+						: (KIND[k] as Ty),
+		),
+	);
 }
 
 /** Keywords that only apply to arrays and that the type reads; their presence implies `type: array`. */
@@ -1493,27 +1520,82 @@ function typed(cx: Ctx, v: JsonObject, t: string, at: string): Ty {
 	}
 }
 
-/** A string, unless its lengths admit only `""` (`maxLength: 0`) or none. */
+/**
+ * A string: `""` where its lengths admit only it (`maxLength: 0`), none where they admit
+ * none, and the template literal types of its `pattern` where they say its strings.
+ */
 function text(v: JsonObject): Ty {
 	const max = count(v, "maxLength");
-	if (max === undefined) return STRING;
-	if ((count(v, "minLength") ?? 0) > max) return NEVER;
-	return max === 0 ? lit('""') : STRING;
+	if (max !== undefined && (count(v, "minLength") ?? 0) > max) return NEVER;
+	if (max === 0) return lit('""');
+	const pattern = v.str("pattern");
+	return (pattern === undefined ? undefined : patternType(pattern)) ?? STRING;
 }
 
-/** A number (an integer if `integer`), unless its bounds admit only one or none. */
+/**
+ * A number (an integer if `integer`), or the values its bounds admit where they are
+ * finitely many: the integers, or the multiples of `multipleOf`, between them, as long
+ * as TypeScript builds their union.
+ */
 function numeric(cx: Ctx, v: JsonObject, integer: boolean): Ty {
 	const { low, high } = bounds(cx, v);
-	if (low === undefined || high === undefined)
-		return integer ? INTEGER : NUMBER;
+	const any = integer ? INTEGER : NUMBER;
+	if (low === undefined || high === undefined) return any;
 	const order = compare(low.at, high.at);
 	if (order > 0 || (order === 0 && (low.open || high.open))) return NEVER;
-	if (!integer) return order === 0 ? lit(low.text) : NUMBER;
-	// The integers between the bounds: from the least one above low to the greatest below high.
-	const first = ceil(low.at) + (low.open && isWhole(low.at) ? 1n : 0n);
-	const last = floor(high.at) - (high.open && isWhole(high.at) ? 1n : 0n);
+	const m = v.get("multipleOf");
+	const step =
+		m instanceof JsonNumber && decimal(m.text).digits > 0n
+			? decimal(m.text)
+			: undefined;
+	if (!integer && step === undefined)
+		return order === 0 ? lit(low.text) : NUMBER;
+	// The values are the whole multiples of a unit: the step, or for integers the least
+	// integer that is a multiple of it (1 without one).
+	const unit: Decimal = !integer
+		? (step as Decimal)
+		: step === undefined
+			? { digits: 1n, scale: 0 }
+			: {
+					digits: step.digits / gcd(step.digits, 10n ** BigInt(step.scale)),
+					scale: 0,
+				};
+	// From the least multiple above low to the greatest below high.
+	const above = (b: Bound) => {
+		const [x, u] = aligned(b.at, unit);
+		const q = x / u + (x % u > 0n ? 1n : 0n);
+		return q + (b.open && x % u === 0n ? 1n : 0n);
+	};
+	const below = (b: Bound) => {
+		const [x, u] = aligned(b.at, unit);
+		const q = x / u - (x % u < 0n ? 1n : 0n);
+		return q - (b.open && x % u === 0n ? 1n : 0n);
+	};
+	const first = above(low);
+	const last = below(high);
 	if (first > last) return NEVER;
-	return first === last ? lit(first.toString()) : INTEGER;
+	if (last - first >= BigInt(MAX_UNION)) return any;
+	const values: Ty[] = [];
+	for (let k = first; k <= last; k++)
+		values.push(
+			lit(decimalText({ digits: k * unit.digits, scale: unit.scale })),
+		);
+	return union(values);
+}
+
+function gcd(a: bigint, b: bigint): bigint {
+	return b === 0n ? a : gcd(b, a % b);
+}
+
+/** A decimal as JSON writes it: `-1.25`, `3`. */
+function decimalText(d: Decimal): string {
+	const sign = d.digits < 0n ? "-" : "";
+	const digits = (d.digits < 0n ? -d.digits : d.digits)
+		.toString()
+		.padStart(d.scale + 1, "0");
+	const int = digits.slice(0, digits.length - d.scale);
+	const frac = digits.slice(digits.length - d.scale).replace(/0+$/, "");
+	return `${sign}${int}${frac === "" ? "" : `.${frac}`}`;
 }
 
 /** A bound on numbers: its value, as written, and whether it is exclusive. */
@@ -1630,15 +1712,6 @@ function isMultiple(a: Decimal, m: Decimal): boolean {
 
 const isWhole = (d: Decimal): boolean =>
 	d.digits % 10n ** BigInt(d.scale) === 0n;
-
-function floor(d: Decimal): bigint {
-	const unit = 10n ** BigInt(d.scale);
-	const q = d.digits / unit;
-	return d.digits < 0n && d.digits % unit !== 0n ? q - 1n : q;
-}
-
-const ceil = (d: Decimal): bigint =>
-	-floor({ digits: -d.digits, scale: d.scale });
 
 /**
  * Raw bytes: `format: binary` (3.0), or a binary `contentMediaType` without a
@@ -1823,6 +1896,14 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 				)
 			: [];
 
+	// A property a pattern matches has both types.
+	for (const p of props) {
+		const matched = patterns
+			.filter(([k]) => matches(k, p.key))
+			.map(([, t]) => t);
+		if (matched.length > 0) p.ty = inter([p.ty, ...matched]);
+	}
+
 	// A required key without a property schema must be present, with the value the
 	// patterns it matches admit, or else additionalProperties; any value without either.
 	for (const name of required) {
@@ -1856,24 +1937,104 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		return counted(v, kept);
 	}
 
-	// Keys matching a pattern are allowed whatever additionalProperties says. TypeScript
-	// cannot check the pattern, so their types join the index signature.
-	if (patterns.length > 0 && additional !== undefined) {
-		const types = patterns.map(([, t]) => t);
-		additional = union(
-			additional.kind === "never" ? types : [additional, ...types],
-		);
+	// Keys a pattern matches have its type whatever additionalProperties says. A pattern
+	// whose keys template literal types say keys index signatures by them, and a key it
+	// names is a property; another pattern's type joins the index signature by any string.
+	const keyed: { pattern: string; key: Ty; ty: Ty }[] = [];
+	const unwritten: Ty[] = [];
+	const named = (name: string, ty: Ty) => {
+		if (left.has(name) || props.some((p) => p.key === name)) return;
+		if (ty.kind !== "never") props.push({ key: name, ty, optional: true });
+	};
+	for (const [pattern, ty] of patterns) {
+		const keys = patternType(pattern);
+		if (keys === undefined) unwritten.push(ty);
+		else
+			for (const key of keys.kind === "union" ? keys.items : [keys])
+				if (key.kind === "lit") named(JSON.parse(key.text) as string, ty);
+				else keyed.push({ pattern, key, ty });
+	}
+	// An index signature admits each property it applies to, `undefined` too for an optional one.
+	const admitting = (ty: Ty, applies: (key: string) => boolean): Ty => {
+		const own = props.filter((p) => applies(p.key));
+		return union([
+			ty,
+			...own.map((p) => p.ty),
+			...(own.some((p) => p.optional) ? [UNDEFINED] : []),
+		]);
+	};
+	const byPattern: Keyed[] = keyed.map((k) => ({
+		key: k.key,
+		ty: admitting(k.ty, (key) => matches(k.pattern, key)),
+	}));
+	const everyType = [
+		...unwritten,
+		...keyed.map((k) => k.ty),
+		...props.map((p) => p.ty),
+	];
+
+	// propertyNames: { pattern } keys the object by it: a property it does not admit cannot
+	// be there, a key it names is a property, and the others index signatures by its templates.
+	const names = keyPattern(v.get("propertyNames"));
+	if (names !== undefined) {
+		const pattern = (v.get("propertyNames") as JsonObject).str(
+			"pattern",
+		) as string;
+		if (props.some((p) => !p.optional && !matches(pattern, p.key)))
+			return NEVER;
+		for (const p of props) if (!matches(pattern, p.key)) p.ty = NEVER;
+		const rest: Keyed[] = [];
+		for (const key of names.kind === "union" ? names.items : [names])
+			if (key.kind === "lit")
+				named(JSON.parse(key.text) as string, additional ?? UNKNOWN);
+			else if (additional?.kind !== "never")
+				rest.push({
+					key,
+					ty: admitting(
+						union([additional ?? UNKNOWN, ...everyType]),
+						() => true,
+					),
+				});
+		if (byPattern.length === 0 && rest.length === 0) return counted(v, props);
+		return { kind: "map", props, keyed: [...byPattern, ...rest] };
 	}
 
-	if (additional === undefined)
-		return props.length === 0 ? RECORD : { kind: "object", props };
+	if (additional === undefined) {
+		if (byPattern.length === 0)
+			return props.length === 0 ? RECORD : { kind: "object", props };
+		// Without properties, other keys have any value, as for an object without either.
+		return props.length === 0
+			? { kind: "map", props, keyed: byPattern, index: UNKNOWN }
+			: { kind: "map", props, keyed: byPattern };
+	}
 	// `additionalProperties: false` closes the object; TypeScript can only say so
 	// when there are no properties at all, but its counts can say which are present.
-	if (additional.kind === "never") return counted(v, props);
-	// The index signature must admit every declared property too.
-	const members = [additional, ...props.map((p) => p.ty)];
-	if (props.some((p) => p.optional)) members.push(UNDEFINED);
-	return { kind: "map", props, index: union(members) };
+	if (
+		additional.kind === "never" &&
+		byPattern.length === 0 &&
+		unwritten.length === 0
+	)
+		return counted(v, props);
+	const index =
+		additional.kind === "never" && unwritten.length === 0
+			? undefined
+			: admitting(union([additional, ...everyType]), () => true);
+	return {
+		kind: "map",
+		props,
+		...(byPattern.length === 0 ? {} : { keyed: byPattern }),
+		...(index === undefined ? {} : { index }),
+	};
+}
+
+/** The keys a `propertyNames` with only `pattern` admits, as template literal types; undefined for any other, or a pattern none says. */
+function keyPattern(names: Value | undefined): Ty | undefined {
+	if (!(names instanceof JsonObject)) return undefined;
+	const keys = names.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	const pattern = names.str("pattern");
+	return keys.length === 1 && pattern !== undefined
+		? patternType(pattern)
+		: undefined;
 }
 
 /**

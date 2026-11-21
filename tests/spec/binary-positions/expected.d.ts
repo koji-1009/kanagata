@@ -43,7 +43,7 @@ export interface paths {
             name?: string;
           };
           "multipart/mixed": {
-            [key: string]: Blob;
+            [key: `f${string}`]: Blob;
           };
           "multipart/related": {
             any?: unknown;
@@ -95,7 +95,7 @@ export type Pair = [Upload?, unknown?, ...unknown[]];
 
 /** Pattern properties are parts too. */
 export type Patterned = {
-  [key: string]: Upload;
+  [key: `f${string}`]: Upload;
 };
 
 /** And additional ones. */

@@ -21,7 +21,7 @@ export type Additional = {
 /** Or by the patterns it matches. */
 export type Pattern = {
   "x-a": string;
-  [key: string]: string;
+  [key: `x-${string}`]: string;
 };
 
 /** A key no pattern matches, where additionalProperties is false, admits nothing. */
@@ -30,6 +30,8 @@ export type Unmatched = never;
 /** Every pattern it matches applies. */
 export type Both = {
   xa: "v";
+  [key: `x${string}`]: string;
+  [key: `${string}a`]: "v" | 1;
 };
 
 /** Without either, any value. */

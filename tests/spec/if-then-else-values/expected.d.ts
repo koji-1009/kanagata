@@ -87,7 +87,7 @@ export type Values = {
   };
 } & ({
   code?: unknown;
-  name?: unknown;
+  name?: `a${string}` | number | boolean | null | unknown[] | Record<string, unknown>;
   v?: string | number;
   w?: [1];
 } & {
