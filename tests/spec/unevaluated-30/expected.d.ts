@@ -14,8 +14,4 @@ export type Cat = {
 };
 
 /** In 3.0 the keywords next to $ref are ignored, so they evaluate nothing. */
-export type Ignored = Cat & {
-  x: {} | null;
-} & {
-  x?: never;
-};
+export type Ignored = never;

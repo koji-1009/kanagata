@@ -354,6 +354,20 @@ export function inter(items: Ty[]): Ty {
 	}
 	const merged = mergeObjects(out);
 	if (merged !== out) return inter(merged);
+	// A union of object types meets the object type next to it member by member, each
+	// one object type: `{ a?: A } & ({ b: B } | { c: C })` is `{ a?: A; b: B } | { a?: A; c: C }`.
+	const objects = out.find((t) => t.kind === "object");
+	const alternatives = out.find(
+		(t): t is Extract<Ty, { kind: "union" }> =>
+			t.kind === "union" && t.items.every((m) => m.kind === "object"),
+	);
+	if (objects !== undefined && alternatives !== undefined) {
+		const rest = out.filter((t) => t !== alternatives && t !== objects);
+		return inter([
+			...rest,
+			union(alternatives.items.map((m) => inter([objects, m]))),
+		]);
+	}
 	const narrowed = prune(narrow(out));
 	// Narrowing can make members equal (`"a" & ("a" | 1) & string`); normalize again.
 	// Each round drops a member or shrinks a set of values, so this ends.
@@ -386,22 +400,16 @@ const hasArray = (t: Ty): boolean =>
 	isArrayTy(t) || (t.kind === "union" && t.items.some(isArrayTy));
 
 /**
- * Object types that share a property with arrays in each are one object type, the
- * property's types met, so that its items read as both say (TypeScript reads an item
- * of `A[] & B[]` as `A`). Returns `items` itself when none do.
+ * Object types are one object type: each property's types met, required where one
+ * requires it (so that the items of arrays read as both say: TypeScript reads an item
+ * of `A[] & B[]` as `A`). A required property that admits nothing admits no object.
+ * Returns `items` itself when there is one object type at most.
  */
 function mergeObjects(items: Ty[]): Ty[] {
 	const objects = items.filter(
 		(t): t is Extract<Ty, { kind: "object" }> => t.kind === "object",
 	);
-	const types = new Map<string, Ty[]>();
-	for (const o of objects)
-		for (const p of o.props)
-			types.set(p.key, [...(types.get(p.key) ?? []), p.ty]);
-	const shared = [...types.values()].some(
-		(tys) => tys.length > 1 && tys.every(hasArray),
-	);
-	if (!shared) return items;
+	if (objects.length < 2) return items;
 	const props: Prop[] = [];
 	for (const o of objects)
 		for (const p of o.props) {
@@ -420,6 +428,7 @@ function mergeObjects(items: Ty[]): Ty[] {
 			if (met.doc === undefined && p.doc !== undefined) met.doc = p.doc;
 			props[i] = met;
 		}
+	if (props.some((p) => !p.optional && p.ty.kind === "never")) return [NEVER];
 	return [
 		...items.filter((t) => t.kind !== "object"),
 		{ kind: "object", props },

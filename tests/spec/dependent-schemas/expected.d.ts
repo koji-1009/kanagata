@@ -31,13 +31,12 @@ export interface schemas {
 
 /** A key present asks what its schema asks: here, another key. */
 export type Required = {
-  a?: string;
-  b?: string;
-} & ({
   a?: never;
+  b?: string;
 } | {
-  b: {} | null;
-});
+  a?: string;
+  b: string;
+};
 
 /** Its schema can type keys too, and other kinds the type names pass. */
 export type Typed = ({
@@ -50,8 +49,6 @@ export type Typed = ({
 
 /** A schema no object with the key matches leaves the key out. */
 export type Closed = {
-  a?: string;
-} & {
   a?: never;
 };
 
@@ -62,20 +59,18 @@ export type Open = {
 
 /** A key left out of the view is not asked for: id is not sent, created is not returned. */
 export type Card = {
-  number?: string;
-  id?: string;
-} & ({
   number?: never;
+  id?: string;
 } | {
-  id: {} | null;
-});
+  number?: string;
+  id: string;
+};
 
 /** A key left out of the view is not asked for: id is not sent, created is not returned. */
 export type CardInput = {
-  number?: string;
-  created?: string;
-} & ({
   number?: never;
+  created?: string;
 } | {
-  created: {} | null;
-});
+  number?: string;
+  created: string;
+};

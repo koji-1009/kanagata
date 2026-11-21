@@ -27,7 +27,6 @@ export type StrictTree = {
 export type Labeled = {
   data?: unknown;
   children?: Labeled[];
-} & {
   label: string;
 };
 

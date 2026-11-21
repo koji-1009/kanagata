@@ -72,8 +72,6 @@ export type NotInteger = number;
 
 /** not required is the objects without one of the keys. */
 export type NotRequired = {
-  a?: string;
-} & {
   a?: never;
 };
 

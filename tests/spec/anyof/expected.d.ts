@@ -15,10 +15,9 @@ export type Value = number | string;
 export type Anything = unknown;
 
 export type Contact = {
-  email?: string;
+  email: string;
   phone?: string;
-} & ({
-  email: {} | null;
 } | {
-  phone: {} | null;
-});
+  email?: string;
+  phone: string;
+};

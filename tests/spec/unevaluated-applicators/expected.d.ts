@@ -63,11 +63,7 @@ export type Extends = Cat & {
 };
 
 /** A key nothing evaluates is not admitted, even required. */
-export type Outside = Cat & {
-  z: {} | null;
-} & {
-  z?: never;
-};
+export type Outside = never;
 
 /** A oneOf member's properties are evaluated where it is the member that matches. */
 export type Either = Record<string, unknown> & (Card | Bank) & ({
@@ -88,41 +84,34 @@ export type Typed = ({
 } | string);
 
 /** if and then evaluate where if admits the value, else where it does not. */
-export type Conditional = {
-  kind?: "a" | "b";
-} & ({
-  kind?: "a";
-} & {
-  x?: string;
-} | {
-  kind: "b";
-} & {
-  y?: string;
-}) & ({
+export type Conditional = ({
   x?: never;
 } | {
   kind?: "a";
-} & {
   x?: string;
 }) & ({
   y?: never;
 } | {
   kind: "b";
-} & {
+  y?: string;
+}) & ({
+  kind?: "a";
+  x?: string;
+} | {
+  kind: "b";
   y?: string;
 });
 
 /** A dependent schema evaluates where its key is present. */
-export type Dependent = {
-  card?: string;
-} & ({
-  card?: never;
-} | {
-  billing?: string;
-}) & ({
+export type Dependent = ({
   billing?: never;
 } | {
   card: {} | null;
+}) & ({
+  card?: never;
+} | {
+  card?: string;
+  billing?: string;
 });
 
 /** A member evaluates what its own members evaluate where they match. */
@@ -148,76 +137,46 @@ export type Everything = {
 };
 
 /** A key a member's pattern matches is evaluated; one nothing names but required is not. */
-export type Patterned = {
-  [key: `x-${string}`]: string;
-  [key: string]: unknown;
-} & {
-  "x-a": {} | null;
-  b: {} | null;
-} & {
-  b?: never;
-};
+export type Patterned = never;
 
 /** Keys dependentRequired and propertyNames name are left out where nothing evaluates them. */
 export type Named = {
-  a?: string;
-  c?: unknown;
-  d?: unknown;
-} & {
-  c?: never;
-} & {
-  d?: never;
-} & ({
   a?: never;
-} | {
-  c: {} | null;
-});
+  c?: never;
+  d?: never;
+};
 
 /** Without then, if alone evaluates where it admits the value. */
-export type ElseOnly = {
-  kind?: "a" | "b";
-} & ({
-  kind?: "a";
-  w?: string;
-} | {
-  kind: "b";
-} & {
-  y?: string;
-} | {
-  w: number | boolean | null | unknown[] | Record<string, unknown>;
-} & {
-  y?: string;
-}) & ({
+export type ElseOnly = ({
   w?: never;
 } | {
   kind?: "a";
   w?: string;
 }) & ({
   y?: never;
-} | ({
+} | {
+  y?: string;
   kind: "b";
 } | {
+  y?: string;
   w: number | boolean | null | unknown[] | Record<string, unknown>;
-}) & {
+}) & ({
+  kind?: "a";
+  w?: string;
+} | {
+  kind: "b";
+  y?: string;
+} | {
+  kind?: "a" | "b";
+  w: number | boolean | null | unknown[] | Record<string, unknown>;
   y?: string;
 });
 
 /** Without else, nothing more is evaluated where if does not admit the value. */
-export type ThenOnly = ({
-  a: {} | null;
-} & {
-  x?: string;
-} | {
+export type ThenOnly = {
   a?: never;
-}) & {
-  a?: never;
-} & ({
   x?: never;
-} | {
-  a: {} | null;
-} & {
-  x?: string;
-});
+};
 
 /** A member's members evaluate where both match. */
 export type Deep = ({
@@ -228,19 +187,17 @@ export type Deep = ({
   c: string;
 }) & ({
   a?: never;
-} | ({
+} | {
   a: string;
 } | {
-  b: string;
-}) & {
   a: string;
+  b: string;
 }) & ({
   b?: never;
-} | ({
-  a: string;
 } | {
   b: string;
-}) & {
+  a: string;
+} | {
   b: string;
 }) & ({
   c?: never;
@@ -249,9 +206,7 @@ export type Deep = ({
 });
 
 /** A member's patterns evaluate the keys they match where it matches. */
-export type BranchPattern = {
-  "x-a": {} | null;
-} & ({
+export type BranchPattern = ({
   [key: `x-${string}`]: string;
   [key: string]: unknown;
 } | {
@@ -262,36 +217,34 @@ export type BranchPattern = {
   [key: `x-${string}`]: string;
   [key: string]: unknown;
 }) & ({
+  "x-a": {} | null;
   a?: never;
 } | {
+  "x-a": {} | null;
   a?: string;
 });
 
 /** A member's own keyword sees only what the member evaluates, in the view it is in: not the id its parent declares. */
 export type Account = ({
-  a?: string;
-} | {
-  b?: string;
-}) & ({
-  a?: never;
-} | {
-  a?: string;
-}) & ({
   b?: never;
 } | {
   b?: string;
-}) & {
+}) & ({
   id?: never;
-} & {
+  a?: string;
+} | {
+  id?: never;
+  b?: string;
+}) & ({
   id?: string;
-};
+  a?: never;
+} | {
+  id?: string;
+  a?: string;
+});
 
 /** A member's own keyword sees only what the member evaluates, in the view it is in: not the id its parent declares. */
 export type AccountInput = ({
-  a?: string;
-} | {
-  b?: string;
-}) & ({
   a?: never;
 } | {
   a?: string;
@@ -299,9 +252,13 @@ export type AccountInput = ({
   b?: never;
 } | {
   b?: string;
-}) & {
+}) & ({
   id?: never;
-};
+  a?: string;
+} | {
+  id?: never;
+  b?: string;
+});
 
 /** Without an applicator they are additionalProperties and items, which say the value is an object or an array. */
 export type Alone = {

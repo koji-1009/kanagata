@@ -86,9 +86,7 @@ export type Named = {
 
 /** Nor what a member leaves out next to its $ref. */
 export type MemberSiblings = Named & {
-  id?: string;
-} & {
-  id: {} | null;
+  id: string;
   name: {} | null;
 };
 
@@ -107,13 +105,12 @@ export type OtherInput = Named & Record<string, unknown>;
 
 /** Nor a oneOf member's required. */
 export type OneOfRequired = {
-  id?: string;
+  id: string;
   name?: string;
-} & ({
-  id: {} | null;
 } | {
-  name: {} | null;
-});
+  id?: string;
+  name: string;
+};
 
 /** Nor a oneOf member's required. */
 export type OneOfRequiredInput = {

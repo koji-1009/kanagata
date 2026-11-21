@@ -37,9 +37,8 @@ export type Refs = Tags & MinOne & [string, ...string[]];
 /** A property both members have meets as its arrays do. */
 export type Steps = {
   /** Steps of the job. */
-  steps: ({
+  steps: {
     name?: string;
-  } & {
     number?: number;
-  })[];
+  }[];
 };

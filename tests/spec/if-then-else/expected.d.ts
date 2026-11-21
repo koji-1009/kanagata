@@ -18,48 +18,29 @@ export type Kind = "a" | "b" | "c";
 
 /** if fails where the property has another of the values it is declared with. */
 export type ByKind = {
-  kind: "a" | "b";
-  x?: string;
+  kind: "a";
+  x: string;
   y?: string;
-} & ({
-  kind?: "a";
-} & {
-  x: {} | null;
 } | {
   kind: "b";
-} & {
-  y: {} | null;
-});
+  x?: string;
+  y: string;
+};
 
 /** if fails where a key it requires is absent; no else asks nothing then. */
 export type ByKey = {
-  a?: string;
-  b?: string;
-} & ({
-  a: {} | null;
-} & {
-  b: {} | null;
+  a: string;
+  b: string;
 } | {
   a?: never;
-});
+  b?: string;
+};
 
 /** Each member's if reads the values the schema declares, through a $ref too. */
-export type InAllOf = ({
-  kind: "a" | "b";
-} & {
-  x: {} | null;
-} | {
-  kind: "c";
-} | {
-  kind?: never;
-}) & {
-  kind?: "c";
-} & {
-  y: {} | null;
-} & {
-  kind: Kind;
+export type InAllOf = {
+  kind: "c" & Kind;
+  y: string;
   x?: string;
-  y?: string;
 };
 
 /** if: { type } fails for the other kinds, and a property's type for its others. */

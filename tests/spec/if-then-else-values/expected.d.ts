@@ -33,51 +33,47 @@ export type Always = {
 };
 
 /** A property if rejects whole is present; one it admits whole asks nothing. */
-export type Properties = Record<string, unknown> & ({
+export type Properties = {
   a?: never;
   b?: unknown;
   c?: unknown;
-} & {
   x: {} | null;
 } | {
   a: {} | null;
-} & {
   y: {} | null;
-});
+};
 
 /** The values meet where the schema and its $ref target declare them, and the target is read once. */
-export type Derived = Base & {
-  kind?: "a" | "b";
-} & ({
+export type Derived = Base & ({
   kind?: "a";
-} & {
   x: {} | null;
 } | {
   kind: "b";
-} & {
   y: {} | null;
 });
 
 /** const, type: boolean and type: null list values too. */
 export type Listed = {
   one?: "a";
-  flag?: boolean;
-  none?: null;
-} & ({
-  one?: "a";
   flag?: true;
   none?: null;
-} & {
   x: {} | null;
 } | {
+  one?: "a";
   flag: false;
-} & {
+  none?: null;
   y: {} | null;
-});
+};
 
 /** if is read value by value: bounds, patterns, types, values in arrays and objects. */
 export type Values = {
   code?: 200 | 404;
+  name?: "ab";
+  v?: "a" | 1;
+  w?: [1];
+  x: {} | null;
+} | {
+  code: 200;
   name?: "ab" | "cd";
   v?: "a" | 1 | 1.5 | null | true | [1] | {
     a: 1;
@@ -85,26 +81,34 @@ export type Values = {
   w?: [1] | {
     a: 1;
   };
-} & ({
-  code?: unknown;
-  name?: `a${string}` | number | boolean | null | unknown[] | Record<string, unknown>;
-  v?: string | number;
-  w?: [1];
-} & {
-  x: {} | null;
 } | {
-  code: 200;
-} | {
+  code?: 200 | 404;
   name: "cd";
+  v?: "a" | 1 | 1.5 | null | true | [1] | {
+    a: 1;
+  };
+  w?: [1] | {
+    a: 1;
+  };
 } | {
+  code?: 200 | 404;
+  name?: "ab" | "cd";
   v: 1.5 | null | true | [1] | {
     a: 1;
   };
+  w?: [1] | {
+    a: 1;
+  };
 } | {
+  code?: 200 | 404;
+  name?: "ab" | "cd";
+  v?: "a" | 1 | 1.5 | null | true | [1] | {
+    a: 1;
+  };
   w: {
     a: 1;
   };
-});
+};
 
 /** Array keywords without type let the other kinds the schema can be pass. */
 export type Items = [unknown, ...unknown[]] | null;

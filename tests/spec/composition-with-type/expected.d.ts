@@ -17,13 +17,9 @@ export type S = string;
 export type N = string | null;
 
 export type O = {
-  a: {} | null;
-} & {
-  a?: string;
+  a: string;
 };
 
 export type P = {
-  a: {} | null;
-} & {
-  a?: string;
+  a: string;
 };

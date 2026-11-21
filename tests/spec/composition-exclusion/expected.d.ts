@@ -90,10 +90,8 @@ export type Closed = {
 
 /** A closed object admits no key its members have but it does not. */
 export type ClosedOver = {
-  x?: string;
-} & {
-  a?: string;
   x?: never;
+  a?: string;
 };
 
 export type Cat = {

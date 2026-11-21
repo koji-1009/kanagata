@@ -12,12 +12,11 @@ export interface schemas {
 }
 
 export type Cond = {
-  kind?: string;
-} & ({
   kind?: never;
 } | {
+  kind?: string;
   x: {} | null;
-});
+};
 
 export type Names = {
   a?: unknown;
@@ -27,10 +26,9 @@ export type Names = {
 export type Contains = [string | number, ...(string | number)[]];
 
 export type DepReq = {
-  a?: string;
-  b?: string;
-} & ({
   a?: never;
+  b?: string;
 } | {
-  b: {} | null;
-});
+  a?: string;
+  b: string;
+};
