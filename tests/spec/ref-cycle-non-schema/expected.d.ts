@@ -6,10 +6,13 @@ export interface operations {}
 
 export interface schemas {
   Holder: Holder;
+  a: A;
 }
 
 export type Holder = {
-  loop?: {
-    next?: unknown[];
-  };
+  loop?: A;
+};
+
+export type A = {
+  next?: A[];
 };

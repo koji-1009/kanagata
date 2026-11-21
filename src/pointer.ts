@@ -60,6 +60,8 @@ function decodePath(segment: string): string {
 interface Index {
 	ids: Map<string, Value>;
 	anchors: Map<string, Value>;
+	/** How many `$dynamicAnchor`s have each name. */
+	dynamic: Map<string, number>;
 }
 
 /**
@@ -81,9 +83,15 @@ function indexIds(index: Index, doc: Value, base: string): void {
 			here = withoutFragment(new URL(id, base));
 			if (!index.ids.has(here)) index.ids.set(here, v);
 		}
-		const anchor = v.str("$anchor");
-		if (anchor !== undefined && !index.anchors.has(`${here}#${anchor}`))
-			index.anchors.set(`${here}#${anchor}`, v);
+		// A $dynamicAnchor is a plain-name fragment too (JSON Schema 2020-12, 8.2.2).
+		for (const key of ["$anchor", "$dynamicAnchor"]) {
+			const anchor = v.str(key);
+			if (anchor !== undefined && !index.anchors.has(`${here}#${anchor}`))
+				index.anchors.set(`${here}#${anchor}`, v);
+		}
+		const dynamic = v.str("$dynamicAnchor");
+		if (dynamic !== undefined)
+			index.dynamic.set(dynamic, (index.dynamic.get(dynamic) ?? 0) + 1);
 		for (const [k, x] of v.entries) {
 			if (!names && DATA.has(k)) continue;
 			walk(x, here, !names && NAME_MAPS.has(k));
@@ -326,10 +334,41 @@ export class Ctx {
 			throw new DiagError(at, `$ref target not found: ${r}`);
 		return {
 			value,
-			base: resource,
+			base: fragment.startsWith("/")
+				? this.#within(doc, fragment, resource)
+				: resource,
 			uri: `${resource}#${fragment}`,
 			where: this.where(resource, fragment),
 		};
+	}
+
+	/**
+	 * The base URI at a JSON Pointer into a document: the nearest `$id` on the way
+	 * (3.1, 3.2), whose relative `$ref`s resolve against it, or the document's.
+	 */
+	#within(doc: Value, fragment: string, resource: string): string {
+		if (!this.refSiblings) return resource;
+		let base = resource;
+		let cur: Value | undefined = doc;
+		// The pointer resolved, so every token names a member or an index.
+		for (const raw of fragment.slice(1).split("/")) {
+			const id = str(cur, "$id");
+			if (id !== undefined && URL.canParse(id, base))
+				base = withoutFragment(new URL(id, base));
+			const token = unescapeToken(raw);
+			cur = Array.isArray(cur) ? cur[Number(token)] : get(cur, token);
+		}
+		return base;
+	}
+
+	/** Whether a `$dynamicRef` to `#name` is a `$ref`: no other `$dynamicAnchor` of the name can take its place. */
+	dynamicIsStatic(name: string): boolean {
+		return (this.#ids().dynamic.get(name) ?? 0) <= 1;
+	}
+
+	/** Whether a schema is hoisted, by its URI. */
+	isHoisted(uri: string): boolean {
+		return this.#hoistedKeys.has(uri);
 	}
 
 	/**
@@ -380,7 +419,11 @@ export class Ctx {
 	/** Every schema resource (`$id`) and `$anchor` in the document, by absolute URI, found on first use; other documents add theirs as they load. */
 	#ids(): Index {
 		if (this.#index !== undefined) return this.#index;
-		const index: Index = { ids: new Map(), anchors: new Map() };
+		const index: Index = {
+			ids: new Map(),
+			anchors: new Map(),
+			dynamic: new Map(),
+		};
 		indexIds(index, this.root, this.documentBase);
 		this.#index = index;
 		return index;

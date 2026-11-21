@@ -49,7 +49,6 @@ const IGNORED: [keyword: string, message: string][] = [
 		"dependentSchemas",
 		"dependentSchemas cannot be expressed in TypeScript; ignored",
 	],
-	["$dynamicRef", "$dynamicRef is not supported; ignored"],
 ];
 
 /** Keywords that apply subschemas to the same value: they decide what `unevaluated*` see. */
@@ -160,6 +159,19 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		// are ignored, nullable among them unless loose.
 		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
 		out.push(...admitted([v], [target]));
+	}
+	// $dynamicRef is $ref where no other $dynamicAnchor of its name can take the place of
+	// the one it reaches; which one does depends on how the value was reached.
+	const dr = v.str("$dynamicRef");
+	if (dr !== undefined) {
+		const name = dr.split("#")[1] ?? "";
+		if (name.startsWith("/") || cx.dynamicIsStatic(name))
+			out.push(reference(cx, dr, at));
+		else
+			cx.warn(
+				child(at, "$dynamicRef"),
+				"$dynamicRef to a name more than one $dynamicAnchor has cannot be expressed in TypeScript; ignored",
+			);
 	}
 	const c = v.get("const");
 	if (c !== undefined) out.push(literal(c));
@@ -841,15 +853,16 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 	const key = cx.componentKey(target);
 	if (key !== undefined) {
 		if (at !== child("#/components/schemas", key)) return ref(key, cx.mode);
-	} else if (cx.isFile(base)) {
+	} else if (cx.isFile(base) || cx.isHoisted(uri)) {
 		return ref(cx.hoist(target, located), cx.mode);
 	}
-	if (!cx.enter(uri)) {
-		cx.warn(at, `circular $ref expanded as unknown: ${r}`);
-		return UNKNOWN;
-	}
+	// A schema reached again while it is expanded inline is a cycle: a component is
+	// its name, another schema gets one, as a schema in another file does.
+	if (!cx.enter(uri)) return ref(key ?? cx.hoist(target, located), cx.mode);
 	try {
-		return cx.withBase(base, () => schema(cx, target, where));
+		const t = cx.withBase(base, () => schema(cx, target, where));
+		// It reached itself, so it has a name now: every view refers to it by that.
+		return cx.isHoisted(uri) ? ref(cx.hoist(target, located), cx.mode) : t;
 	} finally {
 		cx.leave();
 	}

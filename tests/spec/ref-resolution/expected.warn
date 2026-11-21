@@ -1,0 +1,1 @@
+#/components/schemas/B/properties/x/$dynamicRef: $dynamicRef to a name more than one $dynamicAnchor has cannot be expressed in TypeScript; ignored

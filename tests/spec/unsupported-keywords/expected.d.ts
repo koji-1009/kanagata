@@ -6,7 +6,6 @@ export interface operations {}
 
 export interface schemas {
   Cond: Cond;
-  Dyn: Dyn;
   Names: Names;
   Contains: Contains;
   DepReq: DepReq;
@@ -15,8 +14,6 @@ export interface schemas {
 export type Cond = {
   kind?: string;
 };
-
-export type Dyn = unknown;
 
 export type Names = {
   a?: unknown;
