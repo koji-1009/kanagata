@@ -1,0 +1,34 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Unevaluated": { "description": "Without applicators, unevaluatedProperties is additionalProperties.", "type": "object", "properties": { "a": { "type": "string" } }, "unevaluatedProperties": false, "required": ["b"] },
+      "UnevaluatedEmpty": { "description": "So it closes an object.", "type": "object", "unevaluatedProperties": false },
+      "UnevaluatedSchema": { "description": "And types the other keys.", "type": "object", "unevaluatedProperties": { "type": "string" } },
+      "UnevaluatedItems": { "description": "unevaluatedItems is items.", "prefixItems": [{ "type": "string" }], "unevaluatedItems": false },
+      "NotAnything": { "description": "not of a schema that admits everything admits nothing.", "not": {} },
+      "NotNothing": { "description": "not false admits everything.", "type": "string", "not": false },
+      "NotTrue": { "description": "not true admits nothing.", "type": "string", "not": true },
+      "NotTwo": { "description": "A not with more than one keyword has no type.", "type": "string", "not": { "type": "string", "maxLength": 0 } },
+      "NotNull": { "description": "not type leaves the other kinds.", "type": ["string", "null"], "not": { "type": "null" } },
+      "NotTypes": { "description": "Or the kinds a type list does not name.", "not": { "type": ["string", "null", "object"] } },
+      "NotInteger": { "description": "But a number that is not an integer has no type.", "type": "number", "not": { "type": "integer" } },
+      "NotRequired": { "description": "not required is the objects without one of the keys.", "type": "object", "properties": { "a": { "type": "string" } }, "not": { "required": ["a"] } },
+      "NotEnum": { "description": "not enum leaves out the values it lists.", "enum": ["a", "b", "c"], "not": { "enum": ["b"] } },
+      "NotRef": { "description": "Other nots have no type.", "not": { "$ref": "#/components/schemas/NotNull" } },
+      "NotString": { "description": "An object is no string not could leave out.", "type": "object", "not": { "const": "x" } },
+      "NotObject": { "description": "But an object type admits an object not lists.", "type": "object", "not": { "const": {} } },
+      "NotTuple": { "description": "And an array type an array.", "type": "array", "not": { "enum": [[1]] } },
+      "NoNames": { "description": "propertyNames false admits no key.", "type": "object", "propertyNames": false },
+      "OneName": { "description": "propertyNames const or enum lists the keys.", "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } }, "patternProperties": { "^c": { "type": "integer" } }, "propertyNames": { "enum": ["a", "c"] } },
+      "RequiredName": { "description": "A required key it does not list admits nothing.", "type": "object", "properties": { "a": { "type": "string" } }, "required": ["a"], "propertyNames": { "const": "b" } },
+      "PatternNames": { "description": "Other propertyNames have no type.", "type": "object", "propertyNames": { "pattern": "^a" } },
+      "MixedNames": { "description": "Nor do names listed next to another keyword.", "type": "object", "propertyNames": { "enum": ["a"], "maxLength": 1 } },
+      "ContainsNone": { "description": "minContains 0 asks for no item.", "type": "array", "items": { "type": "string" }, "contains": { "const": "x" }, "minContains": 0 },
+      "ContainsEmpty": { "description": "An item is more than maxItems 0 admits.", "type": "array", "contains": {}, "maxItems": 0 },
+      "NoDeps": { "description": "dependentRequired with no keys asks nothing.", "type": "object", "dependentRequired": { "a": [], "b": "c" } },
+      "OrNull": { "description": "Object keywords like these do not apply to null.", "type": ["object", "null"], "dependentRequired": { "a": ["b"] } }
+    }
+  }
+}

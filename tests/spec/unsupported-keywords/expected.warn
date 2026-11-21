@@ -1,7 +1,5 @@
 #/components/schemas/Cond/if: if / then / else cannot be expressed in TypeScript; ignored
 #/components/schemas/Cond/dependentSchemas: dependentSchemas cannot be expressed in TypeScript; ignored
-#/components/schemas/Cond/unevaluatedProperties: unevaluatedProperties cannot be expressed in TypeScript; ignored
+#/components/schemas/Cond/unevaluatedProperties: unevaluatedProperties next to an applicator cannot be expressed in TypeScript; ignored
 #/components/schemas/Dyn/$dynamicRef: $dynamicRef is not supported; ignored
-#/components/schemas/Names/propertyNames: propertyNames cannot be expressed in TypeScript; ignored
-#/components/schemas/Contains/contains: contains cannot be expressed in TypeScript; ignored
-#/components/schemas/DepReq/dependentRequired: dependentRequired cannot be expressed in TypeScript; ignored
+#/components/schemas/Contains/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

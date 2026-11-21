@@ -18,11 +18,18 @@ export type Cond = {
 
 export type Dyn = unknown;
 
-export type Names = Record<string, unknown>;
+export type Names = {
+  a?: unknown;
+  b?: unknown;
+};
 
-export type Contains = (string | number)[];
+export type Contains = [string | number, ...(string | number)[]];
 
 export type DepReq = {
   a?: string;
   b?: string;
-};
+} & ({
+  a?: never;
+} | {
+  b: {} | null;
+});

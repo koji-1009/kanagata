@@ -67,8 +67,8 @@ Types follow what the schema accepts, not another generator's output.
 | object keywords without `type`                                                                                      | an object (non-objects are never meant), but other kinds the parent's `type` names pass: `{ type: string, allOf: [{ properties: … }] }` is `string`                   |
 | array keywords (`items`, `prefixItems`, `minItems`, `maxItems`) without `type`                                      | an array (non-arrays are never meant), so `{ minItems: 1 }` is `[unknown, ...unknown[]]`; other kinds the parent's `type` names pass, as for object keywords          |
 | `readOnly` / `writeOnly` property                                                                                   | left out of what is sent to the API / what it sends                                                                                                                   |
-| `not`, `if` / `then` / `else`, `dependentSchemas`, `unevaluated*`, `$dynamicRef`                                    | ignored, with a warning                                                                                                                                               |
-| `dependentRequired`, `propertyNames`, `contains`                                                                    | ignored, with a warning                                                                                                                                               |
+| `if` / `then` / `else`, `dependentSchemas`, `$dynamicRef`, `unevaluated*` next to an applicator                     | ignored, with a warning                                                                                                                                               |
+| `not`, `dependentRequired`, `propertyNames`, `contains`, `unevaluated*` without an applicator                       | what TypeScript can say of them; see [Other keywords](#other-keywords)                                                                                                |
 | `pattern`, `minLength`, `maxLength`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`     | the `const` / `enum` values they reject are left out, and a string or number they admit one of (or none) is it; see [Values](#values)                                 |
 | `minProperties`, `maxProperties` of a closed object (`additionalProperties: false`, no `patternProperties`)         | which properties are present: `minProperties: 1` with `a` and `b` is `{ a: A; b?: B } \| { a?: A; b: B }`; too many or too few, `never`                               |
 | `format` (other than `binary`), `uniqueItems`, `minProperties`, `maxProperties` (other than 0) of an open object    | ignored, without a warning: the type admits every value they do, and more                                                                                             |
@@ -91,6 +91,15 @@ An array is `T[]` until `prefixItems`, `minItems` or `maxItems` say more; then i
 - In 3.0, `exclusiveMinimum` / `exclusiveMaximum` are booleans that make `minimum` / `maximum` exclusive; in 3.1 and 3.2 they are bounds of their own, and the tighter one applies.
 - `maxLength: 0` is `""`, and `minLength` above `maxLength` is `never`. Bounds that admit one number are it (`{ type: integer, minimum: 1.2, maximum: 2.5 }` is `2`), and bounds that admit none are `never`.
 - Other lengths are `string` and other ranges `number`, an integer range too (`{ type: integer, minimum: 1, maximum: 100 }` is `number`).
+
+## Other keywords
+
+- `not: {}` (or `true`) is `never`, and `not: false` changes nothing. `not: { type }` leaves the other kinds: `{ type: [string, null], not: { type: "null" } }` is `string`. `not: { required: [a, b] }` is the objects without one of them: `{ a?: never } | { b?: never }`. `not: { enum }` and `not: { const }` leave out the values they list. Any other `not`, `not: { type: integer }` without `number`, and a value a member admits by its kind (`type: string` for `not: { const: "" }`) are ignored, with a warning: TypeScript has no type for what they leave.
+- `dependentRequired: { a: [b] }` is `{ a?: never } | { b: … }`: without `a`, or with `b`.
+- `propertyNames: false` admits no key. `propertyNames: { enum }` or `{ const }` lists the keys the object has, as `additionalProperties: false` would its properties: a declared property it does not list is `never`, a listed key nothing declares has the value `patternProperties` or `additionalProperties` gives it. Any other `propertyNames` is ignored, with a warning.
+- `contains` asks for `minContains` items (1 when not given) that match it. The type says that many items, not which, with a warning: `{ items: string, contains: … }` is `[string, ...string[]]`.
+- `unevaluatedProperties` and `unevaluatedItems` are `additionalProperties` and `items` where no applicator (`allOf`, `oneOf`, `anyOf`, `$ref`, `if`, `dependentSchemas`) evaluates anything; next to one they are ignored, with a warning.
+- These constrain only objects (arrays, for `contains`), so the other kinds `type` names pass them: `{ type: [object, null], dependentRequired: … }` admits `null`.
 
 ## `oneOf`
 

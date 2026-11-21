@@ -30,7 +30,7 @@
       "Negated": {
         "description": "An ignored keyword next to $ref is reported, as it would apply.",
         "$ref": "#/components/schemas/Base",
-        "not": { "type": "string" }
+        "not": { "const": "x" }
       }
     }
   }

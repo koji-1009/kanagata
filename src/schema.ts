@@ -44,28 +44,34 @@ const SCHEMA_PREFIX = "#/components/schemas/";
 
 /** Keywords that change which values are valid but have no TypeScript form: ignored, with a warning. */
 const IGNORED: [keyword: string, message: string][] = [
-	["not", "not cannot be expressed in TypeScript; ignored"],
 	["if", "if / then / else cannot be expressed in TypeScript; ignored"],
 	[
 		"dependentSchemas",
 		"dependentSchemas cannot be expressed in TypeScript; ignored",
 	],
-	[
-		"dependentRequired",
-		"dependentRequired cannot be expressed in TypeScript; ignored",
-	],
-	["propertyNames", "propertyNames cannot be expressed in TypeScript; ignored"],
-	["contains", "contains cannot be expressed in TypeScript; ignored"],
-	[
-		"unevaluatedProperties",
-		"unevaluatedProperties cannot be expressed in TypeScript; ignored",
-	],
-	[
-		"unevaluatedItems",
-		"unevaluatedItems cannot be expressed in TypeScript; ignored",
-	],
 	["$dynamicRef", "$dynamicRef is not supported; ignored"],
 ];
+
+/** Keywords that apply subschemas to the same value: they decide what `unevaluated*` see. */
+const APPLICATORS = [
+	"allOf",
+	"oneOf",
+	"anyOf",
+	"$ref",
+	"$dynamicRef",
+	"if",
+	"dependentSchemas",
+];
+
+/**
+ * `unevaluatedProperties` / `unevaluatedItems` where no applicator evaluates anything:
+ * then they are `additionalProperties` / `items`. undefined where they are not that.
+ */
+function unevaluated(v: JsonObject, key: string): Value | undefined {
+	return APPLICATORS.every((k) => v.get(k) === undefined)
+		? v.get(key)
+		: undefined;
+}
 
 /** Converts a schema. */
 export function schema(cx: Ctx, v: Value, at: string): Ty {
@@ -82,9 +88,16 @@ export function schema(cx: Ctx, v: Value, at: string): Ty {
 function convert(cx: Ctx, v: JsonObject, at: string): Ty {
 	const t = parts(cx, v, at);
 	// In 3.0 the keywords next to $ref have no effect, so ignoring them is no news.
-	if (cx.refSiblings || v.str("$ref") === undefined)
+	if (cx.refSiblings || v.str("$ref") === undefined) {
 		for (const [keyword, message] of IGNORED)
 			if (v.get(keyword) !== undefined) cx.warn(child(at, keyword), message);
+		for (const key of ["unevaluatedProperties", "unevaluatedItems"])
+			if (v.get(key) !== undefined && unevaluated(v, key) === undefined)
+				cx.warn(
+					child(at, key),
+					`${key} next to an applicator cannot be expressed in TypeScript; ignored`,
+				);
+	}
 	return t;
 }
 
@@ -161,7 +174,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		const members = cx.withLeftOut(allOf, group, () =>
 			list(cx, allOf, child(at, "allOf")),
 		);
-		out.push(...passing(v, allOf, admitted(allOf, members)));
+		out.push(...passing(cx, v, allOf, admitted(allOf, members)));
 	}
 	// A closed object admits no key its $ref target or members have but it does not;
 	// one without properties already says so (`{ [key: string]: never }`).
@@ -177,6 +190,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		const members = v.get(key);
 		if (!Array.isArray(members)) continue;
 		const tys = passing(
+			cx,
 			v,
 			members,
 			closedAmong(
@@ -193,13 +207,27 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 			),
 		);
 	}
+	out.push(...keywordParts(cx, v, at));
 	out.push(...arrayTargets(cx, out, at));
-	// The schema's own keywords drop the literals (from const, enum, members) they reject.
+	// The schema's own keywords drop the literals (from const, enum, members) they reject,
+	// and `not: { enum }` those it lists.
 	const t = inter(out);
 	const members = t.kind === "union" ? t.items : [t];
-	const kept = members.every((m) => admitsLiteral(cx, v, m))
-		? t
-		: union(members.filter((m) => admitsLiteral(cx, v, m)));
+	const out$ = excluded(v) ?? [];
+	const listed = (m: Ty) =>
+		out$.some(
+			(x) =>
+				x.kind === m.kind &&
+				(m.kind !== "lit" ||
+					x === m ||
+					(x as { text: string }).text === m.text),
+		);
+	const keep = (m: Ty) => admitsLiteral(cx, v, m) && !listed(m);
+	const kept = members.every(keep) ? t : union(members.filter(keep));
+	// A value `not` lists that a member may admit other than by listing it (`string` for
+	// "a", a reference) stays.
+	if (out$.some((x) => members.some((m) => mayAdmit(m, x))))
+		cx.warn(child(at, "not"), "not cannot be expressed in TypeScript; ignored");
 	return loose ? union([kept, NULL]) : kept;
 }
 
@@ -208,7 +236,9 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
  * `patternProperties`): its declared properties. undefined when it is not closed.
  */
 function closedKeys(v: JsonObject): Set<string> | undefined {
-	if (v.get("additionalProperties") !== false) return undefined;
+	const ap =
+		v.get("additionalProperties") ?? unevaluated(v, "unevaluatedProperties");
+	if (ap !== false) return undefined;
 	if (v.get("patternProperties") !== undefined) return undefined;
 	const props = v.get("properties");
 	return new Set(
@@ -344,20 +374,167 @@ const KIND: Record<string, Ty> = {
  * `{ minItems: 1 }`) constrains only values of that kind. Where the schema's own `type`
  * (or `nullable: true`, 3.0) names other kinds, their values pass the member.
  */
-function passing(v: JsonObject, members: Value[], tys: Ty[]): Ty[] {
-	const t = v.get("type");
-	const kinds = typeof t === "string" ? [t] : Array.isArray(t) ? t : undefined;
-	if (kinds === undefined) return tys;
-	if (v.get("nullable") === true && !kinds.includes("null")) kinds.push("null");
+function passing(cx: Ctx, v: JsonObject, members: Value[], tys: Ty[]): Ty[] {
 	return tys.map((ty, i) => {
 		const m = members[i];
 		if (!(m instanceof JsonObject) || !typeless(m)) return ty;
-		const kind = hasObjectKeywords(m) ? "object" : "array";
-		const others = kinds.filter(
-			(k): k is string => typeof k === "string" && k !== kind && k in KIND,
-		);
-		return union([ty, ...others.map((k) => KIND[k] as Ty)]);
+		return widen(cx, v, hasObjectKeywords(m) ? "object" : "array", ty);
 	});
+}
+
+/** The kinds `type` names, and null where 3.0's `nullable: true` adds it; undefined without `type`. */
+function typeKinds(cx: Ctx, v: JsonObject): string[] | undefined {
+	const t = v.get("type");
+	const kinds =
+		typeof t === "string"
+			? [t]
+			: Array.isArray(t)
+				? t.filter((k): k is string => typeof k === "string")
+				: undefined;
+	if (kinds === undefined) return undefined;
+	return !cx.refSiblings && v.get("nullable") === true
+		? [...kinds, "null"]
+		: kinds;
+}
+
+/** `ty`, a constraint on values of `kind` only, with the other kinds `type` names, which pass it. */
+function widen(cx: Ctx, v: JsonObject, kind: string, ty: Ty): Ty {
+	const kinds = typeKinds(cx, v);
+	if (kinds === undefined) return ty;
+	return union([
+		ty,
+		...kinds.filter((k) => k !== kind && k in KIND).map((k) => KIND[k] as Ty),
+	]);
+}
+
+/**
+ * What `dependentRequired`, `propertyNames`, `contains` and `not` say that TypeScript
+ * can, as parts of the schema; a warning where they say more.
+ */
+function keywordParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
+	const parts: Ty[] = [];
+	// A key present requires the keys it lists: it is absent, or they are all present.
+	const dr = v.get("dependentRequired");
+	for (const [key, deps] of dr instanceof JsonObject ? dr.entries : []) {
+		const names = Array.isArray(deps)
+			? deps.filter((d): d is string => typeof d === "string")
+			: [];
+		if (names.length === 0) continue;
+		parts.push(
+			widen(
+				cx,
+				v,
+				"object",
+				union([
+					{ kind: "object", props: [{ key, ty: NEVER, optional: true }] },
+					{
+						kind: "object",
+						props: names.map((n) => ({ ...prop(n, UNKNOWN), present: true })),
+					},
+				]),
+			),
+		);
+	}
+	const names = v.get("propertyNames");
+	if (names === false)
+		parts.push(
+			widen(cx, v, "object", { kind: "map", props: [], index: NEVER }),
+		);
+	else if (names !== undefined && keyNames(names) === undefined)
+		cx.warn(
+			child(at, "propertyNames"),
+			"propertyNames cannot be expressed in TypeScript; ignored",
+		);
+	// contains requires minContains items (1 if not given) that match it; TypeScript can say how many.
+	if (v.get("contains") !== undefined) {
+		const min = count(v, "minContains") ?? 1;
+		if (min > 0)
+			parts.push(
+				widen(cx, v, "array", {
+					kind: "tuple",
+					items: Array.from({ length: min }, () => UNKNOWN),
+					min,
+					rest: UNKNOWN,
+				}),
+			);
+		cx.warn(
+			child(at, "contains"),
+			"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
+		);
+	}
+	const n = v.get("not");
+	if (n !== undefined) {
+		const t = negation(n);
+		if (t !== undefined) parts.push(t);
+		else if (excluded(v) === undefined)
+			cx.warn(
+				child(at, "not"),
+				"not cannot be expressed in TypeScript; ignored",
+			);
+	}
+	return parts;
+}
+
+/**
+ * The values `not` leaves, where TypeScript can say them: none for a schema that admits
+ * everything, the other kinds for `not: { type }`, the objects without a key for
+ * `not: { required }`. undefined otherwise (`not: false` leaves everything: unknown).
+ */
+function negation(n: Value): Ty | undefined {
+	if (n === false) return UNKNOWN;
+	// true, and anything else read as a schema that admits every value.
+	if (!(n instanceof JsonObject)) return NEVER;
+	const keys = n.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	if (keys.length === 0) return NEVER;
+	if (keys.length !== 1) return undefined;
+	const t = n.get("type");
+	if (keys[0] === "type") {
+		const named = Array.isArray(t) ? t : [t];
+		// Without number, an integer is a number TypeScript cannot leave out.
+		if (named.includes("integer") && !named.includes("number"))
+			return undefined;
+		return union(
+			["string", "number", "boolean", "null", "array", "object"]
+				.filter((k) => !named.includes(k))
+				.map((k) => KIND[k] as Ty),
+		);
+	}
+	const req = n.get("required");
+	if (keys[0] === "required" && Array.isArray(req)) {
+		const names = req.filter((r): r is string => typeof r === "string");
+		return union(
+			names.map((key) => ({
+				kind: "object",
+				props: [{ key, ty: NEVER, optional: true }],
+			})),
+		);
+	}
+	return undefined;
+}
+
+/** The values `not: { enum }` or `not: { const }` leave out; undefined for any other `not`. */
+function excluded(v: JsonObject): Ty[] | undefined {
+	const n = v.get("not");
+	if (!(n instanceof JsonObject)) return undefined;
+	const keys = n.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	if (keys.length !== 1) return undefined;
+	const e = n.get("enum");
+	if (keys[0] === "enum" && Array.isArray(e)) return e.map(literal);
+	const c = n.get("const");
+	return keys[0] === "const" && c !== undefined ? [literal(c)] : undefined;
+}
+
+/** The keys `propertyNames: { enum }` or `{ const }` allow; undefined for any other. */
+function keyNames(names: Value | undefined): string[] | undefined {
+	if (!(names instanceof JsonObject)) return undefined;
+	const keys = names.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	if (keys.length !== 1) return undefined;
+	const e = names.get("enum");
+	const c = names.get("const");
+	const values =
+		keys[0] === "enum" && Array.isArray(e) ? e : keys[0] === "const" ? [c] : [];
+	const strings = values.filter((x): x is string => typeof x === "string");
+	return strings.length > 0 ? strings : undefined;
 }
 
 /** Whether a schema says nothing but keywords of one kind, without `type`. */
@@ -420,6 +597,17 @@ function shared(tys: Ty[]): Ty[] {
 	return tys.map((t) =>
 		union(listed(t).filter((m) => !drop.some((d) => same(m, d)))),
 	);
+}
+
+/** Whether a type may admit a value (from `const` / `enum`) other than by listing it. */
+function mayAdmit(m: Ty, x: Ty): boolean {
+	const of = (kinds: string[], t: Ty) => kinds.includes(t.kind);
+	const objects = ["object", "map", "record"];
+	if (of(["lit", "null", "blob"], m)) return false;
+	if (of(["string", "number", "integer", "boolean"], m)) return byKind(m, x);
+	if (of(objects, m)) return of(objects, x);
+	if (of(["array", "tuple"], m)) return x.kind === "tuple";
+	return true;
 }
 
 /** Whether a member admits a literal by its kind, not by listing it. */
@@ -811,7 +999,10 @@ function isBinaryString(v: JsonObject): boolean {
  * which TypeScript bounds only by writing out every item.
  */
 function array(cx: Ctx, v: JsonObject, at: string): Ty {
-	const items = v.get("items");
+	// unevaluatedItems is items where nothing else evaluates the rest.
+	const key = v.get("items") === undefined ? "unevaluatedItems" : "items";
+	const items =
+		key === "items" ? v.get("items") : unevaluated(v, "unevaluatedItems");
 	const prefix = v.get("prefixItems");
 	const head = Array.isArray(prefix)
 		? list(cx, prefix, child(at, "prefixItems"))
@@ -821,7 +1012,7 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 			? UNKNOWN
 			: items === false && Array.isArray(prefix)
 				? undefined
-				: schema(cx, items, child(at, "items"));
+				: schema(cx, items, child(at, key));
 	const min = count(v, "minItems") ?? 0;
 	const max = count(v, "maxItems");
 	if (max !== undefined && max < min) return NEVER;
@@ -937,12 +1128,19 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 			? NEVER
 			: { kind: "map", props: [], index: NEVER };
 
-	const ap = v.get("additionalProperties");
+	// unevaluatedProperties is additionalProperties where nothing else evaluates the rest.
+	const apKey =
+		v.get("additionalProperties") === undefined
+			? "unevaluatedProperties"
+			: "additionalProperties";
+	const ap =
+		apKey === "additionalProperties"
+			? v.get(apKey)
+			: unevaluated(v, "unevaluatedProperties");
 	let additional: Ty | undefined;
 	if (ap === false) additional = NEVER;
 	else if (ap === true) additional = UNKNOWN;
-	else if (ap !== undefined)
-		additional = schema(cx, ap, child(at, "additionalProperties"));
+	else if (ap !== undefined) additional = schema(cx, ap, child(at, apKey));
 	const pp = v.get("patternProperties");
 	const patterns =
 		pp instanceof JsonObject
@@ -965,6 +1163,27 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		const ty = matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
 		if (ty.kind === "never") return NEVER;
 		props.push({ ...prop(name, ty), present: true });
+	}
+
+	// propertyNames that lists the keys closes the object over them: a declared property
+	// it does not list cannot be there, and one it lists but nothing declares has the
+	// value the patterns or additionalProperties give it.
+	const allowed = keyNames(v.get("propertyNames"));
+	if (allowed !== undefined) {
+		if (props.some((p) => !p.optional && !allowed.includes(p.key)))
+			return NEVER;
+		const kept = props.map((p) =>
+			allowed.includes(p.key) ? p : { ...p, ty: NEVER },
+		);
+		for (const name of allowed) {
+			if (left.has(name) || kept.some((p) => p.key === name)) continue;
+			const matched = patterns
+				.filter(([p]) => matches(p, name))
+				.map(([, t]) => t);
+			const ty = matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
+			if (ty.kind !== "never") kept.push({ key: name, ty, optional: true });
+		}
+		return counted(v, kept);
 	}
 
 	// Keys matching a pattern are allowed whatever additionalProperties says. TypeScript

@@ -458,7 +458,7 @@ test("in 3.0, keywords next to $ref are ignored without warnings", () => {
 
 test("a warning raised in both views of a schema is reported once", () => {
 	const src = schemas(
-		`"S":{"type":"object","properties":{"id":{"type":"integer","readOnly":true},"x":{"not":{"type":"string"}}}}`,
+		`"S":{"type":"object","properties":{"id":{"type":"integer","readOnly":true},"x":{"not":{"const":"a"}}}}`,
 	);
 	assert.deepEqual(generate(src).warnings, [
 		{

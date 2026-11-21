@@ -27,7 +27,7 @@
           "stamp": { "type": "string", "readOnly": true }
         }
       },
-      "Negated": { "description": "Without $ref, an ignored keyword is reported.", "not": { "type": "string" } },
+      "Negated": { "description": "Without $ref, an ignored keyword is reported.", "not": { "const": "x" } },
       "Old": { "$ref": "#/components/schemas/Base", "deprecated": true }
     }
   }
