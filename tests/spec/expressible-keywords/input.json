@@ -32,6 +32,10 @@
       "ContainsNoString": { "description": "maxContains 0: no item is of the kind contains names.", "type": "array", "items": { "type": ["string", "number"] }, "contains": { "type": "string" }, "minContains": 0, "maxContains": 0 },
       "ContainsFew": { "description": "Other maxContains is ignored.", "type": "array", "contains": { "type": "string" }, "maxContains": 2 },
       "ContainsNoX": { "description": "As is maxContains 0 with a contains TypeScript cannot leave out.", "type": "array", "items": { "type": "string" }, "contains": { "const": "x" }, "minContains": 0, "maxContains": 0 },
+      "ContainsNoA": { "description": "maxContains 0: the values items lists that contains rejects.", "type": "array", "items": { "enum": ["a", "b", "c"] }, "contains": { "const": "a" }, "minContains": 0, "maxContains": 0 },
+      "ContainsNoShort": { "description": "As contains's keywords read them.", "type": "array", "items": { "enum": ["a", "bb"] }, "contains": { "maxLength": 1 }, "minContains": 0, "maxContains": 0 },
+      "ContainsNoObject": { "description": "Not where they cannot tell.", "type": "array", "items": { "enum": ["a"] }, "contains": { "minProperties": 1 }, "minContains": 0, "maxContains": 0 },
+      "ContainsPastPrefix": { "description": "Nor past prefixItems, whose items items does not list.", "type": "array", "prefixItems": [{ "type": "string" }], "items": { "enum": ["a", "b"] }, "contains": { "const": "a" }, "minContains": 0, "maxContains": 0 },
       "NoDeps": { "description": "dependentRequired with no keys asks nothing.", "type": "object", "dependentRequired": { "a": [], "b": "c" } },
       "OrNull": { "description": "Object keywords like these do not apply to null.", "type": ["object", "null"], "dependentRequired": { "a": ["b"] } }
     }

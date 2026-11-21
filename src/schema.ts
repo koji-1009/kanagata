@@ -594,7 +594,10 @@ function keywordParts(
 	if (contains !== undefined) {
 		const min = count(v, "minContains") ?? 1;
 		const max = count(v, "maxContains");
-		const none = max === 0 ? negation(contains) : undefined;
+		const none =
+			max === 0
+				? (negation(contains) ?? notContained(cx, v, contains as JsonObject))
+				: undefined;
 		const items = (n: number): Ty[] => Array.from({ length: n }, () => UNKNOWN);
 		if (max !== undefined && min > max)
 			parts.push(widen(cx, v, "array", NEVER));
@@ -1162,6 +1165,24 @@ function dependencies(v: JsonObject): [string, string[]][] {
 			? deps.filter((d): d is string => typeof d === "string")
 			: [],
 	]);
+}
+
+/**
+ * The items of an array none of whose items `contains` admits, where `items` lists their
+ * values: those values `contains` rejects. undefined where it cannot tell for one of them,
+ * or where `prefixItems` types the first items, which need not be values `items` lists.
+ */
+function notContained(
+	cx: Ctx,
+	v: JsonObject,
+	contains: JsonObject,
+): Ty | undefined {
+	const values = listed(cx, v.get("items"), new Set());
+	if (values === undefined || v.get("prefixItems") !== undefined)
+		return undefined;
+	const admitted = values.map((x) => accepts(cx, contains, x));
+	if (admitted.includes(undefined)) return undefined;
+	return union(values.filter((_, i) => admitted[i] === false).map(literal));
 }
 
 /** The values `not: { enum }` or `not: { const }` leave out; undefined for any other `not`. */

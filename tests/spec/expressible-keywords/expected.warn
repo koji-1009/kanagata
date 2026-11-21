@@ -10,3 +10,7 @@
 #/components/schemas/ContainsFew/maxContains: maxContains cannot be expressed in TypeScript; ignored
 #/components/schemas/ContainsNoX/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/ContainsNoX/maxContains: maxContains cannot be expressed in TypeScript; ignored
+#/components/schemas/ContainsNoObject/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/ContainsNoObject/maxContains: maxContains cannot be expressed in TypeScript; ignored
+#/components/schemas/ContainsPastPrefix/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/ContainsPastPrefix/maxContains: maxContains cannot be expressed in TypeScript; ignored
