@@ -716,11 +716,6 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		return required.some((n) => !left.has(n))
 			? NEVER
 			: { kind: "map", props: [], index: NEVER };
-	// A required key without a property schema must be present with any value.
-	for (const name of required) {
-		if (!left.has(name) && !props.some((p) => p.key === name))
-			props.push({ ...prop(name, UNKNOWN), present: true });
-	}
 
 	const ap = v.get("additionalProperties");
 	let additional: Ty | undefined;
@@ -728,30 +723,91 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	else if (ap === true) additional = UNKNOWN;
 	else if (ap !== undefined)
 		additional = schema(cx, ap, child(at, "additionalProperties"));
-
-	// Keys matching a pattern are allowed whatever additionalProperties says. TypeScript
-	// cannot check the pattern, so their types join the index signature.
 	const pp = v.get("patternProperties");
 	const patterns =
 		pp instanceof JsonObject
-			? pp.entries.map(([key, s]) =>
-					schema(cx, s, child(child(at, "patternProperties"), key)),
+			? pp.entries.map(
+					([key, s]) =>
+						[
+							key,
+							schema(cx, s, child(child(at, "patternProperties"), key)),
+						] as const,
 				)
 			: [];
+
+	// A required key without a property schema must be present, with the value the
+	// patterns it matches admit, or else additionalProperties; any value without either.
+	for (const name of required) {
+		if (left.has(name) || props.some((p) => p.key === name)) continue;
+		const matched = patterns
+			.filter(([p]) => matches(p, name))
+			.map(([, t]) => t);
+		const ty = matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
+		if (ty.kind === "never") return NEVER;
+		props.push({ ...prop(name, ty), present: true });
+	}
+
+	// Keys matching a pattern are allowed whatever additionalProperties says. TypeScript
+	// cannot check the pattern, so their types join the index signature.
 	if (patterns.length > 0 && additional !== undefined) {
+		const types = patterns.map(([, t]) => t);
 		additional = union(
-			additional.kind === "never" ? patterns : [additional, ...patterns],
+			additional.kind === "never" ? types : [additional, ...types],
 		);
 	}
 
 	if (additional === undefined)
 		return props.length === 0 ? RECORD : { kind: "object", props };
 	// `additionalProperties: false` closes the object; TypeScript can only say so
-	// when there are no properties at all.
-	if (additional.kind === "never" && props.length > 0)
-		return { kind: "object", props };
+	// when there are no properties at all, but its counts can say which are present.
+	if (additional.kind === "never") return counted(v, props);
 	// The index signature must admit every declared property too.
 	const members = [additional, ...props.map((p) => p.ty)];
 	if (props.some((p) => p.optional)) members.push(UNDEFINED);
 	return { kind: "map", props, index: union(members) };
+}
+
+/**
+ * A closed object, its properties all it can have: `minProperties` requires that many
+ * of them (a union over which), `maxProperties` leaves out the others.
+ */
+function counted(v: JsonObject, props: Prop[]): Ty {
+	if (props.length === 0) return { kind: "map", props: [], index: NEVER };
+	const optional = props.filter((p) => p.optional).map((p) => p.key);
+	const present = props.length - optional.length;
+	const min = count(v, "minProperties") ?? 0;
+	const max = count(v, "maxProperties") ?? props.length;
+	if (min > Math.min(max, props.length) || present > max) return NEVER;
+	const variant = (f: (p: Prop) => Prop): Ty => ({
+		kind: "object",
+		props: props.map((p) => (p.optional ? f(p) : p)),
+	});
+	const parts: Ty[] = [];
+	if (min > present)
+		parts.push(
+			union(
+				subsets(optional, min - present).map((keys) =>
+					variant((p) =>
+						keys.includes(p.key) ? { ...p, optional: false, present: true } : p,
+					),
+				),
+			),
+		);
+	if (max < props.length)
+		parts.push(
+			union(
+				subsets(optional, max - present).map((keys) =>
+					variant((p) => (keys.includes(p.key) ? p : { ...p, ty: NEVER })),
+				),
+			),
+		);
+	return parts.length === 0 ? { kind: "object", props } : inter(parts);
+}
+
+/** The subsets of `items` with `size` members, in order. */
+function subsets<T>(items: T[], size: number): T[][] {
+	if (size === 0) return [[]];
+	return items.flatMap((item, i) =>
+		subsets(items.slice(i + 1), size - 1).map((rest) => [item, ...rest]),
+	);
 }

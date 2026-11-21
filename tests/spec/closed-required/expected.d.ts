@@ -51,6 +51,6 @@ export type Open = {
 
 export type Patterned = {
   code?: string;
-  "x-id": {} | null;
-  [key: string]: unknown;
+  "x-id": string;
+  [key: string]: string | undefined;
 };

@@ -1,0 +1,17 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "One": { "description": "minProperties 1 on a closed object with one property requires it.", "type": "object", "additionalProperties": false, "minProperties": 1, "properties": { "pr_scan": { "enum": ["enabled", "disabled"] } } },
+      "Either": { "description": "With two, one of them.", "type": "object", "additionalProperties": false, "minProperties": 1, "properties": { "a": { "type": "string" }, "b": { "type": "string" } } },
+      "PastRequired": { "description": "Required properties count.", "type": "object", "additionalProperties": false, "minProperties": 2, "required": ["a"], "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } } },
+      "AtMostOne": { "description": "maxProperties leaves the others out.", "type": "object", "additionalProperties": false, "maxProperties": 1, "properties": { "a": { "type": "string" }, "b": { "type": "string" } } },
+      "Exactly": { "description": "Both.", "type": "object", "additionalProperties": false, "minProperties": 1, "maxProperties": 1, "properties": { "a": { "type": "string" }, "b": { "type": "string" } } },
+      "TooMany": { "description": "minProperties past the properties admits nothing.", "type": "object", "additionalProperties": false, "minProperties": 2, "properties": { "a": { "type": "string" } } },
+      "TooFew": { "description": "maxProperties below the required ones admits nothing.", "type": "object", "additionalProperties": false, "maxProperties": 1, "required": ["a", "b"], "properties": { "a": { "type": "string" }, "b": { "type": "string" } } },
+      "Loose": { "description": "Bounds the required properties meet change nothing.", "type": "object", "additionalProperties": false, "minProperties": 1, "maxProperties": 2, "required": ["a"], "properties": { "a": { "type": "string" }, "b": { "type": "string" } } },
+      "Open": { "description": "An open object can have any other key, so its counts are not a type.", "type": "object", "minProperties": 1, "maxProperties": 1, "properties": { "a": { "type": "string" } } }
+    }
+  }
+}

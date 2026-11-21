@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Additional": { "description": "A required key outside properties is typed by additionalProperties.", "type": "object", "additionalProperties": { "type": "string" }, "required": ["a"] },
+      "Pattern": { "description": "Or by the patterns it matches.", "type": "object", "additionalProperties": false, "patternProperties": { "^x-": { "type": "string" } }, "required": ["x-a"] },
+      "Unmatched": { "description": "A key no pattern matches, where additionalProperties is false, admits nothing.", "type": "object", "additionalProperties": false, "patternProperties": { "^x-": { "type": "string" } }, "required": ["b"] },
+      "Both": { "description": "Every pattern it matches applies.", "type": "object", "patternProperties": { "^x": { "type": "string" }, "a$": { "enum": ["v", 1] } }, "required": ["xa"] },
+      "Anything": { "description": "Without either, any value.", "type": "object", "required": ["a"] }
+    }
+  }
+}
