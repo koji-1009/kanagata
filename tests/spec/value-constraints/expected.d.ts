@@ -13,6 +13,7 @@ export interface schemas {
   Mixed: Mixed;
   Pattern: Pattern;
   Range: Range;
+  Exponents: Exponents;
   Multiples: Multiples;
   Even: Even;
   ConstOut: ConstOut;
@@ -53,6 +54,9 @@ export type Pattern = "ab";
 
 /** Bounds drop the numbers outside them. */
 export type Range = 5;
+
+/** Bounds compare numbers by value, exponents too, and leave other kinds alone. */
+export type Exponents = 5e2 | false;
 
 /** multipleOf by decimal value, not floating point. */
 export type Multiples = 0.3 | 0.5 | 0.6;

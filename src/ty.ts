@@ -234,43 +234,72 @@ export function admitsAny(
  * admits any value (`any`): such a type admits `undefined` in TypeScript, which would
  * stay in the type another member gives (`{ a?: string } & { a: unknown }` reads `a`
  * as `string | undefined`), while JSON has no `undefined`. `unknown` becomes `{} | null`.
+ * A type with no such key is kept as it is.
  */
 export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
-	const go = (u: Ty) => presentKeys(u, any);
+	// Each part gone through; unchanged, the type is itself, and what is known of it stays.
+	let changed = false;
+	// The items of a long tuple are one type, gone through once.
+	let last: Ty | undefined;
+	let lastOut = t;
+	const go = (u: Ty) => {
+		if (u !== last) {
+			last = u;
+			lastOut = presentKeys(u, any);
+		}
+		if (lastOut !== u) changed = true;
+		return lastOut;
+	};
 	const props = (ps: Prop[]) =>
 		ps.map((p) => {
 			const ty = go(p.ty);
-			return { ...p, ty: p.present && any(ty) ? inter([ty, ANY_JSON]) : ty };
+			if (!p.present || !any(ty)) return ty === p.ty ? p : { ...p, ty };
+			changed = true;
+			return { ...p, ty: inter([ty, ANY_JSON]) };
 		});
+	let out: Ty = t;
 	switch (t.kind) {
-		case "array":
-			return { kind: "array", elem: go(t.elem) };
-		case "tuple":
-			return t.rest === undefined
-				? { kind: "tuple", items: t.items.map(go), min: t.min }
-				: {
-						kind: "tuple",
-						items: t.items.map(go),
-						min: t.min,
-						rest: go(t.rest),
-					};
-		case "object":
-			return { kind: "object", props: props(t.props) };
-		case "map":
-			return {
-				kind: "map",
-				props: props(t.props),
-				...(t.keyed === undefined
-					? {}
-					: { keyed: t.keyed.map((k) => ({ key: k.key, ty: go(k.ty) })) }),
-				...(t.index === undefined ? {} : { index: go(t.index) }),
-			};
+		case "array": {
+			const elem = go(t.elem);
+			if (changed) out = { kind: "array", elem };
+			break;
+		}
+		case "tuple": {
+			const items = t.items.map(go);
+			const rest = t.rest === undefined ? undefined : go(t.rest);
+			if (changed)
+				out =
+					rest === undefined
+						? { kind: "tuple", items, min: t.min }
+						: { kind: "tuple", items, min: t.min, rest };
+			break;
+		}
+		case "object": {
+			const ps = props(t.props);
+			if (changed) out = { kind: "object", props: ps };
+			break;
+		}
+		case "map": {
+			const ps = props(t.props);
+			const keyed = t.keyed?.map((k) => ({ key: k.key, ty: go(k.ty) }));
+			const index = t.index === undefined ? undefined : go(t.index);
+			if (changed)
+				out = {
+					kind: "map",
+					props: ps,
+					...(keyed === undefined ? {} : { keyed }),
+					...(index === undefined ? {} : { index }),
+				};
+			break;
+		}
 		case "union":
-		case "inter":
-			return { kind: t.kind, items: t.items.map(go) };
-		default:
-			return t;
+		case "inter": {
+			const items = t.items.map(go);
+			if (changed) out = { kind: t.kind, items };
+			break;
+		}
 	}
+	return out;
 }
 
 /**
@@ -304,15 +333,19 @@ export function union(items: Ty[]): Ty {
 	items.forEach(push);
 	let out = members.out;
 	if (out.some((t) => t.kind === "unknown")) return UNKNOWN;
-	const kinds = out.flatMap((t) => kindsOf(t) ?? []);
-	// `number` admits every whole number; a primitive admits its literals, `string` its templates.
-	out = out.filter((t) =>
-		t.kind === "integer"
-			? !kinds.includes("number")
-			: t.kind === "template"
-				? !kinds.includes("string")
-				: t.kind !== "lit" || !admits(kinds, t),
+	// A literal is no kind type; a union of thousands of them has none to read.
+	const kinds = out.flatMap((t) =>
+		t.kind === "lit" ? [] : (kindsOf(t) ?? []),
 	);
+	// `number` admits every whole number; a primitive admits its literals, `string` its templates.
+	if (kinds.length > 0)
+		out = out.filter((t) =>
+			t.kind === "integer"
+				? !kinds.includes("number")
+				: t.kind === "template"
+					? !kinds.includes("string")
+					: t.kind !== "lit" || !admits(kinds, t),
+		);
 	if (out.length === 0) return NEVER;
 	const [only] = out;
 	return out.length === 1 && only !== undefined
@@ -333,6 +366,8 @@ export function inter(items: Ty[]): Ty {
 	};
 	items.forEach(push);
 	const out = members.out;
+	// One type meets nothing: it is as it was built.
+	if (out.length === 1) return out[0] as Ty;
 	const arrays = out.filter(isArrayTy);
 	if (arrays.length > 1)
 		return inter([...out.filter((t) => !isArrayTy(t)), meetArrays(arrays)]);
@@ -384,10 +419,7 @@ export function inter(items: Ty[]): Ty {
 	)
 		return NEVER;
 	if (out.length === 0) return UNKNOWN;
-	const [only] = out;
-	return out.length === 1 && only !== undefined
-		? only
-		: { kind: "inter", items: out };
+	return { kind: "inter", items: out };
 }
 
 type ArrayTy = Extract<Ty, { kind: "array" | "tuple" }>;
@@ -474,9 +506,25 @@ type ValueKind =
 	| "object"
 	| "array";
 
+/**
+ * `f`, remembered for each union and intersection: a type is never changed once built,
+ * and the normalization asks again for the same ones, unions of thousands of literals
+ * among them. Other types cost less to read again than to look up.
+ */
+function remembered<T>(f: (t: Ty) => T): (t: Ty) => T {
+	const known = new WeakMap<Ty, T>();
+	return (t) => {
+		if (t.kind !== "union" && t.kind !== "inter") return f(t);
+		if (known.has(t)) return known.get(t) as T;
+		const r = f(t);
+		known.set(t, r);
+		return r;
+	};
+}
+
 /** The kinds of value an "any value of these kinds" type admits: `string`, `string | null`, `Record`, `unknown[]`. */
-function kindsOf(t: Ty): ValueKind[] | undefined {
-	const one = (m: Ty): ValueKind | undefined => {
+const kindsOf = remembered((t: Ty): ValueKind[] | undefined =>
+	kindsBy(t, (m) => {
 		if (
 			m.kind === "string" ||
 			m.kind === "number" ||
@@ -488,12 +536,37 @@ function kindsOf(t: Ty): ValueKind[] | undefined {
 		if (m.kind === "record") return "object";
 		if (m.kind === "array" && m.elem.kind === "unknown") return "array";
 		return undefined;
-	};
-	const kinds = (t.kind === "union" ? t.items : [t]).map(one);
-	return kinds.every((k) => k !== undefined)
-		? (kinds as ValueKind[])
-		: undefined;
+	}),
+);
+
+/** The kind `one` gives each member of a union (or the type), if it gives every one a kind. */
+function kindsBy(
+	t: Ty,
+	one: (m: Ty) => ValueKind | undefined,
+): ValueKind[] | undefined {
+	if (t.kind !== "union") {
+		const k = one(t);
+		return k === undefined ? undefined : ONE_KIND[k];
+	}
+	const kinds: ValueKind[] = [];
+	for (const m of t.items) {
+		const k = one(m);
+		if (k === undefined) return undefined;
+		kinds.push(k);
+	}
+	return kinds;
 }
+
+/** Each kind alone, one list for all that ask (none changes it). */
+const ONE_KIND: Record<ValueKind, ValueKind[]> = {
+	string: ["string"],
+	number: ["number"],
+	integer: ["integer"],
+	boolean: ["boolean"],
+	null: ["null"],
+	object: ["object"],
+	array: ["array"],
+};
 
 /**
  * The kind of value a type that lists values admits: a literal by its notation, any
@@ -608,7 +681,7 @@ function admitsString(t: Ty, m: Ty): boolean {
 }
 
 /** The kinds of value a type admits, where its form says so: `{ a: A }` objects, `string | A[]` strings and arrays. */
-function kindSet(t: Ty): ValueKind[] | undefined {
+const kindSet = remembered((t: Ty): ValueKind[] | undefined => {
 	if (t.kind === "inter") {
 		// The kinds every member it says them of allows.
 		const sets = t.items.map(kindSet).filter((s) => s !== undefined);
@@ -616,24 +689,30 @@ function kindSet(t: Ty): ValueKind[] | undefined {
 			? undefined
 			: sets.reduce((a, b) => a.filter((k) => b.some((o) => meets(k, o))));
 	}
-	const one = (m: Ty): ValueKind[] | undefined => {
-		if (m.kind === "inter") return kindSet(m);
-		const k =
-			kindsOf(m)?.[0] ??
-			valueKind(m) ??
-			(m.kind === "null"
-				? "null"
-				: m.kind === "array"
-					? "array"
-					: m.kind === "template"
-						? "string"
-						: undefined);
-		return k === undefined ? undefined : [k];
-	};
-	const kinds = (t.kind === "union" ? t.items : [t]).map(one);
-	return kinds.every((k) => k !== undefined)
-		? (kinds as ValueKind[][]).flat()
-		: undefined;
+	if (t.kind !== "union") return memberKinds(t);
+	const kinds: ValueKind[] = [];
+	for (const m of t.items) {
+		const k = memberKinds(m);
+		if (k === undefined) return undefined;
+		kinds.push(...k);
+	}
+	return kinds;
+});
+
+/** `kindSet` of a type that is no union. */
+function memberKinds(m: Ty): ValueKind[] | undefined {
+	if (m.kind === "inter") return kindSet(m);
+	const k =
+		kindsOf(m)?.[0] ??
+		valueKind(m) ??
+		(m.kind === "null"
+			? "null"
+			: m.kind === "array"
+				? "array"
+				: m.kind === "template"
+					? "string"
+					: undefined);
+	return k === undefined ? undefined : ONE_KIND[k];
 }
 
 const meets = (a: ValueKind, b: ValueKind): boolean =>
@@ -647,6 +726,7 @@ const meets = (a: ValueKind, b: ValueKind): boolean =>
  * when nothing changes.
  */
 function prune(items: Ty[]): Ty[] {
+	if (!items.some((t) => t.kind === "union")) return items;
 	const sets = items.map(kindSet);
 	let changed = false;
 	const out = items.map((t, i) => {
@@ -708,10 +788,20 @@ function meet(a: ValueKind[], b: ValueKind[]): ValueKind[] {
 function valueKey(m: Ty): string {
 	if (m.kind !== "lit") return "null";
 	if (valueKind(m) !== "number") return m.text;
+	// A number's key is remembered: a range is thousands of them, met again and again.
+	let key = numberKeys.get(m);
+	if (key === undefined) {
+		key = numberKey(m.text);
+		numberKeys.set(m, key);
+	}
+	return key;
+}
+
+const numberKeys = new WeakMap<Ty, string>();
+
+function numberKey(text: string): string {
 	const [, sign, int, frac = "", exp = "0"] =
-		/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(
-			m.text,
-		) as RegExpExecArray;
+		/^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text) as RegExpExecArray;
 	let digits = `${int}${frac}`.replace(/^0+/, "");
 	let e = Number(exp) - frac.length;
 	if (digits === "") return "#0";

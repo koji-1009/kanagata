@@ -8,10 +8,13 @@ export interface schemas {
   Range: Range;
   Exclusive: Exclusive;
   Negative: Negative;
+  Wide: Wide;
+  Offset: Offset;
   Fractional: Fractional;
   Step: Step;
   DecimalStep: DecimalStep;
   WholeDecimalStep: WholeDecimalStep;
+  NegativeStep: NegativeStep;
   OpenStep: OpenStep;
   NoStep: NoStep;
   TooMany: TooMany;
@@ -26,6 +29,12 @@ export type Exclusive = 1 | 2 | 3;
 
 export type Negative = -2 | -1 | 0 | 1;
 
+/** Integers in a row are spelled by their digits where that is shorter than listing each. */
+export type Wide = integers<`-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-1${0 | 1 | 2}` | `${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `3${0 | 1 | 2 | 3}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `34${0 | 1 | 2 | 3 | 4 | 5}`>;
+
+/** Digits past a bound's first are spelled from the bound. */
+export type Offset = integers<`11${5 | 6 | 7 | 8 | 9}` | `1${2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `2${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `3${0 | 1 | 2}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `33${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7}`>;
+
 /** The integers between fractional bounds. */
 export type Fractional = 1 | 2 | 3;
 
@@ -36,6 +45,8 @@ export type DecimalStep = 0 | 0.25 | 0.5 | 0.75 | 1;
 
 /** The integers that are multiples of 1.5. */
 export type WholeDecimalStep = 0 | 3 | 6;
+
+export type NegativeStep = -1 | -0.5 | 0;
 
 export type OpenStep = 0.5;
 
@@ -50,3 +61,6 @@ export type Listed = 2;
 export type Empty = never;
 
 export type Unbounded = number;
+
+/** The integers the decimal texts `S` spell: ``integers<`1${0 | 1}`>`` is `10 | 11`. */
+export type integers<S extends string> = S extends `${infer N extends number}` ? N : never;
