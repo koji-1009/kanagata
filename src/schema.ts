@@ -594,10 +594,7 @@ function keywordParts(
 	if (contains !== undefined) {
 		const min = count(v, "minContains") ?? 1;
 		const max = count(v, "maxContains");
-		const none =
-			max === 0
-				? (negation(contains) ?? notContained(cx, v, contains as JsonObject))
-				: undefined;
+		const none = max === 0 ? notContained(cx, v, contains) : undefined;
 		const items = (n: number): Ty[] => Array.from({ length: n }, () => UNKNOWN);
 		if (max !== undefined && min > max)
 			parts.push(widen(cx, v, "array", NEVER));
@@ -616,8 +613,7 @@ function keywordParts(
 						rest: UNKNOWN,
 					}),
 				);
-		} else if (none !== undefined)
-			parts.push(widen(cx, v, "array", arrayTy(none)));
+		} else if (none !== undefined) parts.push(widen(cx, v, "array", none));
 		else {
 			if (min > 0)
 				parts.push(
@@ -1168,21 +1164,27 @@ function dependencies(v: JsonObject): [string, string[]][] {
 }
 
 /**
- * The items of an array none of whose items `contains` admits, where `items` lists their
- * values: those values `contains` rejects. undefined where it cannot tell for one of them,
- * or where `prefixItems` types the first items, which need not be values `items` lists.
+ * The arrays none of whose items `contains` admits, where TypeScript can say it: of the
+ * values `not` would leave, or, where `items` lists the values, of those `contains` rejects
+ * past any `prefixItems` (whose items need not be values `items` lists). undefined where
+ * it cannot tell.
  */
-function notContained(
-	cx: Ctx,
-	v: JsonObject,
-	contains: JsonObject,
-): Ty | undefined {
+function notContained(cx: Ctx, v: JsonObject, contains: Value): Ty | undefined {
+	const leaves = negation(contains);
+	if (leaves !== undefined) return arrayTy(leaves);
+	// negation reads every schema but an object.
+	const s = contains as JsonObject;
 	const values = listed(cx, v.get("items"), new Set());
-	if (values === undefined || v.get("prefixItems") !== undefined)
-		return undefined;
-	const admitted = values.map((x) => accepts(cx, contains, x));
+	if (values === undefined) return undefined;
+	const admitted = values.map((x) => accepts(cx, s, x));
 	if (admitted.includes(undefined)) return undefined;
-	return union(values.filter((_, i) => admitted[i] === false).map(literal));
+	const rest = union(
+		values.filter((_, i) => admitted[i] === false).map(literal),
+	);
+	const prefix = v.get("prefixItems");
+	return Array.isArray(prefix)
+		? { kind: "tuple", items: prefix.map(() => UNKNOWN), min: 0, rest }
+		: arrayTy(rest);
 }
 
 /** The values `not: { enum }` or `not: { const }` leave out; undefined for any other `not`. */

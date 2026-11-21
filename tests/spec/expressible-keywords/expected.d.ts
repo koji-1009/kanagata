@@ -150,8 +150,8 @@ export type ContainsNoShort = "bb"[];
 /** Not where they cannot tell. */
 export type ContainsNoObject = "a"[];
 
-/** Nor past prefixItems, whose items items does not list. */
-export type ContainsPastPrefix = [string?, ...("a" | "b")[]];
+/** Past prefixItems, whose items items does not list, the items are those it lists that contains rejects. */
+export type ContainsPastPrefix = [string?, ..."b"[]];
 
 /** dependentRequired with no keys asks nothing. */
 export type NoDeps = Record<string, unknown>;
