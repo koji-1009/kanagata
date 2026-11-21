@@ -116,6 +116,23 @@ test("arrays and tuples meet item by item", () => {
 	);
 });
 
+test("a union drops the members another member rules out by kind", () => {
+	const a = object([prop("a", STRING)]);
+	const cat = schemaRef("Cat");
+	assert.deepEqual(inter([a, union([cat, STRING])]), {
+		kind: "inter",
+		items: [a, cat],
+	});
+	// integer is a number
+	assert.equal(inter([INTEGER, union([a, NUMBER])]), INTEGER);
+	assert.equal(inter([NUMBER, union([a, INTEGER])]), INTEGER);
+	// a member whose kind is not plain stays
+	assert.deepEqual(inter([a, union([cat, NULL])]), {
+		kind: "inter",
+		items: [a, cat],
+	});
+});
+
 test("union flattens and removes duplicates", () => {
 	const t = union([STRING, union([NULL, NUMBER]), NULL, STRING]);
 	assert.deepEqual(t, { kind: "union", items: [STRING, NULL, NUMBER] });

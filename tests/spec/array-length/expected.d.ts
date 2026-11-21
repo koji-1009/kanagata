@@ -90,7 +90,7 @@ export type SplitItems = "a"[];
 export type SplitClosed = never;
 
 /** A reference stays a reference. */
-export type SplitRef = NonEmpty & [unknown?];
+export type SplitRef = NonEmpty & [string];
 
-/** Array keywords next to another type admit nothing. */
-export type NotArray = never;
+/** Array keywords constrain only arrays, so the strings type names pass them. */
+export type NotArray = string;

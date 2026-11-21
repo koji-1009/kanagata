@@ -1,0 +1,50 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "NullTwice": { "description": "null two oneOf members admit is in neither.", "oneOf": [{ "type": ["string", "null"] }, { "type": ["integer", "null"] }, { "type": ["array", "null"], "items": { "type": "string" } }] },
+      "NullOnce": { "description": "null one member admits stays.", "oneOf": [{ "type": ["string", "null"] }, { "type": "integer" }] },
+      "Literals": { "description": "So does a literal two members list.", "oneOf": [{ "enum": ["a", "b"] }, { "enum": ["b", "c"] }] },
+      "ByKind": { "description": "TypeScript has no string but one literal.", "oneOf": [{ "type": "string" }, { "const": "a" }] },
+      "Booleans": { "description": "Booleans and numbers are literals too.", "oneOf": [{ "enum": [true, 1] }, { "enum": [true, 2] }] },
+      "Integers": { "description": "An integer type admits the whole numbers by its kind, not 1.5.", "oneOf": [{ "type": "integer" }, { "enum": [1.5, 2, "x"] }, { "enum": [1.5, 2] }] },
+      "Anything": { "description": "A member that admits any value admits null by its kind.", "oneOf": [{}, { "type": ["string", "null"] }, { "type": ["integer", "null"] }] },
+      "AnyOf": { "description": "anyOf admits a value several members admit.", "anyOf": [{ "type": ["string", "null"] }, { "type": ["integer", "null"] }] },
+      "Fields": {
+        "description": "A closed member admits no key another member has.",
+        "oneOf": [
+          { "type": "object", "additionalProperties": false, "required": ["issue_field_id"], "properties": { "issue_field_id": { "type": "integer" } } },
+          { "type": "object", "additionalProperties": false, "required": ["name", "data_type"], "properties": { "name": { "type": "string" }, "data_type": { "type": "string" } } },
+          { "type": "object", "properties": { "extra": { "type": "string" } } }
+        ]
+      },
+      "EmptyOrUser": {
+        "description": "A closed member without properties already admits no key.",
+        "oneOf": [
+          { "type": "object", "additionalProperties": false },
+          { "type": "object", "properties": { "login": { "type": "string" } } }
+        ]
+      },
+      "EmptyOver": { "description": "Nor does a closed object without properties.", "type": "object", "additionalProperties": false, "allOf": [{ "properties": { "x": { "type": "string" } } }] },
+      "ClosedAnyOf": {
+        "description": "In anyOf too.",
+        "anyOf": [
+          { "$ref": "#/components/schemas/Closed" },
+          { "type": "object", "properties": { "b": { "type": "string" } } }
+        ]
+      },
+      "Closed": { "type": "object", "additionalProperties": false, "properties": { "a": { "type": "string" } } },
+      "ClosedOver": {
+        "description": "A closed object admits no key its members have but it does not.",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "a": { "type": "string" } },
+        "allOf": [{ "properties": { "x": { "type": "string" } } }]
+      },
+      "Cat": { "type": "object", "required": ["kind"], "properties": { "kind": { "type": "string" } } },
+      "ClosedRef": { "description": "A key the $ref next to it requires is one it does not admit.", "$ref": "#/components/schemas/Cat", "additionalProperties": false, "properties": { "a": { "type": "string" } } },
+      "Nested": { "description": "Nor one a nested allOf member requires.", "type": "object", "additionalProperties": false, "properties": { "a": { "type": "string" } }, "allOf": [{ "allOf": [{ "required": ["zzz"] }] }] }
+    }
+  }
+}

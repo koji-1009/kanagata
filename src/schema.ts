@@ -8,6 +8,7 @@
 
 import { isBinaryMedia } from "./client.ts";
 import {
+	escapeToken,
 	get,
 	JsonNumber,
 	JsonObject,
@@ -129,18 +130,6 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const nullable = !cx.refSiblings && v.get("nullable") === true;
 	const loose = nullable && cx.looseNullable;
 	const out: Ty[] = [];
-	const r = v.str("$ref");
-	if (r !== undefined) {
-		const target = reference(cx, r, at);
-		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
-		// are ignored, nullable among them unless loose.
-		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
-		out.push(target);
-	}
-	const c = v.get("const");
-	if (c !== undefined) out.push(literal(c));
-	const e = v.get("enum");
-	if (Array.isArray(e)) out.push(union(e.map(literal)));
 	// A member that requires a key this closed object forbids admits no value.
 	const closed = closedKeys(v);
 	const admitted = (members: Value[], tys: Ty[]) =>
@@ -151,6 +140,18 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 						? NEVER
 						: t,
 				);
+	const r = v.str("$ref");
+	if (r !== undefined) {
+		const target = reference(cx, r, at);
+		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
+		// are ignored, nullable among them unless loose.
+		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
+		out.push(...admitted([v], [target]));
+	}
+	const c = v.get("const");
+	if (c !== undefined) out.push(literal(c));
+	const e = v.get("enum");
+	if (Array.isArray(e)) out.push(union(e.map(literal)));
 	const allOf = v.get("allOf");
 	if (Array.isArray(allOf)) {
 		// Every member is the same object: a property one member leaves out of this
@@ -160,22 +161,39 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		const members = cx.withLeftOut(allOf, group, () =>
 			list(cx, allOf, child(at, "allOf")),
 		);
-		out.push(...admitted(allOf, members));
+		out.push(...passing(v, allOf, admitted(allOf, members)));
 	}
+	// A closed object admits no key its $ref target or members have but it does not;
+	// one without properties already says so (`{ [key: string]: never }`).
+	const self =
+		closed === undefined || closed.size === 0
+			? own(cx, v, at)
+			: forbid(own(cx, v, at), outsideKeys(cx, v, closed));
 	const typedNull = nullable && !loose && v.get("type") !== undefined;
-	out.push(typedNull ? union([own(cx, v, at), NULL]) : own(cx, v, at));
+	out.push(typedNull ? union([self, NULL]) : self);
 	// `discriminator` is not read: it must not change what the schema accepts (OAS 3.0.4, 3.1.1),
 	// and a member is narrowed by the property only where the member itself fixes it.
 	for (const key of ["oneOf", "anyOf"]) {
 		const members = v.get(key);
 		if (!Array.isArray(members)) continue;
-		const tys = admitted(members, list(cx, members, child(at, key)));
+		const tys = passing(
+			v,
+			members,
+			closedAmong(
+				cx,
+				members,
+				admitted(members, list(cx, members, child(at, key))),
+			),
+		);
 		out.push(
 			union(
-				key === "oneOf" ? exclusive(cx, members, tys, child(at, key)) : tys,
+				key === "oneOf"
+					? shared(exclusive(cx, members, tys, child(at, key)))
+					: tys,
 			),
 		);
 	}
+	out.push(...arrayTargets(cx, out, at));
 	// The schema's own keywords drop the literals (from const, enum, members) they reject.
 	const t = inter(out);
 	const members = t.kind === "union" ? t.items : [t];
@@ -198,20 +216,222 @@ function closedKeys(v: JsonObject): Set<string> | undefined {
 	);
 }
 
-/** The keys a schema requires: its own `required`, and those of the schema its `$ref` reaches. */
-function requiredKeys(cx: Ctx, s: Value): string[] {
+/**
+ * The keys a schema requires: its own `required`, and those of the schema its `$ref`
+ * reaches and of its `allOf` members.
+ */
+function requiredKeys(cx: Ctx, s: Value, seen = new Set<string>()): string[] {
+	return keysOf(cx, s, seen, false);
+}
+
+/** The keys a schema names, as properties or as required, there or through `$ref` and `allOf`. */
+function namedKeys(cx: Ctx, s: Value, seen = new Set<string>()): string[] {
+	return keysOf(cx, s, seen, true);
+}
+
+function keysOf(
+	cx: Ctx,
+	s: Value,
+	seen: Set<string>,
+	properties: boolean,
+): string[] {
 	const req = get(s, "required");
-	const own = Array.isArray(req)
+	const keys = Array.isArray(req)
 		? req.filter((n): n is string => typeof n === "string")
 		: [];
+	const props = get(s, "properties");
+	if (properties && props instanceof JsonObject)
+		keys.push(...props.entries.map(([k]) => k));
+	const allOf = get(s, "allOf");
+	for (const m of Array.isArray(allOf) ? allOf : [])
+		keys.push(...keysOf(cx, m, seen, properties));
 	const r = str(s, "$ref");
 	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target === undefined) return own;
+	if (target === undefined || seen.has(target.uri)) return keys;
+	seen.add(target.uri);
 	// The target's own $refs resolve against the document it is in.
 	return [
-		...own,
-		...cx.withBase(target.base, () => requiredKeys(cx, target.value)),
+		...keys,
+		...cx.withBase(target.base, () =>
+			keysOf(cx, target.value, seen, properties),
+		),
 	];
+}
+
+/**
+ * The keys a closed object's `$ref` target (3.1, 3.2) and members name that it does not
+ * declare: it admits none of them.
+ */
+function outsideKeys(cx: Ctx, v: JsonObject, closed: Set<string>): string[] {
+	const named: string[] = [];
+	const r = v.str("$ref");
+	const target = r === undefined ? undefined : cx.tryLocate(r);
+	if (target !== undefined)
+		named.push(...cx.withBase(target.base, () => namedKeys(cx, target.value)));
+	for (const key of ["allOf", "oneOf", "anyOf"]) {
+		const members = v.get(key);
+		for (const m of Array.isArray(members) ? members : [])
+			named.push(...namedKeys(cx, m));
+	}
+	return [...new Set(named)].filter((k) => !closed.has(k));
+}
+
+/** The keys a closed member admits: its own, or those of the closed schema its `$ref` alone reaches. */
+function closedMember(cx: Ctx, s: Value): Set<string> | undefined {
+	if (!(s instanceof JsonObject)) return undefined;
+	const r = s.str("$ref");
+	if (
+		r === undefined ||
+		!s.entries.every(([k]) => k === "$ref" || isAnnotation(k))
+	)
+		return closedKeys(s);
+	const target = cx.tryLocate(r);
+	return target?.value instanceof JsonObject
+		? closedKeys(target.value)
+		: undefined;
+}
+
+/**
+ * The array types of the components among `out` that are arrays, where another array
+ * meets them: the reference stays, and its type beside it lets the items read as it
+ * says (`Tags & [unknown?]` is `Tags & [string?]`). TypeScript reads an item of an
+ * intersection of arrays as one member's alone.
+ */
+function arrayTargets(cx: Ctx, out: Ty[], at: string): Ty[] {
+	const isArray = (t: Ty) => t.kind === "array" || t.kind === "tuple";
+	const arrays = out.filter(isArray).length;
+	const refs = out.filter(
+		(t): t is Extract<Ty, { kind: "ref" }> =>
+			t.kind === "ref" && cx.schemas.has(t.schema),
+	);
+	if (refs.length + arrays < 2) return [];
+	const targets: Ty[] = [];
+	for (const t of refs) {
+		const { value, base, uri, where } = cx.withBase(cx.documentBase, () =>
+			cx.locate(SCHEMA_PREFIX + escapeToken(t.schema), at),
+		);
+		// Only an array schema has an array type.
+		const type = get(value, "type");
+		const array =
+			type === "array" ||
+			(type === undefined &&
+				value instanceof JsonObject &&
+				hasArrayKeywords(value));
+		if (!array || !cx.enter(uri)) continue;
+		try {
+			const target = cx.withBase(base, () => schema(cx, value, where));
+			if (isArray(target)) targets.push(target);
+		} finally {
+			cx.leave();
+		}
+	}
+	return targets.length > 0 && targets.length + arrays > 1 ? targets : [];
+}
+
+/** The type of each value kind `type` names. */
+const KIND: Record<string, Ty> = {
+	string: STRING,
+	number: NUMBER,
+	integer: INTEGER,
+	boolean: BOOLEAN,
+	null: NULL,
+	array: arrayTy(UNKNOWN),
+	object: RECORD,
+};
+
+/**
+ * A member without `type` whose keywords are all of one kind (`{ required: [a] }`,
+ * `{ minItems: 1 }`) constrains only values of that kind. Where the schema's own `type`
+ * (or `nullable: true`, 3.0) names other kinds, their values pass the member.
+ */
+function passing(v: JsonObject, members: Value[], tys: Ty[]): Ty[] {
+	const t = v.get("type");
+	const kinds = typeof t === "string" ? [t] : Array.isArray(t) ? t : undefined;
+	if (kinds === undefined) return tys;
+	if (v.get("nullable") === true && !kinds.includes("null")) kinds.push("null");
+	return tys.map((ty, i) => {
+		const m = members[i];
+		if (!(m instanceof JsonObject) || !typeless(m)) return ty;
+		const kind = hasObjectKeywords(m) ? "object" : "array";
+		const others = kinds.filter(
+			(k): k is string => typeof k === "string" && k !== kind && k in KIND,
+		);
+		return union([ty, ...others.map((k) => KIND[k] as Ty)]);
+	});
+}
+
+/** Whether a schema says nothing but keywords of one kind, without `type`. */
+function typeless(m: JsonObject): boolean {
+	return (
+		["type", "$ref", "const", "enum", "allOf", "oneOf", "anyOf"].every(
+			(k) => m.get(k) === undefined,
+		) &&
+		(hasObjectKeywords(m) || hasArrayKeywords(m))
+	);
+}
+
+/** A closed oneOf / anyOf member admits no key another member names. */
+function closedAmong(cx: Ctx, members: Value[], tys: Ty[]): Ty[] {
+	const named = members.map((m) => namedKeys(cx, m));
+	return tys.map((t, i) => {
+		const keys = closedMember(cx, members[i] as Value);
+		if (keys === undefined || keys.size === 0) return t;
+		const others = named.flatMap((n, j) => (j === i ? [] : n));
+		return forbid(
+			t,
+			[...new Set(others)].filter((k) => !keys.has(k)),
+		);
+	});
+}
+
+/** `t` without these keys: `k?: never`, in its own object type where it is one. */
+function forbid(t: Ty, keys: string[]): Ty {
+	if (keys.length === 0) return t;
+	const props: Prop[] = keys.map((key) => ({ key, ty: NEVER, optional: true }));
+	if (t.kind !== "object") return inter([t, { kind: "object", props }]);
+	const have = new Set(t.props.map((p) => p.key));
+	return {
+		kind: "object",
+		props: [...t.props, ...props.filter((p) => !have.has(p.key))],
+	};
+}
+
+/**
+ * oneOf admits a value only one member admits, so a literal or `null` two members
+ * admit is in neither. TypeScript can leave it out only where no member admits it by
+ * its kind (`string` for `"a"`); other members, refs among them, are not counted.
+ */
+function shared(tys: Ty[]): Ty[] {
+	const listed = (t: Ty): Ty[] => (t.kind === "union" ? t.items : [t]);
+	const same = (a: Ty, b: Ty) =>
+		a.kind === b.kind &&
+		(a.kind !== "lit" || a.text === (b as { text: string }).text);
+	const values = tys
+		.flatMap(listed)
+		.filter((m) => m.kind === "lit" || m.kind === "null");
+	const out = new Set<Ty>();
+	for (const value of values) {
+		if (tys.some((t) => listed(t).some((m) => byKind(m, value)))) continue;
+		if (tys.filter((t) => listed(t).some((m) => same(m, value))).length > 1)
+			out.add(value);
+	}
+	if (out.size === 0) return tys;
+	const drop = [...out];
+	return tys.map((t) =>
+		union(listed(t).filter((m) => !drop.some((d) => same(m, d)))),
+	);
+}
+
+/** Whether a member admits a literal by its kind, not by listing it. */
+function byKind(m: Ty, value: Ty): boolean {
+	if (m.kind === "unknown") return true;
+	if (value.kind !== "lit") return false;
+	const text = value.text;
+	if (text.startsWith('"')) return m.kind === "string";
+	if (text === "true" || text === "false") return m.kind === "boolean";
+	return (
+		m.kind === "number" || (m.kind === "integer" && isWhole(decimal(text)))
+	);
 }
 
 /**

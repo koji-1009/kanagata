@@ -19,6 +19,7 @@ export type RequiresUndeclared = never;
 export type Campaign = {
   name?: string;
   code?: string;
+  secret?: never;
 } & {
   code: {} | null;
 } & {
@@ -31,6 +32,7 @@ export type Secret = {
 
 export type ThroughRef = {
   a?: string;
+  secret?: never;
 } & {
   a: {} | null;
 };

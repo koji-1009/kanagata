@@ -307,11 +307,39 @@ export function inter(items: Ty[]): Ty {
 	const arrays = out.filter(isArrayTy);
 	if (arrays.length > 1)
 		return inter([...out.filter((t) => !isArrayTy(t)), meetArrays(arrays)]);
-	const narrowed = narrow(out);
+	// A union with arrays meets the other arrays member by member, so that their items
+	// read as both say: `(string | unknown[]) & (string | string[])` is `string | string[]`.
+	const arrayish = out.filter(hasArray);
+	if (arrayish.length > 1 && arrayish.some((t) => t.kind === "union")) {
+		const combos = arrayish.reduce<Ty[][]>(
+			(acc, t) =>
+				acc.flatMap((c) =>
+					(t.kind === "union" ? t.items : [t]).map((m) => [...c, m]),
+				),
+			[[]],
+		);
+		return inter([
+			...out.filter((t) => !arrayish.includes(t)),
+			union(combos.map((c) => inter(c))),
+		]);
+	}
+	const merged = mergeObjects(out);
+	if (merged !== out) return inter(merged);
+	const narrowed = prune(narrow(out));
 	// Narrowing can make members equal (`"a" & ("a" | 1) & string`); normalize again.
 	// Each round drops a member or shrinks a set of values, so this ends.
 	if (narrowed !== out) return inter(narrowed);
 	if (out.some((t) => t.kind === "never")) return NEVER;
+	// Members of kinds no value has both of meet nowhere: `null & string[]`.
+	const kinds = out.map(kindSet).filter((k) => k !== undefined);
+	if (
+		kinds.some((a, i) =>
+			kinds
+				.slice(i + 1)
+				.some((b) => !a.some((x) => b.some((y) => meets(x, y)))),
+		)
+	)
+		return NEVER;
 	if (out.length === 0) return UNKNOWN;
 	const [only] = out;
 	return out.length === 1 && only !== undefined
@@ -323,6 +351,51 @@ type ArrayTy = Extract<Ty, { kind: "array" | "tuple" }>;
 
 const isArrayTy = (t: Ty): t is ArrayTy =>
 	t.kind === "array" || t.kind === "tuple";
+
+/** An array or tuple, or a union with one. */
+const hasArray = (t: Ty): boolean =>
+	isArrayTy(t) || (t.kind === "union" && t.items.some(isArrayTy));
+
+/**
+ * Object types that share a property with arrays in each are one object type, the
+ * property's types met, so that its items read as both say (TypeScript reads an item
+ * of `A[] & B[]` as `A`). Returns `items` itself when none do.
+ */
+function mergeObjects(items: Ty[]): Ty[] {
+	const objects = items.filter(
+		(t): t is Extract<Ty, { kind: "object" }> => t.kind === "object",
+	);
+	const types = new Map<string, Ty[]>();
+	for (const o of objects)
+		for (const p of o.props)
+			types.set(p.key, [...(types.get(p.key) ?? []), p.ty]);
+	const shared = [...types.values()].some(
+		(tys) => tys.length > 1 && tys.every(hasArray),
+	);
+	if (!shared) return items;
+	const props: Prop[] = [];
+	for (const o of objects)
+		for (const p of o.props) {
+			const i = props.findIndex((q) => q.key === p.key);
+			const q = props[i];
+			if (q === undefined) {
+				props.push(p);
+				continue;
+			}
+			const met: Prop = {
+				...q,
+				ty: inter([q.ty, p.ty]),
+				optional: q.optional && p.optional,
+			};
+			if (p.present) met.present = true;
+			if (met.doc === undefined && p.doc !== undefined) met.doc = p.doc;
+			props[i] = met;
+		}
+	return [
+		...items.filter((t) => t.kind !== "object"),
+		{ kind: "object", props },
+	];
+}
 
 /**
  * Arrays and tuples meet item by item: `string[]` and `[unknown, unknown, ...unknown[]]`
@@ -457,6 +530,50 @@ function narrow(items: Ty[]): Ty[] {
 				out.push(union((kinds as ValueKind[]).map((k) => KIND_TY[k])));
 			}
 		} else out.push(t);
+	});
+	return changed ? out : items;
+}
+
+/** The kinds of value a type admits, where its form says so: `{ a: A }` objects, `string | A[]` strings and arrays. */
+function kindSet(t: Ty): ValueKind[] | undefined {
+	const one = (m: Ty): ValueKind | undefined =>
+		kindsOf(m)?.[0] ??
+		valueKind(m) ??
+		(m.kind === "null" ? "null" : m.kind === "array" ? "array" : undefined);
+	const kinds = (t.kind === "union" ? t.items : [t]).map(one);
+	return kinds.every((k) => k !== undefined)
+		? (kinds as ValueKind[])
+		: undefined;
+}
+
+const meets = (a: ValueKind, b: ValueKind): boolean =>
+	a === b ||
+	(a === "integer" && b === "number") ||
+	(a === "number" && b === "integer");
+
+/**
+ * Drops the members of a union another member of the intersection rules out by kind:
+ * `{ a?: string } & (Cat | string)` is `{ a?: string } & Cat`. Returns `items` itself
+ * when nothing changes.
+ */
+function prune(items: Ty[]): Ty[] {
+	const sets = items.map(kindSet);
+	let changed = false;
+	const out = items.map((t, i) => {
+		if (t.kind !== "union") return t;
+		const others = sets.filter(
+			(s, j): s is ValueKind[] => j !== i && s !== undefined,
+		);
+		const kept = t.items.filter((m) => {
+			const own = kindSet(m);
+			return (
+				own === undefined ||
+				others.every((s) => own.some((k) => s.some((o) => meets(k, o))))
+			);
+		});
+		if (kept.length === t.items.length) return t;
+		changed = true;
+		return union(kept);
 	});
 	return changed ? out : items;
 }

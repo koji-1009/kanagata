@@ -24,7 +24,7 @@
       "SplitItems": { "description": "Items meet too.", "allOf": [{ "type": "array", "items": { "type": "string" } }, { "items": { "enum": ["a", 1] } }] },
       "SplitClosed": { "description": "minItems past a closed tuple in another member admits nothing.", "allOf": [{ "prefixItems": [{ "type": "string" }], "items": false }, { "minItems": 2 }] },
       "SplitRef": { "description": "A reference stays a reference.", "allOf": [{ "$ref": "#/components/schemas/NonEmpty" }, { "maxItems": 1 }] },
-      "NotArray": { "description": "Array keywords next to another type admit nothing.", "type": "string", "allOf": [{ "minItems": 1 }] }
+      "NotArray": { "description": "Array keywords constrain only arrays, so the strings type names pass them.", "type": "string", "allOf": [{ "minItems": 1 }] }
     }
   }
 }
