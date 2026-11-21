@@ -80,7 +80,7 @@ export function schema(cx: Ctx, v: Value, at: string): Ty {
 				// A schema with $id is a resource: $refs inside it resolve against its URI.
 				const id = v.str("$id");
 				if (id !== undefined && cx.refSiblings)
-					return cx.withBase(cx.baseOf(id), () => convert(cx, v, at));
+					return cx.inResource(cx.baseOf(id), () => convert(cx, v, at));
 				return convert(cx, v, at);
 			}),
 		);
@@ -199,18 +199,16 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
 		out.push(...admitted([v], [target]));
 	}
-	// $dynamicRef is $ref where no other $dynamicAnchor of its name can take the place of
-	// the one it reaches; which one does depends on how the value was reached.
+	// $dynamicRef is $ref, except where it reaches a $dynamicAnchor: then it reaches the
+	// one of that name in the outermost resource the value was reached through.
 	const dr = v.str("$dynamicRef");
 	if (dr !== undefined) {
-		const name = dr.split("#")[1] ?? "";
-		if (name.startsWith("/") || cx.dynamicIsStatic(name))
-			out.push(reference(cx, dr, at));
-		else
-			cx.warn(
-				child(at, "$dynamicRef"),
-				"$dynamicRef to a name more than one $dynamicAnchor has cannot be expressed in TypeScript; ignored",
-			);
+		const target = cx.locate(dr, at);
+		const name = new URL(target.uri).hash.slice(1);
+		const outer = cx.isDynamicAnchor(target.uri)
+			? cx.dynamicTarget(name)
+			: undefined;
+		out.push(cx.withAround(v, () => reference(cx, outer ?? dr, at)));
 	}
 	const c = v.get("const");
 	if (c !== undefined) out.push(literal(c));
@@ -1453,7 +1451,7 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 		if (cx.withBase(located.base, () => binaryAt(cx, located.value, here)))
 			return expand(cx, located, cx.componentKey(located.value));
 	}
-	if (r.startsWith(SCHEMA_PREFIX) && cx.inDocument) {
+	if (r.startsWith(SCHEMA_PREFIX) && cx.inDocument && !cx.dynamicScope) {
 		const rest = r.slice(SCHEMA_PREFIX.length);
 		if (!rest.includes("/")) {
 			const name = unescapeToken(rest);
@@ -1464,6 +1462,10 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 	}
 	const located = cx.locate(r, at);
 	const { value: target, base, uri } = located;
+	// A named type is the target as reached from the document. Where a $dynamicRef in it
+	// reaches another $dynamicAnchor from here, it is written out here.
+	if (cx.dynamicScope && rescoped(cx, target, base))
+		return expand(cx, located, cx.componentKey(target));
 	// An $anchor, $id or file naming a component schema refers to that type (except
 	// in the component's own definition, which is what defines it).
 	const key = cx.componentKey(target);
@@ -1473,6 +1475,57 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 		return ref(cx.hoist(target, located), cx.mode);
 	}
 	return expand(cx, located, key);
+}
+
+/**
+ * Whether a `$dynamicRef` in a schema (through its `$ref`s) reaches another
+ * `$dynamicAnchor` from where it is now than from the document, through its own resource.
+ */
+function rescoped(cx: Ctx, target: Value, base: string): boolean {
+	for (const name of dynamicNames(cx, target, base, new Set()))
+		if (
+			cx.dynamicTarget(name, [...cx.scope, base]) !==
+			cx.dynamicTarget(name, [base])
+		)
+			return true;
+	return false;
+}
+
+/** The names of the `$dynamicAnchor`s the `$dynamicRef`s in a schema reach, through its `$ref`s. */
+function dynamicNames(
+	cx: Ctx,
+	v: Value,
+	base: string,
+	seen: Set<string>,
+): Set<string> {
+	const out = new Set<string>();
+	const walk = (x: Value, base: string): void => {
+		if (Array.isArray(x)) {
+			for (const y of x) walk(y, base);
+			return;
+		}
+		if (!(x instanceof JsonObject)) return;
+		const id = x.str("$id");
+		const here =
+			id === undefined ? base : cx.withBase(base, () => cx.baseOf(id));
+		for (const key of ["$ref", "$dynamicRef"]) {
+			const r = x.str(key);
+			const target =
+				r === undefined ? undefined : cx.withBase(here, () => cx.tryLocate(r));
+			if (target === undefined) continue;
+			if (key === "$dynamicRef" && cx.isDynamicAnchor(target.uri))
+				out.add(new URL(target.uri).hash.slice(1));
+			if (!seen.has(target.uri)) {
+				seen.add(target.uri);
+				walk(target.value, target.base);
+			}
+		}
+		for (const [k, y] of x.entries)
+			if (!["const", "enum", "default", "example", "examples"].includes(k))
+				walk(y, here);
+	};
+	walk(v, base);
+	return out;
 }
 
 /** A `$ref`'s target written out where it is used, in the position the `$ref` is in. */
@@ -1486,7 +1539,7 @@ function expand(
 	// its name, another schema gets one, as a schema in another file does.
 	if (!cx.enter(uri)) return ref(key ?? cx.hoist(target, located), cx.mode);
 	try {
-		const t = cx.withBase(base, () =>
+		const t = cx.inResource(base, () =>
 			cx.withRaw(cx.here, () => schema(cx, target, where)),
 		);
 		// It reached itself, so it has a name now: every view refers to it by that.

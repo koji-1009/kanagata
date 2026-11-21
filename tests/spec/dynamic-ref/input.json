@@ -1,0 +1,35 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Tree": {
+        "description": "A tree whose nodes are what the outermost resource with a node anchor says.",
+        "$id": "https://example.com/tree",
+        "$dynamicAnchor": "node",
+        "type": "object",
+        "properties": { "data": true, "children": { "type": "array", "items": { "$dynamicRef": "#node" } } }
+      },
+      "StrictTree": {
+        "description": "Reached through this resource, the tree's nodes are strict trees.",
+        "$id": "https://example.com/strict-tree",
+        "$dynamicAnchor": "node",
+        "$ref": "tree",
+        "unevaluatedProperties": false
+      },
+      "Labeled": {
+        "description": "And here, labeled trees.",
+        "$id": "https://example.com/labeled",
+        "$dynamicAnchor": "node",
+        "$ref": "tree",
+        "properties": { "label": { "type": "string" } },
+        "required": ["label"]
+      },
+      "Forest": {
+        "description": "Trees reached from the document have trees for nodes.",
+        "type": "array",
+        "items": { "$ref": "#/components/schemas/Tree" }
+      }
+    }
+  }
+}

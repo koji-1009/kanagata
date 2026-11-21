@@ -60,8 +60,8 @@ function decodePath(segment: string): string {
 interface Index {
 	ids: Map<string, Value>;
 	anchors: Map<string, Value>;
-	/** How many `$dynamicAnchor`s have each name. */
-	dynamic: Map<string, number>;
+	/** The `$dynamicAnchor`s, by resource and name (`https://example.com/tree#node`). */
+	dynamic: Set<string>;
 }
 
 /**
@@ -90,8 +90,7 @@ function indexIds(index: Index, doc: Value, base: string): void {
 				index.anchors.set(`${here}#${anchor}`, v);
 		}
 		const dynamic = v.str("$dynamicAnchor");
-		if (dynamic !== undefined)
-			index.dynamic.set(dynamic, (index.dynamic.get(dynamic) ?? 0) + 1);
+		if (dynamic !== undefined) index.dynamic.add(`${here}#${dynamic}`);
 		for (const [k, x] of v.entries) {
 			if (!names && DATA.has(k)) continue;
 			walk(x, here, !names && NAME_MAPS.has(k));
@@ -356,6 +355,45 @@ export class Ctx {
 		}
 	}
 
+	/**
+	 * The schema resources a value was reached through, outermost first, after the
+	 * document's own (JSON Schema 2020-12's dynamic scope): `$dynamicRef` reads it.
+	 */
+	scope: readonly string[] = [];
+
+	/** Converts in a schema resource: with its base URI, and in the dynamic scope. */
+	inResource<T>(base: string, f: () => T): T {
+		const saved = this.scope;
+		if (base !== (this.scope[this.scope.length - 1] ?? this.documentBase))
+			this.scope = [...this.scope, base];
+		try {
+			return this.withBase(base, f);
+		} finally {
+			this.scope = saved;
+		}
+	}
+
+	/**
+	 * The `$dynamicAnchor` of this name a `$dynamicRef` reaches in a dynamic scope: the
+	 * outermost resource's, the document's first; undefined where none has one.
+	 */
+	dynamicTarget(name: string, scope = this.scope): string | undefined {
+		const dynamic = this.#ids().dynamic;
+		return [this.documentBase, ...scope]
+			.map((r) => `${r}#${name}`)
+			.find((uri) => dynamic.has(uri));
+	}
+
+	/** Whether the document has `$dynamicAnchor`s and a value is reached through a resource of its own. */
+	get dynamicScope(): boolean {
+		return this.#ids().dynamic.size > 0 && this.scope.length > 0;
+	}
+
+	/** Whether a URI names a `$dynamicAnchor`. */
+	isDynamicAnchor(uri: string): boolean {
+		return this.#ids().dynamic.has(uri);
+	}
+
 	/** The base URI inside a schema with `$id`, resolved against the current one. */
 	baseOf(id: string): string {
 		return withoutFragment(new URL(id, this.base));
@@ -416,11 +454,6 @@ export class Ctx {
 		return base;
 	}
 
-	/** Whether a `$dynamicRef` to `#name` is a `$ref`: no other `$dynamicAnchor` of the name can take its place. */
-	dynamicIsStatic(name: string): boolean {
-		return (this.#ids().dynamic.get(name) ?? 0) <= 1;
-	}
-
 	/** Whether a schema is hoisted, by its URI. */
 	isHoisted(uri: string): boolean {
 		return this.#hoistedKeys.has(uri);
@@ -477,7 +510,7 @@ export class Ctx {
 		const index: Index = {
 			ids: new Map(),
 			anchors: new Map(),
-			dynamic: new Map(),
+			dynamic: new Set(),
 		};
 		indexIds(index, this.root, this.documentBase);
 		this.#index = index;

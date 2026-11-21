@@ -55,7 +55,7 @@ export type Pointer = {
 export type A = Record<string, unknown>;
 
 export type B = {
-  x?: unknown;
+  x?: B;
 };
 
 /** A cycle among schemas expanded inline gets a name. */
