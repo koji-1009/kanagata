@@ -727,6 +727,34 @@ class Machine {
 	}
 }
 
+/** A pattern's machine, from its start to its accepting state. */
+interface Read {
+	m: Machine;
+	start: number;
+	accept: number;
+}
+
+/** Machines built once each; null for a pattern no machine says, or JavaScript cannot read. */
+const machines = new Map<string, Read | null>();
+
+function machine(pattern: string): Read | null {
+	let read = machines.get(pattern);
+	if (read === undefined) {
+		read = null;
+		try {
+			new RegExp(pattern, "u");
+			const m = new Machine();
+			const start = m.state();
+			const accept = m.build(new Expression(pattern).alternatives(true), start);
+			read = { m, start, accept };
+		} catch {
+			// A pattern JavaScript cannot read, `NoType`, or more states than read.
+		}
+		machines.set(pattern, read);
+	}
+	return read;
+}
+
 /** The most pairs of states `matching` visits before it gives up. */
 const MAX_PAIRS = 10_000;
 
@@ -739,19 +767,9 @@ export function matching(
 	pattern: string,
 	t: Template,
 ): "within" | "meets" | "apart" | undefined {
-	try {
-		new RegExp(pattern, "u");
-	} catch {
-		return undefined;
-	}
-	const m = new Machine();
-	const start = m.state();
-	let accept: number;
-	try {
-		accept = m.build(new Expression(pattern).alternatives(true), start);
-	} catch {
-		return undefined;
-	}
+	const read = machine(pattern);
+	if (read === null) return undefined;
+	const { m, start, accept } = read;
 	const tm = new Machine();
 	const tStart = tm.state();
 	const tAccept = tm.build(
@@ -799,8 +817,17 @@ export function matching(
  * The strings an ECMA-262 pattern matches (anywhere in the string, as JSON Schema reads
  * it), as template literal types; undefined where no type says exactly those, where
  * TypeScript would not build their union, or where JavaScript cannot read the pattern.
+ * Each pattern is read once: a document repeats its patterns.
  */
 export function patternType(pattern: string): Ty | undefined {
+	if (!typed.has(pattern)) typed.set(pattern, typeOf(pattern));
+	return typed.get(pattern);
+}
+
+/** What `patternType` read of each pattern. */
+const typed = new Map<string, Ty | undefined>();
+
+function typeOf(pattern: string): Ty | undefined {
 	try {
 		new RegExp(pattern, "u");
 	} catch {
