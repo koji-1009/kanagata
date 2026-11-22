@@ -4,7 +4,7 @@
   "components": {
     "schemas": {
       "OneOrNull": {
-        "description": "A $ref to a schema that admits arrays among other kinds keeps its arrays beside it where an array meets it; the other kinds meet no array.",
+        "description": "A $ref to a schema that admits arrays among other kinds keeps its arrays beside it where an array meets it; the other kinds its type names pass the array keywords.",
         "allOf": [{ "$ref": "#/components/schemas/TagsOrNull" }, { "maxItems": 1 }]
       },
       "OneNotNull": {

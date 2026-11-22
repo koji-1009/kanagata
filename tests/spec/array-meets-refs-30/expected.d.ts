@@ -18,5 +18,5 @@ export type OneTag = Tags & [string?];
 
 export type TagsOrNull = string[] | null;
 
-/** And so are those of a nullable array, which meets the other array without null. */
-export type OneOrNull = TagsOrNull & [string?];
+/** And so are those of a nullable array; null, which it admits, passes maxItems. */
+export type OneOrNull = TagsOrNull & ([string?] | null);

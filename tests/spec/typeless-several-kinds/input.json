@@ -65,7 +65,7 @@
         "allOf": [{ "allOf": [{ "dependentRequired": { "a": ["b"] } }] }]
       },
       "OneOfKind": {
-        "description": "anyOf and oneOf members do not: each is the kinds its own keywords say.",
+        "description": "So do anyOf and oneOf members: each constrains its own kind, and the schema's other kinds pass it.",
         "anyOf": [{ "required": ["a"] }, { "minItems": 1 }]
       },
       "MemberDependentOrItems": {
@@ -89,7 +89,7 @@
         "allOf": [{ "required": ["a"], "allOf": [{ "minItems": 1 }] }]
       },
       "EitherMemberOrNull": {
-        "description": "So does one whose anyOf members are of several kinds.",
+        "description": "So does one whose anyOf members are of several kinds: every object passes one, every array the other.",
         "type": ["array", "object", "null"],
         "allOf": [{ "anyOf": [{ "required": ["a"] }, { "minItems": 1 }] }]
       },

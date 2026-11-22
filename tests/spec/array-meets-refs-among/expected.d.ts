@@ -23,20 +23,20 @@ export interface schemas {
   Counted: Counted;
 }
 
-/** A $ref to a schema that admits arrays among other kinds keeps its arrays beside it where an array meets it; the other kinds meet no array. */
-export type OneOrNull = TagsOrNull & [string?];
+/** A $ref to a schema that admits arrays among other kinds keeps its arrays beside it where an array meets it; the other kinds its type names pass the array keywords. */
+export type OneOrNull = TagsOrNull & ([string?] | null);
 
 /** Its keywords are read together: not leaves arrays only. */
 export type OneNotNull = NotNullTags & [string?];
 
 /** Its arrays are those of its members, through a $ref too. */
-export type OneOrEmpty = TagsOrEmpty & [string?];
+export type OneOrEmpty = TagsOrEmpty & ([string?] | "");
 
 /** And its array values. */
 export type OneMixed = Mixed & ["a"];
 
 /** It is converted where the array meets it, so its warning comes first. */
-export type OneCounted = Counted & [string];
+export type OneCounted = Counted & ([string] | string);
 
 /** An array among other kinds meets a $ref to an array too. */
 export type TagsBesideNullable = Tags & [string?];

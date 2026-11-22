@@ -94,10 +94,8 @@ export type ItemsOrMemberDependent = {
   b: {} | null;
 } | [unknown, ...unknown[]];
 
-/** anyOf and oneOf members do not: each is the kinds its own keywords say. */
-export type OneOfKind = {
-  a: {} | null;
-} | [unknown, ...unknown[]];
+/** So do anyOf and oneOf members: each constrains its own kind, and the schema's other kinds pass it. */
+export type OneOfKind = Record<string, unknown> | unknown[];
 
 /** A member with keywords of several kinds constrains each kind by its own. */
 export type MemberDependentOrItems = {
@@ -121,13 +119,11 @@ export type NestedMemberOrNull = {
   a: {} | null;
 } | null;
 
-/** So does one whose anyOf members are of several kinds. */
-export type EitherMemberOrNull = {
-  a: {} | null;
-} | [unknown, ...unknown[]] | null;
+/** So does one whose anyOf members are of several kinds: every object passes one, every array the other. */
+export type EitherMemberOrNull = Record<string, unknown> | unknown[] | null;
 
 /** Without type in the parent, the member is the kinds its keywords say. */
-export type MemberOfAnyType = [unknown, ...unknown[]] | `a${string}`;
+export type MemberOfAnyType = `a${string}` | [unknown, ...unknown[]];
 
 /** A closed object admits no object that requires a key it forbids; the member's arrays stay. */
 export type ClosedMember = [unknown, ...unknown[]] | null;

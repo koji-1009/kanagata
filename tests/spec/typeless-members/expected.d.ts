@@ -60,10 +60,10 @@ export type ArrayOrNull = [string, ...string[]] | null;
 export type TaggedOrNull = [string, ...string[]] | null;
 
 /** The strings that pass are those the member's string keywords admit. */
-export type TaggedOrPrefixed = [unknown, ...unknown[]] | `a${string}`;
+export type TaggedOrPrefixed = `a${string}` | [unknown, ...unknown[]];
 
 /** So are the integers, by its bounds. */
-export type TaggedOrSmall = [unknown, ...unknown[]] | 1 | 2;
+export type TaggedOrSmall = 1 | 2 | [unknown, ...unknown[]];
 
 /** Next to object keywords too. */
 export type KeyedOrEmpty = {

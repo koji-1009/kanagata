@@ -261,9 +261,7 @@ export type AccountInput = ({
 });
 
 /** Without an applicator they are additionalProperties and items, which say the value is an object or an array. */
-export type Alone = {
-  [key: string]: string;
-} | number[];
+export type Alone = Record<string, unknown> | unknown[];
 
 /** Items past those prefixItems evaluate are not admitted. */
 export type Prefix = [string?, number?];
