@@ -1,0 +1,25 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Tags": { "type": "array", "items": { "type": "string" } },
+      "Pair": { "type": "array", "prefixItems": [true, true], "items": false },
+      "DynamicTags": { "description": "Names arrays through $dynamicRef.", "$dynamicRef": "#/components/schemas/Tags" },
+      "TagPair": {
+        "description": "Its items read as DynamicTags says.",
+        "allOf": [{ "$ref": "#/components/schemas/DynamicTags" }, { "$ref": "#/components/schemas/Pair" }]
+      },
+      "TagsInner": { "$id": "https://example.com/tags-inner", "type": "array", "items": { "type": "string" } },
+      "TagsHolder": {
+        "description": "Names arrays through a $ref that resolves against its own $id.",
+        "$id": "https://example.com/tags-holder",
+        "$ref": "tags-inner"
+      },
+      "HeldPair": {
+        "description": "Its items read as TagsHolder says.",
+        "allOf": [{ "$ref": "#/components/schemas/TagsHolder" }, { "$ref": "#/components/schemas/Pair" }]
+      }
+    }
+  }
+}

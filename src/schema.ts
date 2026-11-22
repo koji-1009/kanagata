@@ -531,16 +531,17 @@ function arrayTargets(cx: Ctx, out: Ty[], at: string): Ty[] {
 
 /** The arrays of a component that names arrays, through the components it is a `$ref` to. */
 function arrayOf(cx: Ctx, name: string, at: string): Arrays | undefined {
-	const { value, base, uri, where } = cx.withBase(cx.documentBase, () =>
+	const located = cx.withBase(cx.documentBase, () =>
 		cx.locate(SCHEMA_PREFIX + escapeToken(name), at),
 	);
+	const { value, uri, where } = located;
 	// Only a schema that names arrays has array types; others are not converted for them.
-	if (!cx.withBase(base, () => namesArrays(cx, value)) || !cx.enter(uri))
+	if (!cx.inTarget(located, () => namesArrays(cx, value)) || !cx.enter(uri))
 		return undefined;
 	try {
 		return arraysIn(
 			cx,
-			cx.withBase(base, () => schema(cx, value, where)),
+			cx.inTarget(located, () => schema(cx, value, where)),
 			at,
 		);
 	} finally {
@@ -570,20 +571,25 @@ function arraysIn(cx: Ctx, t: Ty, at: string): Arrays | undefined {
 /**
  * Whether a schema names arrays, so that its type may have array types: by a `type` that
  * names `array`, `const` / `enum` with an array, array keywords without `type`, a `$ref`
- * to such a schema, or an `allOf`, `oneOf` or `anyOf` member that is one.
+ * or `$dynamicRef` to such a schema, or an `allOf`, `oneOf` or `anyOf` member that is one.
  */
 function namesArrays(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
 	if (!(v instanceof JsonObject)) return false;
-	const r = v.str("$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	const viaRef =
-		target !== undefined &&
-		!seen.has(target.uri) &&
-		cx.withBase(target.base, () =>
-			namesArrays(cx, target.value, new Set([...seen, target.uri])),
+	return cx.inOwnResource(v, () => ownNamesArrays(cx, v, seen));
+}
+
+function ownNamesArrays(cx: Ctx, v: JsonObject, seen: Set<string>): boolean {
+	const viaRef = cx
+		.reached(v)
+		.some(
+			(target) =>
+				!seen.has(target.uri) &&
+				cx.inTarget(target, () =>
+					namesArrays(cx, target.value, new Set([...seen, target.uri])),
+				),
 		);
 	// In 3.0 the keywords next to $ref are ignored.
-	if (viaRef || (r !== undefined && !cx.refSiblings)) return viaRef;
+	if (viaRef || (v.get("$ref") !== undefined && !cx.refSiblings)) return viaRef;
 	const type = v.get("type");
 	if (type === "array" || (Array.isArray(type) && type.includes("array")))
 		return true;
@@ -636,7 +642,8 @@ function ofKind(cx: Ctx, s: JsonObject, kind: string): Ty {
 /**
  * The values of a kind that a member `typelessKinds` reads admits: every one for `true`
  * (and anything else read as a schema that admits every value), none for `false`;
- * otherwise those its keywords for the kind admit, its `$ref` target (that alone in 3.0),
+ * otherwise those its keywords for the kind admit, its `$ref` target (that alone in 3.0)
+ * and `$dynamicRef` target,
  * all its `allOf` members, one of its `anyOf` members and one of its `oneOf` members (a
  * literal or `null` two of them admit is in none; see `shared`), and, where TypeScript
  * can say them, those its `not` leaves (`negation`, `excluded`) and its `if` / `then` /
@@ -652,21 +659,27 @@ function passed(
 ): Ty {
 	if (!(m instanceof JsonObject))
 		return m === false ? NEVER : (KIND[kind] as Ty);
+	return cx.inOwnResource(m, () => ownPassed(cx, m, kind, around, seen));
+}
+
+function ownPassed(
+	cx: Ctx,
+	m: JsonObject,
+	kind: string,
+	around: Value[],
+	seen: ReadonlySet<string>,
+): Ty {
 	const inner = (n: Value, s = seen) => passed(cx, n, kind, [m, ...around], s);
 	const parts: Ty[] = [];
-	const r = m.str("$ref");
-	if (r !== undefined) {
-		// The target's own $refs resolve against the document it is in.
-		const target = cx.tryLocate(r);
-		if (target !== undefined && !seen.has(target.uri))
+	for (const target of cx.reached(m))
+		if (!seen.has(target.uri))
 			parts.push(
-				cx.withBase(target.base, () =>
+				cx.inTarget(target, () =>
 					inner(target.value, new Set([...seen, target.uri])),
 				),
 			);
-		// In 3.0 the keywords next to $ref are ignored.
-		if (!cx.refSiblings) return inter(parts);
-	}
+	// In 3.0 the keywords next to $ref are ignored.
+	if (m.get("$ref") !== undefined && !cx.refSiblings) return inter(parts);
 	const each = (key: string): Ty[] | undefined => {
 		const members = m.get(key);
 		return Array.isArray(members) ? members.map((n) => inner(n)) : undefined;
@@ -1561,9 +1574,9 @@ function typelessKinds(cx: Ctx, m: Value): string[] {
 
 /**
  * The kinds a schema's keywords and those of the schemas it applies make it (`made`: its
- * own, its `$ref` target's and its members'), and those its `if` / `then` / `else` add
- * (`all`), which let the other kinds pass in its own type already; undefined where one of
- * them says more, or its `$ref` reaches nothing (`typelessKinds`). `true`, and anything
+ * own, its `$ref` and `$dynamicRef` targets' and its members'), and those its `if` /
+ * `then` / `else` add (`all`), which let the other kinds pass in its own type already;
+ * undefined where one of them says more, or a reference reaches nothing (`typelessKinds`). `true`, and anything
  * else read as a schema that admits every value, makes no kind; nor does `false`, which
  * admits none (`passed`).
  */
@@ -1576,26 +1589,36 @@ function madeKinds(
 	if (!(m instanceof JsonObject)) return kinds;
 	if (["type", "const", "enum"].some((k) => m.get(k) !== undefined))
 		return undefined;
+	return cx.inOwnResource(m, () => ownMadeKinds(cx, m, seen, kinds));
+}
+
+function ownMadeKinds(
+	cx: Ctx,
+	m: JsonObject,
+	seen: ReadonlySet<string>,
+	kinds: { made: Set<string>; all: Set<string> },
+): { made: Set<string>; all: Set<string> } | undefined {
 	const add = (n: Value, made: boolean, s = seen): boolean => {
 		const inner = madeKinds(cx, n, s);
 		for (const k of inner?.all ?? []) kinds.all.add(k);
 		if (made) for (const k of inner?.made ?? []) kinds.made.add(k);
 		return inner !== undefined;
 	};
-	const r = m.str("$ref");
-	if (r !== undefined) {
-		// The target's own $refs resolve against the document it is in; one seen on the way adds nothing.
-		const target = cx.tryLocate(r);
-		const read =
-			target !== undefined &&
-			(seen.has(target.uri) ||
-				cx.withBase(target.base, () =>
+	const refs = [...REFS].filter((k) => m.get(k) !== undefined);
+	const targets = cx.reached(m);
+	// Each reference must reach its target; one seen on the way adds nothing.
+	const read =
+		targets.length === refs.length &&
+		targets.every(
+			(target) =>
+				seen.has(target.uri) ||
+				cx.inTarget(target, () =>
 					add(target.value, true, new Set([...seen, target.uri])),
-				));
-		if (!read) return undefined;
-		// In 3.0 the keywords next to $ref are ignored.
-		if (!cx.refSiblings) return kinds;
-	}
+				),
+		);
+	if (!read) return undefined;
+	// In 3.0 the keywords next to $ref are ignored.
+	if (m.get("$ref") !== undefined && !cx.refSiblings) return kinds;
 	for (const k of ownKinds(m)) {
 		kinds.made.add(k);
 		kinds.all.add(k);
@@ -1638,11 +1661,11 @@ function kindsOfMember(cx: Ctx, m: JsonObject): string[] {
 	return typeKinds(cx, m) ?? typelessKinds(cx, m);
 }
 
-/** Whether a schema is an object without `type`, `$ref`, `const` or `enum`. */
+/** Whether a schema is an object without `type`, `$ref`, `$dynamicRef`, `const` or `enum`. */
 function isTypeless(m: Value | undefined): m is JsonObject {
 	return (
 		m instanceof JsonObject &&
-		["type", "$ref", "const", "enum"].every((k) => m.get(k) === undefined)
+		["type", ...REFS, "const", "enum"].every((k) => m.get(k) === undefined)
 	);
 }
 
@@ -1686,7 +1709,7 @@ function keywordKinds(v: JsonObject): string[] {
 
 /**
  * The kinds the schema's `const` / `enum` and the `type`s and `const` / `enum` of its
- * members allow, at any depth: those of each `allOf` member, of its `$ref` target, and of
+ * members allow, at any depth: those of each `allOf` member, of its `$ref` and `$dynamicRef` targets, and of
  * every `oneOf` / `anyOf` member together (none where one says none); with `around`,
  * those of the schemas it is a member of too. undefined where none of them says any.
  */
@@ -1704,40 +1727,42 @@ function saidKinds(
 					),
 				);
 	// What a schema's `const` / `enum` and `type`s say (`self`: its own `type` and its `$ref`
-	// target's too), and its members'.
+	// and `$dynamicRef` targets' too), and its members'.
 	const says = (
 		s: Value,
 		self: boolean,
 		seen: ReadonlySet<string>,
 	): string[] | undefined => {
 		if (!(s instanceof JsonObject)) return undefined;
-		const named: string[][] = [];
-		const add = (k: string[] | undefined) => {
-			if (k !== undefined) named.push(k);
-		};
-		const r = self ? s.str("$ref") : undefined;
-		if (r !== undefined) {
-			// The target is the same value; in 3.0 the keywords next to it are ignored.
-			const target = cx.tryLocate(r);
-			if (target !== undefined && !seen.has(target.uri))
-				add(
-					cx.withBase(target.base, () =>
-						says(target.value, true, new Set([...seen, target.uri])),
-					),
-				);
-			if (!cx.refSiblings) return meet(named);
-		}
-		if (self) add(typeKinds(cx, s));
-		add(valueKinds(s));
-		const allOf = s.get("allOf");
-		for (const m of Array.isArray(allOf) ? allOf : []) add(says(m, true, seen));
-		for (const key of ["oneOf", "anyOf"]) {
-			const members = s.get(key);
-			if (!Array.isArray(members)) continue;
-			const each = members.map((m) => says(m, true, seen));
-			if (each.every((k) => k !== undefined)) add([...new Set(each.flat())]);
-		}
-		return meet(named);
+		return cx.inOwnResource(s, () => {
+			const named: string[][] = [];
+			const add = (k: string[] | undefined) => {
+				if (k !== undefined) named.push(k);
+			};
+			if (self) {
+				// The target is the same value; in 3.0 the keywords next to $ref are ignored.
+				for (const target of cx.reached(s))
+					if (!seen.has(target.uri))
+						add(
+							cx.inTarget(target, () =>
+								says(target.value, true, new Set([...seen, target.uri])),
+							),
+						);
+				if (s.get("$ref") !== undefined && !cx.refSiblings) return meet(named);
+				add(typeKinds(cx, s));
+			}
+			add(valueKinds(s));
+			const allOf = s.get("allOf");
+			for (const m of Array.isArray(allOf) ? allOf : [])
+				add(says(m, true, seen));
+			for (const key of ["oneOf", "anyOf"]) {
+				const members = s.get(key);
+				if (!Array.isArray(members)) continue;
+				const each = members.map((m) => says(m, true, seen));
+				if (each.every((k) => k !== undefined)) add([...new Set(each.flat())]);
+			}
+			return meet(named);
+		});
 	};
 	const named: string[][] = [];
 	const own = says(v, false, new Set());
