@@ -1,7 +1,16 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the strings are TypeScript template literal types as printed, not JavaScript templates.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { patternType, relation, strings, within } from "../../src/template.ts";
+import {
+	includes,
+	matching,
+	meet,
+	patternType,
+	relation,
+	strings,
+	type Template,
+	templates,
+} from "../../src/template.ts";
 import type { Ty } from "../../src/ty.ts";
 
 /** The type a pattern is, as printed: `string`, string literals and templates joined by ` | `. */
@@ -156,56 +165,110 @@ test("a pattern JavaScript cannot read is no type", () => {
 	assert.equal(patternType("^\\-$"), undefined, "\\- outside a class");
 });
 
-test("the templates of a pattern whose strings another pattern all matches", () => {
-	assert.deepEqual(within("^x-a", "^x-"), ["`x-a${string}`"]);
+/** The one template of a pattern without alternatives. */
+const one = (pattern: string): Template => templates(pattern)[0] as Template;
+
+test("the templates of a pattern, one for each alternative", () => {
 	assert.deepEqual(
-		within("^x-[\\s\\S]*", "^x-"),
-		["`x-${string}`"],
-		"the same",
-	);
-	assert.deepEqual(within("^x-[ab]", "^x-[a-c]"), [
-		'`x-${"a" | "b"}${string}`',
-	]);
-	assert.deepEqual(within("^x-", "^x-a"), [], "any text is not a");
-	assert.deepEqual(within("^x-b", "^x-a"), []);
-	assert.deepEqual(within("^x-", "-y$"), [], "some strings of both");
-	assert.deepEqual(within("^x-", "^x-[\\s\\S]*z"), [], "z after any text");
-	assert.deepEqual(
-		within("^b$|^x-", "^[bx]"),
-		["`x-${string}`"],
-		"templates only, not the keys a pattern names",
+		templates("^b$|^x-").map((t) => (t.key as { text: string }).text),
+		['"b"', "`x-${string}`"],
 	);
 });
 
-test("how the strings of one template of a pattern stand to another's", () => {
-	const xa: [string, string] = ["^x-a", "`x-a${string}`"];
-	const x: [string, string] = ["^x-", "`x-${string}`"];
-	const ab: [string, string] = ["^[ab]$", '`${"a" | "b"}`'];
-	assert.equal(relation(xa, x), "within");
-	assert.equal(relation(x, xa), "meets", "some strings of both");
-	assert.equal(relation(x, ["-y$", "`${string}-y`"]), "meets");
-	assert.equal(relation(x, ["^y-", "`y-${string}`"]), "apart");
-	assert.equal(relation(ab, ["^[bc]$", '`${"b" | "c"}`']), "meets");
-	assert.equal(relation(ab, ["^[cd]$", '`${"c" | "d"}`']), "apart");
-	const abz: [string, string] = [
-		"^[ab][\\s\\S]*z$",
-		'`${"a" | "b"}${string}z`',
-	];
+test("whether a template admits every string another does", () => {
+	assert.equal(includes(one("^x-"), one("^x-a")), true);
+	assert.equal(includes(one("^x-"), one("^x-[\\s\\S]*")), true, "the same");
+	assert.equal(includes(one("^x-[a-c]"), one("^x-[ab]")), true);
+	assert.equal(includes(one("^x-a"), one("^x-")), false, "any text is not a");
+	assert.equal(includes(one("^x-a"), one("^x-b")), false);
+	assert.equal(includes(one("^x-[\\s\\S]*z"), one("^x-")), false);
+});
+
+test("how the strings of one template stand to another's", () => {
+	const ab = one("^[ab]$");
+	assert.equal(relation(one("^x-a"), one("^x-")), "within");
+	assert.equal(relation(one("^x-"), one("^x-a")), "meets", "some of both");
+	assert.equal(relation(one("^x-"), one("-y$")), "meets");
+	assert.equal(relation(one("^x-"), one("^y-")), "apart");
+	assert.equal(relation(ab, one("^[bc]$")), "meets");
+	assert.equal(relation(ab, one("^[cd]$")), "apart");
+	const abz = one("^[ab][\\s\\S]*z$");
 	assert.equal(relation(abz, ab), "apart", "z after the one character");
 	assert.equal(relation(ab, abz), "apart");
-	assert.equal(
-		relation(
-			["^x-[ab]", '`x-${"a" | "b"}${string}`'],
-			["^x-|^y-", "`x-${string}`"],
-		),
-		"within",
-		"the template of the other pattern's that the text names",
-	);
 });
 
 test("the strings of a template without any text", () => {
-	assert.deepEqual(strings("^x-[ab]$", '`x-${"a" | "b"}`'), ["x-a", "x-b"]);
-	assert.equal(strings("^x-", "`x-${string}`"), undefined, "any text");
+	assert.deepEqual(strings(one("^x-[ab]$")), ["x-a", "x-b"]);
+	assert.equal(strings(one("^x-")), undefined, "any text");
+});
+
+/** The keys of the templates `meet` gives, as printed. */
+function met(a: string, b: string): string[] | undefined {
+	return meet(one(a), one(b))?.map((t) => (t.key as { text: string }).text);
+}
+
+test("the strings two templates admit, as templates", () => {
+	assert.deepEqual(met("^x-", "-y$"), ['"x-y"', "`x-${string}-y`"]);
+	assert.deepEqual(
+		met("^x-a", "^x-"),
+		["`x-a${string}`"],
+		"one within the other",
+	);
+	assert.deepEqual(met("^x-", "^y-"), [], "none");
+	assert.deepEqual(met("^[ab]", "^[bc]"), ["`b${string}`"]);
+	assert.deepEqual(
+		met("a", "b"),
+		["`${string}a${string}b${string}`", "`${string}b${string}a${string}`"],
+		"each order",
+	);
+	assert.deepEqual(met("^a$", "a"), ['"a"'], "text within any text");
+	assert.equal(
+		met(`a${"[\\s\\S]*a".repeat(6)}`, `b${"[\\s\\S]*b".repeat(6)}`),
+		undefined,
+		"too many ways to line them up",
+	);
+});
+
+test("whether a pattern that is a regular expression matches all strings of a template", () => {
+	assert.equal(matching("^[a-z-]+$", one("^x-[ab]$")), "within");
+	assert.equal(matching("^[a-z-]+$", one("^x-")), "meets");
+	assert.equal(matching("^[0-9]+$", one("^x-")), "apart");
+	assert.equal(matching("^x-.+", one("^x-a")), "within", "anything after it");
+	assert.equal(
+		matching("^x-.+$", one("^x-a")),
+		"meets",
+		". is not a line break",
+	);
+	assert.equal(matching("^x-[\\s\\S]+", one("^x-a")), "within");
+	assert.equal(matching("^(?:x-|y-)", one("^y-")), "within", "a group");
+	assert.equal(matching("^(?<p>x)-", one("^x-")), "within", "a named group");
+	assert.equal(matching("^x-a?b*c{0,2}d{0,}", one("^x-")), "within");
+	assert.equal(matching("^x-a{2}", one("^x-aa")), "within");
+	assert.equal(matching("^x-[^a]", one("^x-b")), "within", "a negated class");
+	assert.equal(matching("^x-[^a]", one("^x-a")), "apart");
+	assert.equal(matching("^x-\\D", one("^x-a")), "within");
+	assert.equal(matching("^x-[\\d\\-]", one("^x-1")), "within");
+	assert.equal(matching("^x-[0-9]", one("^x-1")), "within");
+	assert.equal(matching("^x\\.y$", one("^x\\.y$")), "within", "an escape");
+	assert.equal(matching("x$", one("^ax$")), "within", "anywhere");
+	assert.equal(matching("x$", one("^ax")), "meets");
+	assert.equal(matching("^a|b$", one("^a")), "within");
+	assert.equal(matching("^(?=x)", one("^x")), undefined, "a lookahead");
+	assert.equal(matching("\\bx", one("^x")), undefined, "a word boundary");
+	assert.equal(matching("^(a$)", one("^a")), undefined, "$ in a group");
+	assert.equal(matching("a$b", one("^a")), undefined, "$ before the end");
+	assert.equal(matching("a^", one("^a")), undefined, "^ after the start");
+	assert.equal(matching("^(a", one("^a")), undefined, "not a pattern");
+	assert.equal(
+		matching("^[a-z]{1,6000}$", one("^a")),
+		undefined,
+		"more states than read",
+	);
+	assert.equal(
+		matching("^[ab]*a[ab]{14}$", one("^[\\s\\S]*$")),
+		undefined,
+		"more pairs of states than read",
+	);
 });
 
 test("templates keep the pattern they are from", () => {

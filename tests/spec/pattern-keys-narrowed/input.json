@@ -32,6 +32,13 @@
         "propertyNames": { "pattern": "^x-ab" },
         "patternProperties": { "^x-": { "type": "number" }, "^x-a": { "type": "integer" } }
       },
+      "NamesTooMany": {
+        "description": "The ways these templates line up are too many to read: the signatures stay.",
+        "type": "object",
+        "propertyNames": { "pattern": "a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a" },
+        "patternProperties": { "b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b": { "type": "number" } },
+        "additionalProperties": { "type": "string" }
+      },
       "NamesWithProperty": {
         "type": "object",
         "properties": { "x-ab": { "type": "string" } },
@@ -39,7 +46,7 @@
         "patternProperties": { "^x-": { "type": ["string", "number"] } }
       },
       "NamesSomeKeysOfBoth": {
-        "description": "Which keys both admit no template says: the signatures stay.",
+        "description": "The keys both admit: x-y and those of x-${string}-y.",
         "type": "object",
         "propertyNames": { "pattern": "^x-" },
         "patternProperties": { "-y$": { "type": "number" } },
@@ -90,6 +97,28 @@
         "description": "a has both patterns' types, which admit no value.",
         "type": "object",
         "patternProperties": { "^(a|b)$": { "type": "number" }, "^a$": { "type": "string" } }
+      },
+      "NamedTwiceClosed": {
+        "type": "object",
+        "patternProperties": { "^(a|b)$": { "type": "number" }, "^a$": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "UnwrittenWithin": {
+        "description": "^x-[\\s\\S]+ matches every key of x-a${string}: they have its type too.",
+        "type": "object",
+        "patternProperties": { "^x-a": { "type": ["number", "string"] }, "^x-[\\s\\S]+": { "type": ["number", "boolean"] } },
+        "additionalProperties": false
+      },
+      "UnwrittenApart": {
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "number" }, "^[0-9]+$": { "type": "boolean" } },
+        "additionalProperties": false
+      },
+      "NamesUnwrittenWithin": {
+        "type": "object",
+        "propertyNames": { "pattern": "^x-a" },
+        "patternProperties": { "^x-[\\s\\S]+": { "type": "number" } },
+        "additionalProperties": { "type": "string" }
       }
     }
   }

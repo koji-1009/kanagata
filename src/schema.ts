@@ -25,11 +25,14 @@ import {
 	type RawPosition,
 } from "./pointer.ts";
 import {
+	includes,
 	MAX_UNION,
+	matching,
+	meet,
 	patternType,
-	relation,
 	strings,
-	within,
+	type Template,
+	templates,
 } from "./template.ts";
 import {
 	array as arrayTy,
@@ -3095,48 +3098,59 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	// whose keys template literal types say keys index signatures by them, and a key it
 	// names is a property; another pattern's type joins the index signature by any string.
 	// Patterns of the same template are one index signature of both types.
-	const keyed: { pattern: string; key: Ty; text: string; tys: Ty[] }[] = [];
+	const keyed: { pattern: string; all: Template[]; t: Template; ty: Ty }[] = [];
 	const unwritten: { pattern: string; ty: Ty }[] = [];
+	// A key no value is admitted for is absent, which an open object says; a closed one
+	// has no such key anyway (see `shut`).
+	const absent = new Set<string>();
 	const named = (name: string, ty: Ty) => {
 		if (left.has(name) || props.some((p) => p.key === name)) return;
-		if (ty.kind !== "never") props.push({ key: name, ty, optional: true });
+		if (ty.kind === "never") absent.add(name);
+		props.push({ key: name, ty, optional: true });
 	};
+	const shut = () =>
+		counted(
+			v,
+			props.filter((p) => !absent.has(p.key)),
+		);
 	// A pattern every key matches leaves additionalProperties no key: its type is every other key's.
 	const everyKey: Ty[] = [];
 	// A template without any text names its keys, as a literal does: TypeScript keys no
 	// index signature by them. Each has the type of every pattern that matches it.
+	const name = (t: Template) => {
+		for (const key of strings(t) as string[]) named(key, keyValue(key));
+	};
 	for (const [pattern, ty] of patterns) {
 		const keys = patternType(pattern);
 		if (keys === undefined) unwritten.push({ pattern, ty });
 		else if (keys.kind === "string") everyKey.push(ty);
-		else
-			for (const key of keys.kind === "union" ? keys.items : [keys]) {
-				const text = (key as { text: string }).text;
-				const finite =
-					key.kind === "lit"
-						? [JSON.parse(text) as string]
-						: strings(pattern, text);
-				if (finite !== undefined)
-					for (const name of finite) named(name, keyValue(name));
-				else {
-					const same = keyed.find((k) => k.text === text);
-					if (same === undefined) keyed.push({ pattern, key, text, tys: [ty] });
-					else same.tys.push(ty);
-				}
-			}
+		else {
+			const all = templates(pattern);
+			for (const t of all)
+				if (strings(t) !== undefined) name(t);
+				else keyed.push({ pattern, all, t, ty });
+		}
 	}
 	if (everyKey.length > 0) additional = inter(everyKey);
-	// The patterns whose keys include all of a template's: each of its keys has their types.
-	// Whether a pattern no template says matches all of them is not read.
-	const including = (pattern: string, text: string | undefined) =>
-		keyed.filter((k) => within(pattern, k.pattern).includes(text as string));
-	const types = (pattern: string, text: string): Ty[] => [
-		...including(pattern, text).flatMap((h) => h.tys),
+	// The types of every pattern that matches all keys of a template: those of a template
+	// that includes it, those of a pattern no template says where its machine says so (see
+	// `matching`), and those of a pattern of every key.
+	const types = (t: Template): Ty[] => [
+		...keyed.filter((k) => k.all.some((o) => includes(o, t))).map((k) => k.ty),
+		...unwritten
+			.filter((u) => matching(u.pattern, t) === "within")
+			.map((u) => u.ty),
 		...everyKey,
 	];
+	const textOf = (key: Ty) => (key as { text: string }).text;
+	// Patterns of the same template are one index signature of both types, which `types`
+	// gives each of them.
+	const signature = (out: Keyed[], key: Ty, ty: Ty): void => {
+		if (!out.some((s) => textOf(s.key) === textOf(key))) out.push({ key, ty });
+	};
 	// A key has the type of every signature that applies to it, as TypeScript reads them, and
 	// a narrower one's type is within a wider one's, as TypeScript requires.
-	const exact = keyed.map((k) => inter(types(k.pattern, k.text)));
+	const exact = keyed.map((k) => inter(types(k.t)));
 	// An index signature admits each property it applies to, `undefined` too for an optional one.
 	const admitting = (ty: Ty, applies: (key: string) => boolean): Ty => {
 		const own = props.filter((p) => applies(p.key));
@@ -3147,11 +3161,16 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		]);
 	};
 	// Read once the properties are all there.
-	const keyedSignatures = (): Keyed[] =>
-		keyed.map((k, i) => ({
-			key: k.key,
-			ty: admitting(exact[i] as Ty, (key) => matches(k.pattern, key)),
-		}));
+	const keyedSignatures = (): Keyed[] => {
+		const out: Keyed[] = [];
+		for (const [i, k] of keyed.entries())
+			signature(
+				out,
+				k.t.key,
+				admitting(exact[i] as Ty, (key) => matches(k.pattern, key)),
+			);
+		return out;
+	};
 	const allTypes = (): Ty[] => [
 		...unwritten.map((u) => u.ty),
 		...exact,
@@ -3169,61 +3188,55 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (props.some((p) => !p.optional && !matches(pattern, p.key)))
 			return NEVER;
 		for (const p of props) if (!matches(pattern, p.key)) p.ty = NEVER;
-		const keys = names.kind === "union" ? names.items : [names];
-		const templates: Ty[] = [];
-		for (const key of keys) {
-			const text = (key as { text?: string }).text as string;
-			const finite =
-				key.kind === "lit"
-					? [JSON.parse(text) as string]
-					: strings(pattern, text);
-			if (finite === undefined) templates.push(key);
-			else for (const name of finite) named(name, keyValue(name));
-		}
+		const own = templates(pattern).filter((t) => {
+			if (strings(t) === undefined) return true;
+			name(t);
+			return false;
+		});
 		// Where it names every key, those are the properties: no other key is admitted.
-		if (templates.length === 0) return counted(v, props);
-		// A pattern's signature keeps the keys propertyNames admits, where the templates say
-		// which: all of them, those of its templates within the pattern's, or none.
+		if (own.length === 0) return shut();
+		// A pattern's signature is by the keys propertyNames admits too: all of its own
+		// where they are, else the keys each template of propertyNames shares with it,
+		// written as templates (see `meet`). Where those are too many to read, it stays.
 		const signatures: Keyed[] = [];
-		const add = (key: Ty, ty: Ty): void => {
-			const text = (key as { text: string }).text;
-			if (!signatures.some((s) => (s.key as { text: string }).text === text))
-				signatures.push({ key, ty });
-		};
 		for (const [i, k] of keyed.entries()) {
 			const applies = (key: string) => matches(k.pattern, key);
-			const texts = templates.map((t) => (t as { text: string }).text);
-			const how = within(k.pattern, pattern).includes(k.text)
-				? []
-				: texts.map((t) => relation([pattern, t], [k.pattern, k.text]));
-			if (how.length === 0 || how.includes("meets"))
-				add(k.key, admitting(exact[i] as Ty, applies));
+			const both = own.some((n) => includes(n, k.t))
+				? [k.t]
+				: own.map((n) => meet(n, k.t));
+			if (both.some((m) => m === undefined))
+				signature(signatures, k.t.key, admitting(exact[i] as Ty, applies));
 			else
-				for (const [j, t] of texts.entries())
-					if (how[j] === "within")
-						add(
-							templates[j] as Ty,
-							admitting(inter(types(pattern, t)), applies),
-						);
+				for (const t of (both as (Template | Template[])[]).flat())
+					if (t === k.t)
+						signature(signatures, t.key, admitting(exact[i] as Ty, applies));
+					else if (strings(t) !== undefined) name(t);
+					else
+						signature(signatures, t.key, admitting(inter(types(t)), applies));
 		}
 		// A template whose keys a pattern's include has that pattern's signature, and one a
-		// pattern of every key matches has its type: additionalProperties applies to neither.
+		// pattern of every key, or one no template says, matches has their types:
+		// additionalProperties applies to none of them.
 		const others = [
 			...unwritten.map((u) => u.ty),
 			...signatures.map((s) => s.ty),
 			...props.map((p) => p.ty),
 		];
-		const rest = templates.flatMap((key): Keyed[] => {
-			const text = (key as { text?: string }).text as string;
-			if (including(pattern, text).length > 0) return [];
-			const all = types(pattern, text);
-			if (all.length === 0 && additional?.kind === "never") return [];
+		const out = [...signatures];
+		for (const t of own) {
+			if (keyed.some((k) => k.all.some((o) => includes(o, t)))) continue;
+			const all = types(t);
+			if (all.length === 0 && additional?.kind === "never") continue;
 			const ty =
 				all.length > 0 ? inter(all) : union([additional ?? UNKNOWN, ...others]);
-			return [{ key, ty: admitting(ty, () => true) }];
-		});
-		if (signatures.length === 0 && rest.length === 0) return counted(v, props);
-		return { kind: "map", props, keyed: [...signatures, ...rest] };
+			signature(
+				out,
+				t.key,
+				admitting(ty, () => true),
+			);
+		}
+		if (out.length === 0) return shut();
+		return { kind: "map", props, keyed: out };
 	}
 
 	const byPattern = keyedSignatures();
@@ -3244,7 +3257,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		byPattern.length === 0 &&
 		unwritten.length === 0
 	)
-		return counted(v, props);
+		return shut();
 	const index =
 		additional.kind === "never" && unwritten.length === 0
 			? undefined

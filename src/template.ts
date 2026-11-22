@@ -14,12 +14,12 @@ import { lit, STRING, type Ty, union } from "./ty.ts";
 export const MAX_UNION = 99_999;
 
 /** Part of a template: one of a finite set of strings, or any text. */
-type Segment = { set: string[] } | { any: true };
+export type Segment = { set: string[] } | { any: true };
 
 const ANY: Segment = { any: true };
 
 /** A template: its segments, one after the other. */
-type Seq = Segment[];
+export type Seq = Segment[];
 
 /** Strings: the union of some templates. */
 type Lang = Seq[];
@@ -374,53 +374,415 @@ function meets(a: Seq, b: Seq, i: number, j: number): boolean {
 	return x.set.some((c) => set.has(c)) && meets(a, b, i + 1, j + 1);
 }
 
-/** The template of a pattern's strings (see `patternType`) written as `text`. */
-function template(pattern: string, text: string): Seq {
-	return new Parser(pattern)
-		.alternation(true)
-		.find((seq) => (render(seq) as { text?: string }).text === text) as Seq;
+/** One template of the strings a pattern matches: its segments, and its type. */
+export interface Template {
+	readonly seq: Seq;
+	readonly key: Ty;
 }
 
-/**
- * How the strings of template `a` stand to those of template `b`, each a pattern and the
- * text of one of its templates: all among them, some, or none.
- */
+const written = (seq: Seq): Template => ({ seq, key: render(seq) });
+
+/** The templates of a pattern `patternType` reads, one for each of its alternatives. */
+export function templates(pattern: string): Template[] {
+	return new Parser(pattern).alternation(true).map(written);
+}
+
+/** Whether template `outer` admits every string template `inner` does. */
+export function includes(outer: Template, inner: Template): boolean {
+	return contains(outer.seq, inner.seq, 0, 0);
+}
+
+/** How the strings of template `a` stand to those of `b`: all among them, some, or none. */
 export function relation(
-	a: [string, string],
-	b: [string, string],
+	a: Template,
+	b: Template,
 ): "within" | "meets" | "apart" {
-	const x = template(...a);
-	const y = template(...b);
-	return contains(y, x, 0, 0)
+	return includes(b, a)
 		? "within"
-		: meets(x, y, 0, 0)
+		: meets(a.seq, b.seq, 0, 0)
 			? "meets"
 			: "apart";
 }
 
-/** The strings of a pattern's template (see `relation`), where it has no any text. */
-export function strings(pattern: string, text: string): string[] | undefined {
-	const seq = template(pattern, text);
-	if (seq.some((s) => "any" in s)) return undefined;
-	return seq.reduce(
+/** The strings of a template without any text; undefined for one with it. */
+export function strings(t: Template): string[] | undefined {
+	if (t.seq.some((s) => "any" in s)) return undefined;
+	return t.seq.reduce(
 		(out, s) =>
 			out.flatMap((p) => (s as { set: string[] }).set.map((c) => p + c)),
 		[""],
 	);
 }
 
+/** The most steps `common` takes before it gives up: alignments grow with any text. */
+const MAX_STEPS = 10_000;
+
 /**
- * The templates of the strings the pattern `inner` matches (see `patternType`), as
- * written, whose strings the pattern `outer` all matches. Both are patterns
- * `patternType` reads.
+ * The strings both templates admit, as templates: one for each way their segments line
+ * up, the way `meets` reads them, a set meeting a set in the characters both have.
  */
-export function within(inner: string, outer: string): string[] {
-	const outers = new Parser(outer).alternation(true);
-	return new Parser(inner)
-		.alternation(true)
-		.filter((seq) => outers.some((o) => contains(o, seq, 0, 0)))
-		.map(render)
-		.flatMap((t) => (t.kind === "template" ? [t.text] : []));
+function common(
+	a: Seq,
+	b: Seq,
+	i: number,
+	j: number,
+	steps: { n: number },
+): Seq[] {
+	if (++steps.n > MAX_STEPS) throw new NoType();
+	const x = a[i];
+	const y = b[j];
+	if (x === undefined && y === undefined) return [[]];
+	const out: Seq[] = [];
+	const after = (s: Segment, rest: Seq[]) => {
+		for (const r of rest) out.push([s, ...r]);
+	};
+	const anyX = x !== undefined && "any" in x;
+	// Any text in both takes text together, until one of them ends.
+	if (anyX && y !== undefined && "any" in y)
+		after(ANY, [
+			...common(a, b, i + 1, j, steps),
+			...common(a, b, i, j + 1, steps),
+		]);
+	else if (anyX) {
+		out.push(...common(a, b, i + 1, j, steps));
+		if (y !== undefined) after(y, common(a, b, i, j + 1, steps));
+	} else if (y !== undefined && "any" in y) {
+		out.push(...common(a, b, i, j + 1, steps));
+		if (x !== undefined) after(x, common(a, b, i + 1, j, steps));
+	} else if (x !== undefined && y !== undefined) {
+		const set = new Set(y.set);
+		const both = x.set.filter((c) => set.has(c));
+		if (both.length > 0)
+			after({ set: both }, common(a, b, i + 1, j + 1, steps));
+	}
+	return out;
+}
+
+/**
+ * The strings both templates admit, as the fewest of these templates that say them
+ * (`` `x-${string}` `` and `` `${string}-y` ``: `` `x-${string}-y` `` and `"x-y"`);
+ * undefined where the ways they line up are too many to read.
+ */
+export function meet(a: Template, b: Template): Template[] | undefined {
+	let seqs: Seq[];
+	try {
+		seqs = common(a.seq, b.seq, 0, 0, { n: 0 });
+	} catch {
+		return undefined;
+	}
+	// A template another one includes says no more.
+	let kept: Template[] = [];
+	for (const t of seqs.map(written)) {
+		if (kept.some((o) => includes(o, t))) continue;
+		kept = [...kept.filter((o) => !includes(t, o)), t];
+	}
+	return kept;
+}
+
+/** Characters: code point ranges, from and to, in order and apart. */
+type Chars = [number, number][];
+
+const LAST = 0x10ffff;
+const ALL: Chars = [[0, LAST]];
+
+function charsOf(cs: string[]): Chars {
+	const points = cs
+		.map((c) => c.codePointAt(0) as number)
+		.sort((x, y) => x - y);
+	const out: Chars = [];
+	for (const p of points) {
+		const last = out[out.length - 1];
+		if (last !== undefined && p <= last[1] + 1) last[1] = Math.max(last[1], p);
+		else out.push([p, p]);
+	}
+	return out;
+}
+
+function either(sets: Chars[]): Chars {
+	const ranges = sets.flat().sort((x, y) => x[0] - y[0]);
+	const out: Chars = [];
+	for (const [from, to] of ranges) {
+		const last = out[out.length - 1];
+		if (last !== undefined && from <= last[1] + 1)
+			last[1] = Math.max(last[1], to);
+		else out.push([from, to]);
+	}
+	return out;
+}
+
+function other(set: Chars): Chars {
+	const out: Chars = [];
+	let next = 0;
+	for (const [from, to] of set) {
+		if (from > next) out.push([next, from - 1]);
+		next = to + 1;
+	}
+	if (next <= LAST) out.push([next, LAST]);
+	return out;
+}
+
+const has = (set: Chars, c: number) => set.some(([f, t]) => f <= c && c <= t);
+
+/** What `.` matches: every character but a line terminator. */
+const DOT = other(charsOf(["\n", "\r", " ", " "]));
+
+/** A pattern read as a regular expression: characters, a sequence, alternatives, a repetition. */
+type Re =
+	| { chars: Chars }
+	| { seq: Re[] }
+	| { alt: Re[] }
+	| { rep: Re; min: number; max: number };
+
+const ANY_TEXT: Re = { rep: { chars: ALL }, min: 0, max: Infinity };
+
+/**
+ * A parser of the patterns that are regular expressions: all but lookarounds, word
+ * boundaries, back references and property escapes, which throw `NoType`.
+ */
+class Expression extends Parser {
+	alternatives(top: boolean): Re {
+		const alts = [this.items(top)];
+		while (this.peek() === "|") {
+			this.i++;
+			alts.push(this.items(top));
+		}
+		return { alt: alts };
+	}
+
+	/** A sequence; at the top, `^` and `$` anchor it, and any text is around it without them. */
+	items(top: boolean): Re {
+		const items: Re[] = [];
+		const start = top && this.peek() === "^";
+		if (start) this.i++;
+		else if (top) items.push(ANY_TEXT);
+		let end = false;
+		while (!this.done && this.peek() !== "|" && this.peek() !== ")") {
+			if (top && this.peek() === "$") {
+				this.i++;
+				end = true;
+				break;
+			}
+			items.push(this.repeated());
+		}
+		if (end && !this.done && this.peek() !== "|") throw new NoType();
+		if (top && !end) items.push(ANY_TEXT);
+		return { seq: items };
+	}
+
+	repeated(): Re {
+		const unit = this.unit();
+		const c = this.peek();
+		let min = 0;
+		let max = Infinity;
+		if (c === "?") max = 1;
+		else if (c === "+") min = 1;
+		else if (c === "{") {
+			const m = /^\{(\d+)(,(\d*))?\}/.exec(
+				this.cs.slice(this.i).join(""),
+			) as RegExpExecArray;
+			this.i += m[0].length - 1;
+			min = Number(m[1]);
+			max = m[2] === undefined ? min : m[3] === "" ? Infinity : Number(m[3]);
+		} else if (c !== "*") return unit;
+		this.i++;
+		this.lazy();
+		return { rep: unit, min, max };
+	}
+
+	unit(): Re {
+		const c = this.next();
+		if (c === "(") {
+			if (this.peek() === "?") {
+				this.i++;
+				const kind = this.next();
+				if (kind === "<" && this.peek() !== "=" && this.peek() !== "!") {
+					while (this.next() !== ">");
+				} else if (kind !== ":") throw new NoType();
+			}
+			const re = this.alternatives(false);
+			this.next(); // ")"
+			return re;
+		}
+		if (c === "[") return { chars: this.chars() };
+		if (c === "\\") {
+			const e = this.escape(false);
+			return { chars: typeof e === "string" ? charsOf([e]) : escaped(e.cls) };
+		}
+		if (c === "^" || c === "$") throw new NoType();
+		return { chars: c === "." ? DOT : charsOf([c]) };
+	}
+
+	/** `[…]`, negated or not. */
+	chars(): Chars {
+		const negated = this.peek() === "^";
+		if (negated) this.i++;
+		const sets: Chars[] = [];
+		const one = (): string | { cls: string } => {
+			const c = this.next();
+			return c === "\\" ? this.escape(true) : c;
+		};
+		while (this.peek() !== "]") {
+			const a = one();
+			if (typeof a !== "string") sets.push(escaped(a.cls));
+			else if (this.peek() === "-" && this.cs[this.i + 1] !== "]") {
+				this.i++;
+				const b = one() as string;
+				sets.push([[a.codePointAt(0) as number, b.codePointAt(0) as number]]);
+			} else sets.push(charsOf([a]));
+		}
+		this.i++;
+		const set = either(sets);
+		return negated ? other(set) : set;
+	}
+}
+
+/** What a class escape matches: `\d`, `\s`, `\w`, or everything but one (`\D`). */
+function escaped(cls: string): Chars {
+	const set = charsOf(CLASS_ESCAPES[cls.toLowerCase()] as string[]);
+	return cls === cls.toLowerCase() ? set : other(set);
+}
+
+/** The most states a machine has before a reading gives up. */
+const MAX_STATES = 5_000;
+
+/** A nondeterministic machine over characters: each state's moves, and its free moves. */
+class Machine {
+	readonly moves: { chars: Chars; to: number }[][] = [];
+	readonly free: number[][] = [];
+
+	state(): number {
+		if (this.moves.length >= MAX_STATES) throw new NoType();
+		this.moves.push([]);
+		this.free.push([]);
+		return this.moves.length - 1;
+	}
+
+	/** The states of an expression's strings, from `from` to the returned one. */
+	build(re: Re, from: number): number {
+		if ("chars" in re) {
+			const to = this.state();
+			(this.moves[from] as { chars: Chars; to: number }[]).push({
+				chars: re.chars,
+				to,
+			});
+			return to;
+		}
+		if ("seq" in re) return re.seq.reduce((at, r) => this.build(r, at), from);
+		if ("alt" in re) {
+			const to = this.state();
+			for (const r of re.alt) {
+				const start = this.state();
+				(this.free[from] as number[]).push(start);
+				(this.free[this.build(r, start)] as number[]).push(to);
+			}
+			return to;
+		}
+		let at = from;
+		for (let k = 0; k < re.min; k++) at = this.build(re.rep, at);
+		if (re.max === Infinity) {
+			const start = this.state();
+			(this.free[at] as number[]).push(start);
+			(this.free[this.build(re.rep, start)] as number[]).push(start);
+			return start;
+		}
+		const to = this.state();
+		for (let k = re.min; k < re.max; k++) {
+			(this.free[at] as number[]).push(to);
+			at = this.build(re.rep, at);
+		}
+		(this.free[at] as number[]).push(to);
+		return to;
+	}
+
+	/** The states reachable from `states` by free moves. */
+	closure(states: number[]): number[] {
+		const seen = new Set(states);
+		const todo = [...states];
+		for (let s = todo.pop(); s !== undefined; s = todo.pop())
+			for (const t of this.free[s] as number[])
+				if (!seen.has(t)) {
+					seen.add(t);
+					todo.push(t);
+				}
+		return [...seen].sort((x, y) => x - y);
+	}
+
+	step(states: number[], c: number): number[] {
+		const to = states.flatMap((s) =>
+			(this.moves[s] as { chars: Chars; to: number }[]).flatMap((m) =>
+				has(m.chars, c) ? [m.to] : [],
+			),
+		);
+		return this.closure(to);
+	}
+}
+
+/** The most pairs of states `matching` visits before it gives up. */
+const MAX_PAIRS = 10_000;
+
+/**
+ * Whether a pattern that is a regular expression (anywhere in the string, as JSON Schema
+ * reads it) matches all strings of a template, some, or none, read by running both
+ * machines side by side; undefined for any other pattern, or one too large to read.
+ */
+export function matching(
+	pattern: string,
+	t: Template,
+): "within" | "meets" | "apart" | undefined {
+	try {
+		new RegExp(pattern, "u");
+	} catch {
+		return undefined;
+	}
+	const m = new Machine();
+	const start = m.state();
+	let accept: number;
+	try {
+		accept = m.build(new Expression(pattern).alternatives(true), start);
+	} catch {
+		return undefined;
+	}
+	const tm = new Machine();
+	const tStart = tm.state();
+	const tAccept = tm.build(
+		{
+			seq: t.seq.map((s) =>
+				"any" in s ? ANY_TEXT : { chars: charsOf(s.set) },
+			),
+		},
+		tStart,
+	);
+	// The characters no move tells apart are one: each range between the bounds of any move.
+	const bounds = new Set([0]);
+	for (const moves of [...m.moves, ...tm.moves])
+		for (const { chars } of moves)
+			for (const [from, to] of chars) {
+				bounds.add(from);
+				if (to < LAST) bounds.add(to + 1);
+			}
+	const letters = [...bounds];
+	let some = false;
+	let all = true;
+	const seen = new Set<string>();
+	const todo: [number[], number[]][] = [
+		[tm.closure([tStart]), m.closure([start])],
+	];
+	for (let pair = todo.pop(); pair !== undefined; pair = todo.pop()) {
+		const [ts, ps] = pair;
+		const id = `${ts}|${ps}`;
+		if (seen.has(id)) continue;
+		if (seen.size >= MAX_PAIRS) return undefined;
+		seen.add(id);
+		if (ts.includes(tAccept)) {
+			if (ps.includes(accept)) some = true;
+			else all = false;
+		}
+		for (const c of letters) {
+			const next = tm.step(ts, c);
+			if (next.length > 0) todo.push([next, m.step(ps, c)]);
+		}
+	}
+	return all ? "within" : some ? "meets" : "apart";
 }
 
 /**

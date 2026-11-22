@@ -10,6 +10,7 @@ export interface schemas {
   NamesTwo: NamesTwo;
   NamesTwoPatterns: NamesTwoPatterns;
   NamesWithinTwo: NamesWithinTwo;
+  NamesTooMany: NamesTooMany;
   NamesWithProperty: NamesWithProperty;
   NamesSomeKeysOfBoth: NamesSomeKeysOfBoth;
   UnwrittenIncludes: UnwrittenIncludes;
@@ -20,6 +21,10 @@ export interface schemas {
   FiniteKeys: FiniteKeys;
   FiniteNames: FiniteNames;
   NamedTwice: NamedTwice;
+  NamedTwiceClosed: NamedTwiceClosed;
+  UnwrittenWithin: UnwrittenWithin;
+  UnwrittenApart: UnwrittenApart;
+  NamesUnwrittenWithin: NamesUnwrittenWithin;
 }
 
 /** No key propertyNames admits matches ^y-: its signature is left out. */
@@ -47,15 +52,22 @@ export type NamesWithinTwo = {
   [key: `x-ab${string}`]: number;
 };
 
+/** The ways these templates line up are too many to read: the signatures stay. */
+export type NamesTooMany = {
+  [key: `${string}b${string}b${string}b${string}b${string}b${string}b${string}b${string}`]: number;
+  [key: `${string}a${string}a${string}a${string}a${string}a${string}a${string}a${string}`]: string | number;
+};
+
 export type NamesWithProperty = {
   "x-ab"?: string;
   [key: `x-a${string}`]: string | number | undefined;
 };
 
-/** Which keys both admit no template says: the signatures stay. */
+/** The keys both admit: x-y and those of x-${string}-y. */
 export type NamesSomeKeysOfBoth = {
-  [key: `${string}-y`]: number;
-  [key: `x-${string}`]: string | number;
+  "x-y"?: number;
+  [key: `x-${string}-y`]: number | undefined;
+  [key: `x-${string}`]: string | number | undefined;
 };
 
 /** ^[a-z-]+$ matches both keys of the template: they have its type too. */
@@ -100,5 +112,25 @@ export type FiniteNames = {
 
 /** a has both patterns' types, which admit no value. */
 export type NamedTwice = {
+  a?: never;
   b?: number;
+};
+
+export type NamedTwiceClosed = {
+  b?: number;
+};
+
+/** ^x-[\s\S]+ matches every key of x-a${string}: they have its type too. */
+export type UnwrittenWithin = {
+  [key: `x-a${string}`]: number;
+  [key: string]: number | boolean;
+};
+
+export type UnwrittenApart = {
+  [key: `x-${string}`]: number;
+  [key: string]: boolean | number;
+};
+
+export type NamesUnwrittenWithin = {
+  [key: `x-a${string}`]: number;
 };
