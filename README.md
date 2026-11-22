@@ -23,8 +23,10 @@ const api = createClient<paths>({ baseUrl: "https://api.example.com" });
 const res = await api.get("/users/{id}", { path: { id: 1 } });
 if (res.status === 200) {
 	const user: User = res.data;
+} else if (res.status === 404) {
+	res.data.message; // typed as the 404 body
 } else {
-	res.data.message; // typed as the 404 body; a status the document does not list (a gateway's 502) lands here too
+	res.data; // unknown: a status the document does not list (a gateway's 502)
 }
 ```
 

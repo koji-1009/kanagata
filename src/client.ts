@@ -484,7 +484,7 @@ function resolveBase(baseUrl: string): URL {
 /**
  * A client for the `paths` that `kanagata generate` declares: one function per HTTP
  * method, `api.get("/users/{id}", { path: { id: 1 } })`, resolving to a union over the
- * documented statuses. HTTP error statuses do not throw.
+ * statuses fetch returns (`Result`). HTTP error statuses do not throw.
  */
 export function createClient<P>(config: ClientConfig): Client<P> {
 	async function send(
