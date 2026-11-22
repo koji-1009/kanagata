@@ -1,0 +1,15 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Status": {
+        "description": "if compares numbers by value: its const 1.0 admits the enum's 1, so only 2 is a value it rejects.",
+        "type": "object",
+        "properties": { "code": { "enum": [1, 2] } },
+        "if": { "properties": { "code": { "const": 1.0 } } },
+        "then": { "required": ["detail"] }
+      }
+    }
+  }
+}

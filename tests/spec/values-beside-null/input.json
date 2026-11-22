@@ -1,0 +1,19 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Code": {
+        "description": "Lengths leave out the strings an enum lists that they reject; null, which they do not constrain, stays.",
+        "type": ["string", "null"],
+        "enum": ["a", "bb", null],
+        "maxLength": 1
+      },
+      "Name": {
+        "description": "not: { const } is ignored, with a warning, where a kind admits the value by its kind, though null beside it does not.",
+        "type": ["string", "null"],
+        "not": { "const": "" }
+      }
+    }
+  }
+}

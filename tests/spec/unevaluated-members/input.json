@@ -1,0 +1,30 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Strings": {
+        "description": "additionalProperties in a member evaluates the keys the schema requires but does not declare.",
+        "type": "object",
+        "properties": { "id": { "type": "string" } },
+        "allOf": [{ "additionalProperties": { "type": "string" } }],
+        "required": ["id", "name"],
+        "unevaluatedProperties": false
+      },
+      "First": {
+        "description": "A boolean member evaluates no item.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "anyOf": [true],
+        "unevaluatedItems": false
+      },
+      "Unsaid": {
+        "description": "A member's else whose if TypeScript cannot negate leaves what is evaluated unsaid: the keyword is ignored.",
+        "type": "object",
+        "properties": { "id": { "type": "string" } },
+        "allOf": [{ "if": { "minProperties": 2 }, "then": { "required": ["id"] }, "else": { "properties": { "extra": { "type": "string" } } } }],
+        "unevaluatedProperties": false
+      }
+    }
+  }
+}

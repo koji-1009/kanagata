@@ -1,0 +1,37 @@
+openapi: 3.1.0
+info: { title: Anchors, version: "1" }
+webhooks:
+  default:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $anchor: event
+              type: object
+              properties:
+                id: { type: string }
+      responses:
+        "200": { description: Received }
+components:
+  schemas:
+    FieldSchemas:
+      description: JSON Schemas as data. The example of an item is data, not a schema, so the $anchor in it names nothing.
+      type: array
+      items:
+        type: object
+        example: { $anchor: sku, type: integer }
+    Sku: { $anchor: sku, type: string }
+    Branch:
+      description: A property named default in an allOf member is a schema, so its $anchor is found.
+      allOf:
+        - type: object
+          properties:
+            default: { $anchor: default-branch, type: boolean }
+    Order:
+      description: $refs to an $anchor in a component, in a property named default, and in a webhook named default.
+      type: object
+      properties:
+        sku: { $ref: "#sku" }
+        isDefault: { $ref: "#default-branch" }
+        event: { $ref: "#event" }

@@ -1,0 +1,24 @@
+openapi: 3.1.0
+info: { title: Shop, version: "1" }
+paths: {}
+components:
+  schemas:
+    Category:
+      description: A tree through $dynamicRef, so the document has a $dynamicAnchor.
+      $dynamicAnchor: node
+      type: object
+      properties:
+        children: { type: array, items: { $dynamicRef: "#node" } }
+    Money: &money
+      description: Price is a YAML alias of this node, the same schema under another name.
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: string }
+        currency: { type: string }
+    Price: *money
+    Product:
+      description: A $ref to a component names that component, though another component is the same YAML node.
+      type: object
+      properties:
+        price: { $ref: "#/components/schemas/Price" }

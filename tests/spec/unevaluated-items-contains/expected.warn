@@ -1,0 +1,2 @@
+#/components/schemas/Matched/unevaluatedItems: unevaluatedItems next to an applicator cannot be expressed in TypeScript; ignored
+#/components/schemas/Matched/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

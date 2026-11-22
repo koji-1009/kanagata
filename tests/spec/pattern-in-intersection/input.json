@@ -1,0 +1,16 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "PatternThenEnum": {
+        "description": "An enum after a pattern keeps the values the pattern matches.",
+        "allOf": [{ "type": "string", "pattern": "^a" }, { "enum": ["ab", "b"] }]
+      },
+      "PatternOrNumber": {
+        "description": "A number meets a pattern's strings or numbers in the numbers.",
+        "allOf": [{ "anyOf": [{ "type": "string", "pattern": "^a" }, { "type": "number" }] }, { "type": "number" }]
+      }
+    }
+  }
+}

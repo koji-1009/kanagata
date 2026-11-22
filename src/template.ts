@@ -259,6 +259,9 @@ class Parser {
 		if (negated) this.i++;
 		const set = new Set<string>();
 		const escapes = new Set<string>();
+		// A range of more characters than a union holds is not written out: it is no finite
+		// set, unless the class is any character anyway.
+		let wide = false;
 		const one = (): string | { cls: string } => {
 			const c = this.next();
 			return c === "\\" ? this.escape(true) : c;
@@ -275,8 +278,8 @@ class Parser {
 				const b = one() as string;
 				const from = a.codePointAt(0) as number;
 				const to = b.codePointAt(0) as number;
-				if (to - from >= MAX_UNION) throw new NoType();
-				for (const x of range(from, to)) set.add(x);
+				if (to - from >= MAX_UNION) wide = true;
+				else for (const x of range(from, to)) set.add(x);
 			} else set.add(a);
 		}
 		this.i++;
@@ -290,11 +293,11 @@ class Parser {
 		}
 		if (negated) {
 			// [^] is any character; any other negated class is no finite set.
-			if (set.size > 0 || escapes.size > 0) throw new NoType();
+			if (wide || set.size > 0 || escapes.size > 0) throw new NoType();
 			any = true;
 		}
 		if (any) return { lang: [], anyChar: true };
-		if (set.size > MAX_UNION) throw new NoType();
+		if (wide || set.size > MAX_UNION) throw new NoType();
 		return { lang: [[{ set: [...set] }]], anyChar: false };
 	}
 }

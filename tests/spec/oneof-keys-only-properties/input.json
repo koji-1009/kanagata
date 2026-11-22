@@ -1,0 +1,20 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "TypedProperty": {
+        "description": "A member with a property that admits only some values asks more than keys, so the members keep their overlap.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "oneOf": [{ "required": ["a"], "properties": { "a": {}, "b": { "type": "string" } } }, { "required": ["b"] }]
+      },
+      "EmptyProperties": {
+        "description": "Empty properties ask nothing: each member lacks the key the other requires.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "oneOf": [{ "required": ["a"], "properties": {} }, { "required": ["b"] }]
+      }
+    }
+  }
+}

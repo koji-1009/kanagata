@@ -1,0 +1,51 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Named": { "type": "object", "properties": { "name": { "type": "string" } } },
+      "Dated": { "type": "object", "properties": { "date": { "type": "string" } } },
+      "Owned": { "type": "object", "properties": { "owner": { "type": "string" } } },
+      "Code": { "type": "string", "maxLength": 8 },
+      "Label": { "type": "string", "minLength": 1 },
+      "MembersOfIntersections": {
+        "description": "An anyOf member that is an allOf of references is kept, as are the references next to it.",
+        "allOf": [
+          { "anyOf": [{ "allOf": [{ "$ref": "#/components/schemas/Named" }, { "$ref": "#/components/schemas/Dated" }] }, { "type": "string" }] },
+          { "$ref": "#/components/schemas/Owned" }
+        ]
+      },
+      "StringsAmongArrays": {
+        "description": "Members that can be strings or arrays meet a string: they have strings in common.",
+        "allOf": [
+          {
+            "anyOf": [
+              { "allOf": [{ "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }, { "$ref": "#/components/schemas/Code" }] },
+              { "allOf": [{ "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "number" } }] }, { "$ref": "#/components/schemas/Label" }] }
+            ]
+          },
+          { "type": "string" }
+        ]
+      },
+      "StringAndArray": {
+        "description": "No value is both a string and an array, whatever the members between them allow: never.",
+        "allOf": [
+          { "type": "string" },
+          {
+            "anyOf": [
+              { "allOf": [{ "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }, { "$ref": "#/components/schemas/Named" }] },
+              { "allOf": [{ "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "number" } }] }, { "$ref": "#/components/schemas/Dated" }] }
+            ]
+          },
+          { "type": "array", "items": { "type": "string" } },
+          {
+            "anyOf": [
+              { "allOf": [{ "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }, { "$ref": "#/components/schemas/Dated" }] },
+              { "allOf": [{ "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "number" } }] }, { "$ref": "#/components/schemas/Named" }] }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

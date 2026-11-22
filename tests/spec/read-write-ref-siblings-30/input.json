@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Item": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "integer" }, "name": { "type": "string" } } },
+      "Nullable": {
+        "description": "In 3.0 the keywords beside a $ref are ignored, nullable among them: the member is the $ref alone.",
+        "allOf": [{ "$ref": "#/components/schemas/Item", "nullable": true }, { "properties": { "id": { "readOnly": true } } }]
+      }
+    }
+  }
+}

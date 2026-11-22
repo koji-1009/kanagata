@@ -1,0 +1,19 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Any": {
+        "description": "Every item matches and none need to: any array, and without type any other value.",
+        "contains": true,
+        "minContains": 0
+      },
+      "Optional": {
+        "description": "No item needs to match, so no length is asked; how many may match cannot be typed, and without type any other value passes.",
+        "contains": { "type": "string" },
+        "minContains": 0,
+        "maxContains": 2
+      }
+    }
+  }
+}

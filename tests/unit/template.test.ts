@@ -86,6 +86,17 @@ test("classes", () => {
 	assert.equal(printed("^[\\w\\W]*$"), "`${string}`");
 	assert.equal(printed("^[^a]$"), undefined, "a negated class");
 	assert.equal(printed("^[^\\d]$"), undefined);
+	assert.equal(printed("^[^/]*$"), undefined, "any number of a negated class");
+	assert.equal(
+		printed("^ab[\\s\\S\\u{10000}-\\u{286A0}]*$"),
+		"`ab${string}`",
+		"any character, a range of more characters than a union holds beside it",
+	);
+	assert.equal(
+		printed("^[^\\u{0}-\\u{1869F}]$"),
+		undefined,
+		"a negated class with such a range",
+	);
 });
 
 test("templates write text a template would read as a string", () => {
@@ -113,6 +124,11 @@ test("no more strings than TypeScript builds into a union", () => {
 		"100,000 in alternatives",
 	);
 	assert.equal(printed("^[a-z]{1,4}$"), undefined, "more than that in a range");
+	assert.equal(
+		printed("^[\\u{0}-\\u{1869E}]$")?.split(" | ").length,
+		99_999,
+		"a range of 99,999",
+	);
 	assert.equal(
 		printed("^[\\u{0}-\\u{1869F}]$"),
 		undefined,

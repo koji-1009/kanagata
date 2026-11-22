@@ -1049,6 +1049,12 @@ test("binary responses are Blobs; XML and other text types are text", async () =
 		recorder(respond("application/octet-stream", "")),
 	).get("/r");
 	assert.equal(empty.data, undefined);
+	// Parameters without a media type before them name no media type, whatever they end in.
+	const unnamed = (
+		await client(recorder(respond(";type=application/problem+json"))).get("/r")
+	).data;
+	assert.ok(unnamed instanceof Blob);
+	assert.equal(await unnamed.text(), "bytes");
 });
 
 test("cookie parameters are sent in the cookie header", async () => {

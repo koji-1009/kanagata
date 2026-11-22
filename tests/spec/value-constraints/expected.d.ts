@@ -29,6 +29,7 @@ export interface schemas {
   Open: Open;
   Wide: Wide;
   BadPattern: BadPattern;
+  ZeroStep: ZeroStep;
 }
 
 /** maxLength 0 admits only the empty string. */
@@ -102,3 +103,6 @@ export type Wide = number;
 
 /** A pattern JavaScript cannot read drops nothing. */
 export type BadPattern = "a";
+
+/** A multipleOf that is not positive is not read between bounds either. */
+export type ZeroStep = 1 | 2 | 3;

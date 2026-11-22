@@ -57,13 +57,20 @@ const APPLICATORS = [
 ];
 
 /**
- * `unevaluatedProperties` / `unevaluatedItems` where no applicator evaluates anything:
- * then they are `additionalProperties` / `items`. undefined where they are not that.
+ * `unevaluatedProperties` / `unevaluatedItems` where nothing next to them evaluates: then
+ * they are `additionalProperties` / `items`. undefined where they are not that.
  */
 function unevaluated(v: JsonObject, key: string): Value | undefined {
-	return APPLICATORS.every((k) => v.get(k) === undefined)
+	return applicatorsFor(key).every((k) => v.get(k) === undefined)
 		? v.get(key)
 		: undefined;
+}
+
+/** The keywords next to an `unevaluated*` keyword that evaluate for it: `contains` evaluates the items it matches. */
+function applicatorsFor(key: string): string[] {
+	return key === "unevaluatedItems"
+		? [...APPLICATORS, "contains"]
+		: APPLICATORS;
 }
 
 /**
@@ -217,10 +224,17 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 						? NEVER
 						: t,
 				);
+	// Every member is the same object: a property one member leaves out of this view
+	// stays out even where another member lists it as required.
+	const group = leftOutKeys(cx, v);
+	for (const k of cx.leftOutIn(v)) group.add(k);
 	const r = v.str("$ref");
 	if (r !== undefined) {
 		// The target is the same value, this schema's keywords around it.
-		const target = cx.withAround(v, () => reference(cx, r, at));
+		const target = cx.withAround(
+			v,
+			() => leftOutTarget(cx, r, at, group) ?? reference(cx, r, at),
+		);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
 		// are ignored, nullable among them unless loose.
 		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
@@ -241,10 +255,6 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (c !== undefined) out.push(literal(c));
 	const e = v.get("enum");
 	if (Array.isArray(e)) out.push(union(e.map(literal)));
-	// Every member is the same object: a property one member leaves out of this view
-	// stays out even where another member lists it as required.
-	const group = leftOutKeys(cx, v);
-	for (const k of cx.leftOutIn(v)) group.add(k);
 	const allOf = v.get("allOf");
 	if (Array.isArray(allOf)) {
 		const members = membersIn(cx, v, allOf, group, child(at, "allOf"));
@@ -472,25 +482,67 @@ function arrayTargets(cx: Ctx, out: Ty[], at: string): Ty[] {
 	if (refs.length + arrays < 2) return [];
 	const targets: Ty[] = [];
 	for (const t of refs) {
-		const { value, base, uri, where } = cx.withBase(cx.documentBase, () =>
-			cx.locate(SCHEMA_PREFIX + escapeToken(t.schema), at),
-		);
-		// Only an array schema has an array type.
-		const type = get(value, "type");
-		const array =
-			type === "array" ||
-			(type === undefined &&
-				value instanceof JsonObject &&
-				hasArrayKeywords(value));
-		if (!array || !cx.enter(uri)) continue;
-		try {
-			const target = cx.withBase(base, () => schema(cx, value, where));
-			if (isArray(target)) targets.push(target);
-		} finally {
-			cx.leave();
-		}
+		const target = arrayOf(cx, t.schema, at);
+		if (target !== undefined) targets.push(target);
 	}
 	return targets.length > 0 && targets.length + arrays > 1 ? targets : [];
+}
+
+/** The array type of a component that admits arrays only, through the components it is a `$ref` to. */
+function arrayOf(cx: Ctx, name: string, at: string): Ty | undefined {
+	const { value, base, uri, where } = cx.withBase(cx.documentBase, () =>
+		cx.locate(SCHEMA_PREFIX + escapeToken(name), at),
+	);
+	// Only an array schema has an array type; others are not converted for it.
+	if (!cx.withBase(base, () => arraysOnly(cx, value)) || !cx.enter(uri))
+		return undefined;
+	try {
+		const target = cx.withBase(base, () => schema(cx, value, where));
+		if (target.kind === "array" || target.kind === "tuple") return target;
+		return target.kind === "ref" && cx.schemas.has(target.schema)
+			? arrayOf(cx, target.schema, at)
+			: undefined;
+	} finally {
+		cx.leave();
+	}
+}
+
+/**
+ * Whether a schema says it admits arrays only: `type` naming `array` alone, array keywords
+ * without `type`, `const` / `enum` arrays, a `$ref` to such a schema, an `allOf` member
+ * that is one, or `oneOf` / `anyOf` members that all are.
+ */
+function arraysOnly(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
+	if (!(v instanceof JsonObject)) return false;
+	const r = v.str("$ref");
+	const target = r === undefined ? undefined : cx.tryLocate(r);
+	const viaRef =
+		target !== undefined &&
+		!seen.has(target.uri) &&
+		cx.withBase(target.base, () =>
+			arraysOnly(cx, target.value, new Set([...seen, target.uri])),
+		);
+	// In 3.0 the keywords next to $ref are ignored.
+	if (viaRef || (r !== undefined && !cx.refSiblings)) return viaRef;
+	const type = v.get("type");
+	if (type !== undefined)
+		return (
+			type === "array" ||
+			(Array.isArray(type) && type.every((t) => t === "array"))
+		);
+	const c = v.get("const");
+	const values = c === undefined ? v.get("enum") : [c];
+	if (Array.isArray(values)) return values.every((x) => Array.isArray(x));
+	if (hasArrayKeywords(v)) return true;
+	const allOf = v.get("allOf");
+	if (Array.isArray(allOf) && allOf.some((m) => arraysOnly(cx, m, seen)))
+		return true;
+	return ["oneOf", "anyOf"].some((k) => {
+		const members = v.get(k);
+		return (
+			Array.isArray(members) && members.every((m) => arraysOnly(cx, m, seen))
+		);
+	});
 }
 
 /** The type of each value kind `type` names. */
@@ -977,15 +1029,16 @@ function evaluates(
 	}
 	const pp = s.get("patternProperties");
 	if (pp instanceof JsonObject) ev.patterns.push(...pp.entries.map(([k]) => k));
-	ev.all =
+	// Added to what the $ref target evaluates.
+	ev.all ||=
 		s.get("additionalProperties") !== undefined ||
 		(!top && s.get("unevaluatedProperties") !== undefined);
 	const prefix = s.get("prefixItems");
-	ev.length = Array.isArray(prefix) ? prefix.length : 0;
-	ev.rest =
+	ev.length = Math.max(ev.length, Array.isArray(prefix) ? prefix.length : 0);
+	ev.rest ||=
 		s.get("items") !== undefined ||
 		(!top && s.get("unevaluatedItems") !== undefined);
-	ev.contains = s.get("contains") !== undefined;
+	ev.contains ||= s.get("contains") !== undefined;
 	for (const k of requiredKeys(cx, s)) ev.keys.add(k);
 	for (const [k, names] of dependencies(s)) {
 		ev.keys.add(k);
@@ -1080,11 +1133,13 @@ function evaluatingItems(
  * and items past those evaluated are as it says (none for `false`).
  */
 function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
-	const up = v.get("unevaluatedProperties");
-	const ui = v.get("unevaluatedItems");
+	// Where nothing next to them evaluates, they are additionalProperties / items (`unevaluated`).
+	const next = (key: string) =>
+		unevaluated(v, key) === undefined ? v.get(key) : undefined;
+	const up = next("unevaluatedProperties");
+	const ui = next("unevaluatedItems");
 	const asked = (x: Value | undefined) => x !== undefined && x !== true;
 	if (!asked(up) && !asked(ui)) return [];
-	if (APPLICATORS.every((k) => v.get(k) === undefined)) return [];
 	const ev = evaluates(cx, v, at, true, new Set());
 	const warn = (key: string, x: Value | undefined) => {
 		if (asked(x))
@@ -1222,11 +1277,7 @@ function typeless(m: JsonObject): boolean {
 	);
 }
 
-/**
- * Members, converted knowing the keys the group leaves out of this view. A member that
- * is only a `$ref` to a schema naming one of them is written out without it: the
- * reference's own view would have it.
- */
+/** Members, converted knowing the keys the group leaves out of this view (see `leftOutTarget`). */
 function membersIn(
 	cx: Ctx,
 	parent: JsonObject,
@@ -1240,33 +1291,36 @@ function membersIn(
 	return cx.withLeftOut(members, group, () =>
 		members.map((m, i) =>
 			cx.withAround(parent, () =>
-				cx.withRaw(here, () => {
-					const where = child(at, tokens[i] as string);
-					const r = str(m, "$ref");
-					if (
-						r === undefined ||
-						group.size === 0 ||
-						!(m as JsonObject).entries.every(
-							([k]) => k === "$ref" || isAnnotation(k),
-						)
-					)
-						return schema(cx, m, where);
-					const { value, base, uri, where: there } = cx.locate(r, where);
-					const named = cx.withBase(base, () => namedKeys(cx, value));
-					const own = cx.withBase(base, () => leftOutKeys(cx, value));
-					if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
-						return schema(cx, m, where);
-					try {
-						return cx.withBase(base, () =>
-							cx.withLeftOut([value], group, () => schema(cx, value, there)),
-						);
-					} finally {
-						cx.leave();
-					}
-				}),
+				cx.withRaw(here, () => schema(cx, m, child(at, tokens[i] as string))),
 			),
 		),
 	);
+}
+
+/**
+ * A `$ref`'s target written out without the keys the group leaves out of this view, where
+ * it names one that it does not leave out itself: the reference's own view would have it.
+ * Undefined where the reference stays.
+ */
+function leftOutTarget(
+	cx: Ctx,
+	r: string,
+	at: string,
+	group: ReadonlySet<string>,
+): Ty | undefined {
+	if (group.size === 0) return undefined;
+	const { value, base, uri, where } = cx.locate(r, at);
+	const named = cx.withBase(base, () => namedKeys(cx, value));
+	const own = cx.withBase(base, () => leftOutKeys(cx, value));
+	if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
+		return undefined;
+	try {
+		return cx.withBase(base, () =>
+			cx.withLeftOut([value], group, () => schema(cx, value, where)),
+		);
+	} finally {
+		cx.leave();
+	}
 }
 
 /** A closed oneOf / anyOf member admits no key another member names. */
@@ -1485,9 +1539,16 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 	// Keywords for strings and numbers without type constrain those kinds alone.
 	const s = text(v);
 	const n = numeric(cx, v, false);
-	if (s === STRING && n === NUMBER) return UNKNOWN;
+	const kinds = contextKinds(cx, v);
+	// The integers between the bounds say more where integers, not numbers, are a kind there.
+	if (
+		s === STRING &&
+		n === NUMBER &&
+		(kinds.includes("number") || numeric(cx, v, true) === INTEGER)
+	)
+		return UNKNOWN;
 	return union(
-		contextKinds(cx, v).map((k) =>
+		kinds.map((k) =>
 			k === "string"
 				? s
 				: k === "number"
@@ -2099,14 +2160,19 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (matched.length > 0) p.ty = inter([p.ty, ...matched]);
 	}
 
-	// A required key without a property schema must be present, with the value the
-	// patterns it matches admit, or else additionalProperties; any value without either.
-	for (const name of required) {
-		if (left.has(name) || props.some((p) => p.key === name)) continue;
+	// The value of a key without a property schema: what the patterns it matches admit,
+	// or else additionalProperties; any value without either.
+	const keyValue = (name: string): Ty => {
 		const matched = patterns
 			.filter(([p]) => matches(p, name))
 			.map(([, t]) => t);
-		const ty = matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
+		return matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
+	};
+
+	// A required key without a property schema must be present, with that value.
+	for (const name of required) {
+		if (left.has(name) || props.some((p) => p.key === name)) continue;
+		const ty = keyValue(name);
 		if (ty.kind === "never") return NEVER;
 		props.push({ ...prop(name, ty), present: true });
 	}
@@ -2123,10 +2189,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		);
 		for (const name of allowed) {
 			if (left.has(name) || kept.some((p) => p.key === name)) continue;
-			const matched = patterns
-				.filter(([p]) => matches(p, name))
-				.map(([, t]) => t);
-			const ty = matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
+			const ty = keyValue(name);
 			if (ty.kind !== "never") kept.push({ key: name, ty, optional: true });
 		}
 		return counted(v, kept);
@@ -2158,18 +2221,21 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 			...(own.some((p) => p.optional) ? [UNDEFINED] : []),
 		]);
 	};
-	const byPattern: Keyed[] = keyed.map((k) => ({
-		key: k.key,
-		ty: admitting(k.ty, (key) => matches(k.pattern, key)),
-	}));
-	const everyType = [
+	// Read once the properties are all there.
+	const keyedSignatures = (): Keyed[] =>
+		keyed.map((k) => ({
+			key: k.key,
+			ty: admitting(k.ty, (key) => matches(k.pattern, key)),
+		}));
+	const allTypes = (): Ty[] => [
 		...unwritten,
 		...keyed.map((k) => k.ty),
 		...props.map((p) => p.ty),
 	];
 
 	// propertyNames: { pattern } keys the object by it: a property it does not admit cannot
-	// be there, a key it names is a property, and the others index signatures by its templates.
+	// be there, a key it names is a property with the value the patterns or
+	// additionalProperties give it, and the others index signatures by its templates.
 	const names = keyPattern(v.get("propertyNames"));
 	if (names !== undefined) {
 		const pattern = (v.get("propertyNames") as JsonObject).str(
@@ -2178,21 +2244,32 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (props.some((p) => !p.optional && !matches(pattern, p.key)))
 			return NEVER;
 		for (const p of props) if (!matches(pattern, p.key)) p.ty = NEVER;
-		const rest: Keyed[] = [];
-		for (const key of names.kind === "union" ? names.items : [names])
-			if (key.kind === "lit")
-				named(JSON.parse(key.text) as string, additional ?? UNKNOWN);
-			else if (additional?.kind !== "never")
-				rest.push({
-					key,
-					ty: admitting(
-						union([additional ?? UNKNOWN, ...everyType]),
-						() => true,
-					),
-				});
+		const keys = names.kind === "union" ? names.items : [names];
+		for (const key of keys)
+			if (key.kind === "lit") {
+				const name = JSON.parse(key.text) as string;
+				named(name, keyValue(name));
+			}
+		const templates = keys.filter((k) => k.kind !== "lit");
+		// Where it names every key, those are the properties: no other key is admitted.
+		if (templates.length === 0) return counted(v, props);
+		const rest: Keyed[] =
+			additional?.kind === "never"
+				? []
+				: templates.map((key) => ({
+						key,
+						ty: admitting(
+							union([additional ?? UNKNOWN, ...allTypes()]),
+							() => true,
+						),
+					}));
+		const byPattern = keyedSignatures();
 		if (byPattern.length === 0 && rest.length === 0) return counted(v, props);
 		return { kind: "map", props, keyed: [...byPattern, ...rest] };
 	}
+
+	const byPattern = keyedSignatures();
+	const everyType = allTypes();
 
 	if (additional === undefined) {
 		if (byPattern.length === 0)

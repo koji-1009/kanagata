@@ -1,0 +1,58 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Toggle": {
+        "description": "type: boolean lists true and false: if rejects true.",
+        "type": "object",
+        "properties": { "enabled": { "type": "boolean" }, "reason": { "type": "string" } },
+        "if": { "properties": { "enabled": { "const": false } } },
+        "then": { "required": ["reason"] }
+      },
+      "Subset": {
+        "description": "An enum in if admits the values it lists and rejects the others.",
+        "type": "object",
+        "properties": { "kind": { "enum": ["a", "b", "c"] }, "x": { "type": "string" } },
+        "if": { "properties": { "kind": { "enum": ["a", "b"] } } },
+        "then": { "required": ["x"] }
+      },
+      "Shape": { "type": "object", "properties": { "kind": { "enum": ["circle", "square"] }, "radius": { "type": "number" } } },
+      "Inherited": {
+        "description": "The values come from an allOf member's $ref target alone.",
+        "type": "object",
+        "allOf": [{ "$ref": "#/components/schemas/Shape" }],
+        "if": { "properties": { "kind": { "const": "circle" } } },
+        "then": { "required": ["radius"] }
+      },
+      "Size": {
+        "description": "type: string in if rejects null.",
+        "type": "object",
+        "properties": { "size": { "type": ["string", "null"], "enum": ["small", "large", null] }, "price": { "type": "number" } },
+        "if": { "properties": { "size": { "type": "string" } } },
+        "then": { "required": ["price"] }
+      },
+      "Version": {
+        "description": "type: integer in if rejects the numbers that are not whole.",
+        "type": "object",
+        "properties": { "version": { "type": "number", "enum": [1, 1.5, 2] }, "notes": { "type": "string" } },
+        "if": { "properties": { "version": { "type": "integer" } } },
+        "then": { "required": ["notes"] }
+      },
+      "Undecided": {
+        "description": "A keyword values are not read for decides nothing, though enum rejects some values first.",
+        "type": "object",
+        "properties": { "kind": { "enum": ["a", "b", "c"] }, "x": { "type": "string" } },
+        "if": { "properties": { "kind": { "enum": ["a", "b"], "not": { "const": "b" } } } },
+        "then": { "required": ["x"] }
+      },
+      "Amount": {
+        "description": "Numbers, which type names beside objects, pass if and then, which have object keywords only.",
+        "type": ["object", "number"],
+        "properties": { "unit": { "enum": ["fixed", "percent"] }, "currency": { "type": "string" } },
+        "if": { "properties": { "unit": { "const": "fixed" } } },
+        "then": { "required": ["currency"] }
+      }
+    }
+  }
+}

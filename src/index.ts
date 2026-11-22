@@ -208,29 +208,35 @@ interface Component extends Converted {
  * Rejects a schema that reaches itself through unions, intersections and references
  * only (`Tree: { oneOf: [{ type: string }, { $ref: Tree }] }`): TypeScript rejects
  * `type Tree = string | Tree` (TS2456). A reference inside an object, array or tuple
- * type is deferred, so a cycle through one is a type. Only properties differ between
- * the views, so the read view's references are the write view's too.
+ * type is deferred, so a cycle through one is a type. Each view is checked: one can
+ * leave out what breaks a cycle in the other (an `allOf` member that is `never` in one).
  */
 function rejectBareCycles(converted: readonly Converted[]): void {
 	const byKey = new Map(converted.map((c) => [c.key, c]));
 	const done = new Set<string>();
 	const path: string[] = [];
-	const visit = (key: string): void => {
-		const start = path.indexOf(key);
+	const visit = (key: string, view: View): void => {
+		const id = `${view} ${key}`;
+		const start = path.indexOf(id);
 		if (start >= 0) {
-			const cycle = [...path.slice(start), key].join(" → ");
+			const cycle = [...path.slice(start), id]
+				.map((p) => p.slice(view.length + 1))
+				.join(" → ");
+			const sent = view === "write" ? ", in what is sent to the API" : "";
 			throw new DiagError(
 				(byKey.get(key) as Converted).at,
-				`circular reference without an object, array or tuple in between, which TypeScript rejects: ${cycle}`,
+				`circular reference without an object, array or tuple in between, which TypeScript rejects${sent}: ${cycle}`,
 			);
 		}
-		if (done.has(key)) return;
-		path.push(key);
-		for (const r of bareRefs((byKey.get(key) as Converted).read)) visit(r);
+		if (done.has(id)) return;
+		path.push(id);
+		for (const r of bareRefs((byKey.get(key) as Converted)[view]))
+			visit(r.schema, r.view);
 		path.pop();
-		done.add(key);
+		done.add(id);
 	};
-	for (const c of converted) visit(c.key);
+	for (const c of converted) visit(c.key, "read");
+	for (const c of converted) visit(c.key, "write");
 }
 
 /** `presentKeys`, with references resolved to the components' types in their view. */

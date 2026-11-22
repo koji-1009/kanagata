@@ -1,0 +1,15 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Delivery": {
+        "description": "Without nullable, type names no null: null passes no part of if and then.",
+        "type": "object",
+        "properties": { "method": { "type": "string", "enum": ["ship", "pickup"] }, "address": { "type": "string" } },
+        "if": { "properties": { "method": { "const": "ship" } } },
+        "then": { "required": ["address"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": { "type": "object", "properties": { "a": { "type": "string" } }, "additionalProperties": { "type": "string" } },
+      "Extended": {
+        "description": "Base's additionalProperties evaluates every key, so unevaluatedProperties leaves none: c is admitted.",
+        "type": "object",
+        "allOf": [{ "$ref": "#/components/schemas/Base" }],
+        "required": ["c"],
+        "unevaluatedProperties": false
+      },
+      "Beside": {
+        "description": "The same with the $ref beside the keyword.",
+        "$ref": "#/components/schemas/Base",
+        "required": ["c"],
+        "unevaluatedProperties": false
+      },
+      "Pair": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "number" }] },
+      "AtMostPair": {
+        "description": "Pair's prefixItems evaluate the first two items; no others are admitted.",
+        "type": "array",
+        "allOf": [{ "$ref": "#/components/schemas/Pair" }],
+        "unevaluatedItems": false
+      },
+      "Strings": { "type": "array", "items": { "type": "string" } },
+      "AnyStrings": {
+        "description": "Strings' items evaluate every item: unevaluatedItems leaves none.",
+        "type": "array",
+        "allOf": [{ "$ref": "#/components/schemas/Strings" }],
+        "unevaluatedItems": false
+      }
+    }
+  }
+}

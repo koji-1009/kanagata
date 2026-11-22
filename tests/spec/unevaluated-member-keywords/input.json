@@ -1,0 +1,49 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "MemberEvaluatesAll": {
+        "description": "An allOf member's own unevaluatedProperties evaluates every key, so a required key is admitted, with its type.",
+        "type": "object",
+        "required": ["a"],
+        "allOf": [{ "unevaluatedProperties": { "type": "string" } }],
+        "unevaluatedProperties": false
+      },
+      "BranchEvaluatesAll": {
+        "description": "An anyOf member's own unevaluatedProperties evaluates every key where that member matches.",
+        "type": "object",
+        "required": ["a"],
+        "anyOf": [{ "unevaluatedProperties": { "type": "string" } }, { "properties": { "b": { "type": "string" } } }],
+        "unevaluatedProperties": false
+      },
+      "AdditionalInMember": {
+        "description": "additionalProperties in a member evaluates every key, a required one too.",
+        "type": "object",
+        "allOf": [{ "additionalProperties": true }],
+        "required": ["b"],
+        "unevaluatedProperties": false
+      },
+      "ContainsInMember": {
+        "description": "contains in a member evaluates the items it matches, which no type says.",
+        "type": "array",
+        "oneOf": [{ "contains": { "type": "string" } }, { "prefixItems": [{ "type": "number" }] }],
+        "unevaluatedItems": false
+      },
+      "ThenWithoutElse": {
+        "description": "Without else, what then names is evaluated only where if admits the value, which TypeScript can say even where it cannot say which values if does not admit.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "properties": { "x": { "type": "string" } } },
+        "unevaluatedProperties": false
+      },
+      "WithoutApplicator": {
+        "description": "Without an applicator unevaluatedProperties is additionalProperties: a required key outside properties has its type.",
+        "type": "object",
+        "required": ["b"],
+        "unevaluatedProperties": { "type": "string" }
+      }
+    }
+  }
+}

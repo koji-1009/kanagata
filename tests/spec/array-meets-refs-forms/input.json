@@ -1,0 +1,39 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Tags": { "type": "array", "items": { "type": "string" } },
+      "Listed": { "type": ["array"], "items": { "type": "string" } },
+      "OneListed": {
+        "description": "type that names array alone is an array.",
+        "allOf": [{ "$ref": "#/components/schemas/Listed" }, { "maxItems": 1 }]
+      },
+      "Either": { "anyOf": [{ "type": "array", "items": { "type": "string" } }] },
+      "OneEither": {
+        "description": "So are members that all are.",
+        "allOf": [{ "$ref": "#/components/schemas/Either" }, { "maxItems": 1 }]
+      },
+      "Alias": { "$ref": "#/components/schemas/Tags" },
+      "OneAlias": {
+        "description": "So is a $ref to one, through another component.",
+        "allOf": [{ "$ref": "#/components/schemas/Alias" }, { "maxItems": 1 }]
+      },
+      "Wrapped": { "allOf": [{ "$ref": "#/components/schemas/Tags" }], "description": "Tags, described." },
+      "OneWrapped": {
+        "description": "And an allOf member that is one.",
+        "allOf": [{ "$ref": "#/components/schemas/Wrapped" }, { "maxItems": 1 }]
+      },
+      "Origin": { "const": [0, 0] },
+      "AtOrigin": {
+        "description": "A const array is a tuple.",
+        "allOf": [{ "$ref": "#/components/schemas/Origin" }, { "minItems": 1 }]
+      },
+      "Corners": { "enum": [[0, 0], [1, 1]] },
+      "AtCorner": {
+        "description": "Several arrays are no one array type: each is a tuple of its own, which reads its items.",
+        "allOf": [{ "$ref": "#/components/schemas/Corners" }, { "minItems": 1 }]
+      }
+    }
+  }
+}
