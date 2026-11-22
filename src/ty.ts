@@ -135,6 +135,8 @@ export function equal(
 				(a.view === b.view ||
 					(typeof views === "boolean" ? !views : !views.has(a.schema)))
 			);
+		case "opRef":
+			return b.kind === "opRef" && a.id === b.id;
 		case "array":
 			return b.kind === "array" && eq(a.elem, b.elem);
 		case "tuple":
@@ -375,6 +377,8 @@ function structureOf(t: Ty): string {
 			return `${t.kind}${JSON.stringify(t.text)}`;
 		case "ref":
 			return `ref${JSON.stringify(t.schema)}${t.view}`;
+		case "opRef":
+			return `opRef${JSON.stringify(t.id)}`;
 		case "array":
 			return `array(${structure(t.elem)})`;
 		case "tuple":

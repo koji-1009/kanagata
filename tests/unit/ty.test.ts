@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
 	array,
 	BOOLEAN,
+	equal,
 	INTEGER,
 	inter,
 	lit,
@@ -10,6 +11,7 @@ import {
 	NULL,
 	NUMBER,
 	object,
+	opRef,
 	type Prop,
 	prop,
 	RECORD,
@@ -243,6 +245,14 @@ test("intersection with never and unknown", () => {
 	assert.equal(inter([]), UNKNOWN);
 });
 
+test("operation references are equal by their operation", () => {
+	assert.equal(equal(opRef("a"), opRef("a")), true);
+	assert.equal(equal(opRef("a"), opRef("b")), false);
+	const both = [opRef("a"), opRef("b")];
+	assert.deepEqual(union(both), { kind: "union", items: both });
+	assert.equal(union([opRef("a"), opRef("a")]).kind, "opRef");
+});
+
 test("union keeps intersection members", () => {
 	const i = inter([schemaRef("A"), schemaRef("B")]);
 	assert.deepEqual(union([i, NULL]), { kind: "union", items: [i, NULL] });
@@ -288,6 +298,8 @@ test("many members are told apart by their keys as one by one, every kind", () =
 		{ kind: "template", text: "`t`" },
 		ref("A"),
 		ref("A", "write"),
+		opRef("x"),
+		opRef("y"),
 		NULL,
 		UNDEFINED,
 		object([id, name]),
