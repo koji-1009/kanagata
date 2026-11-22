@@ -80,11 +80,11 @@ const ITEM_APPLICATORS = [...APPLICATORS, "contains"];
 
 /**
  * The most cases of what evaluates the items (`itemCases`) read where branches have
- * `contains`: each set of them is one, so they double with each such branch, and their
- * union is normalized by comparing its members pair by pair. 1,024 take about 0.15 s;
- * each doubling about four times as long.
+ * `contains`: each set of them is one, so they double with each such branch. They are
+ * members of one union, kept to as many as a union kanagata builds (`MAX_UNION`); time
+ * grows with them about in proportion (65,536 take about 3 s).
  */
-const MAX_CASES = 1024;
+const MAX_CASES = MAX_UNION;
 
 /**
  * Accepts a `$schema` or `jsonSchemaDialect` that names the dialect kanagata reads: JSON

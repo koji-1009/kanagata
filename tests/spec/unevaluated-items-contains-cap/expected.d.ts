@@ -5,8 +5,12 @@ export interface paths {}
 export interface operations {}
 
 export interface schemas {
+  Plain: Plain;
   Many: Many;
 }
 
-/** Any set of the 11 members can match together: 2,048 cases, more than the 1,024 read, so unevaluatedItems is ignored. */
+/** The member with contains matches or not, beside each of 512 others: 1,026 cases, which are read. */
+export type Plain = [] | [string, ...string[]];
+
+/** Any set of the 17 members can match together: 131,072 cases, more than the 99,999 read, so unevaluatedItems is ignored. */
 export type Many = [unknown, ...unknown[]];
