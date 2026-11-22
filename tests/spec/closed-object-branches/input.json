@@ -1,0 +1,38 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "InThen": {
+        "description": "additionalProperties sees only the properties next to it, so a closed object admits no key then names.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "additionalProperties": false,
+        "if": { "required": ["a"] },
+        "then": { "properties": { "b": { "type": "string" } } }
+      },
+      "InElse": {
+        "description": "Nor one else names.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "additionalProperties": false,
+        "if": { "required": ["a"] },
+        "else": { "properties": { "c": { "type": "string" } } }
+      },
+      "InDependent": {
+        "description": "Nor one a dependent schema names.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "additionalProperties": false,
+        "dependentSchemas": { "a": { "properties": { "b": { "type": "string" } } } }
+      },
+      "InNestedMember": {
+        "description": "Nor one a member of a member names.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "additionalProperties": false,
+        "allOf": [{ "oneOf": [{ "properties": { "b": { "type": "string" } } }] }]
+      }
+    }
+  }
+}

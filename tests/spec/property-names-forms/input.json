@@ -1,0 +1,64 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Empty": {
+        "description": "propertyNames: {} asks nothing.",
+        "type": "object",
+        "propertyNames": {}
+      },
+      "True": {
+        "description": "Nor does true.",
+        "type": "object",
+        "propertyNames": true
+      },
+      "Strings": {
+        "description": "Nor does type: string: every key is a string.",
+        "type": "object",
+        "propertyNames": { "type": "string" }
+      },
+      "StringsAmong": {
+        "description": "Nor does a type that names string among others.",
+        "type": "object",
+        "propertyNames": { "type": ["string", "null"] }
+      },
+      "Annotated": {
+        "description": "Nor do annotations alone.",
+        "type": "object",
+        "propertyNames": { "description": "Any key." }
+      },
+      "AnyAlone": {
+        "description": "Without type, one that asks nothing admits any value.",
+        "propertyNames": {}
+      },
+      "NoStrings": {
+        "description": "An enum without strings lists no key: the object has none.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "propertyNames": { "enum": [1] }
+      },
+      "NoStringsRequired": {
+        "description": "So one that requires a key admits nothing.",
+        "type": "object",
+        "required": ["a"],
+        "propertyNames": { "const": 1 }
+      },
+      "Short": {
+        "description": "The keys are the enum's strings the keywords for strings admit.",
+        "type": "object",
+        "propertyNames": { "enum": ["a", "bb"], "maxLength": 1 }
+      },
+      "Prefixed": {
+        "description": "pattern among them.",
+        "type": "object",
+        "propertyNames": { "enum": ["x-a", "b"], "pattern": "^x-" }
+      },
+      "Unread": {
+        "description": "Lengths without a list of keys are ignored, with a warning.",
+        "type": "object",
+        "propertyNames": { "maxLength": 3 }
+      }
+    }
+  }
+}

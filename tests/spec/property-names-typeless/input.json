@@ -23,6 +23,12 @@
         "properties": { "x-a": { "type": "string" }, "b": { "type": "string" } },
         "allOf": [{ "propertyNames": { "pattern": "^x-" } }]
       },
+      "DeclaredOutside": {
+        "description": "A key the member declares and does not match is left out once.",
+        "type": "object",
+        "properties": { "b": { "type": "string" } },
+        "allOf": [{ "properties": { "b": { "type": "string" } }, "propertyNames": { "pattern": "^x-" } }]
+      },
       "RequiredOutside": {
         "description": "A key it leaves out that the object requires admits no object.",
         "type": "object",

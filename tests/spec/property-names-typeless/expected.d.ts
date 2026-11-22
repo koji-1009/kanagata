@@ -9,6 +9,7 @@ export interface schemas {
   Prefixed: Prefixed;
   Member: Member;
   MemberPattern: MemberPattern;
+  DeclaredOutside: DeclaredOutside;
   RequiredOutside: RequiredOutside;
   Sibling: Sibling;
   BesideUnion: BesideUnion;
@@ -45,6 +46,14 @@ export type MemberPattern = {
   [key: `x-${string}`]: unknown;
 } & {
   "x-a"?: string;
+  b?: string;
+};
+
+/** A key the member declares and does not match is left out once. */
+export type DeclaredOutside = {
+  b?: never;
+  [key: `x-${string}`]: unknown;
+} & {
   b?: string;
 };
 

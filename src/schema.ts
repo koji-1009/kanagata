@@ -514,19 +514,12 @@ function applied(s: Value): Value[] {
 }
 
 /**
- * The keys a closed object's `$ref` and `$dynamicRef` targets (3.1, 3.2) and members
- * name that it does not declare: it admits none of them.
+ * The keys the schemas that apply to the same value as a closed object name (its `$ref`
+ * and `$dynamicRef` targets in 3.1 and 3.2, members, `if` / `then` / `else`, dependent
+ * schemas) that it does not declare: it admits none of them.
  */
 function outsideKeys(cx: Ctx, v: JsonObject, closed: Set<string>): string[] {
-	const named: string[] = [];
-	for (const target of cx.reached(v))
-		named.push(...cx.inTarget(target, () => namedKeys(cx, target.value)));
-	for (const key of ["allOf", "oneOf", "anyOf"]) {
-		const members = v.get(key);
-		for (const m of Array.isArray(members) ? members : [])
-			named.push(...namedKeys(cx, m));
-	}
-	return [...new Set(named)].filter((k) => !closed.has(k));
+	return [...new Set(valueKeys(cx, v))].filter((k) => !closed.has(k));
 }
 
 /** The keys a closed member admits: its own, or those of the closed schema its `$ref` or `$dynamicRef` alone reaches. */
@@ -879,7 +872,8 @@ function keywordParts(
 		);
 	else if (
 		names !== undefined &&
-		keyNames(names) === undefined &&
+		!asksNothing(names) &&
+		keyNames(cx, names) === undefined &&
 		keyPattern(names) === undefined
 	)
 		cx.warn(
@@ -1398,7 +1392,7 @@ function evaluates(
 		ev.keys.add(k);
 		for (const n of names) ev.keys.add(n);
 	}
-	for (const k of keyNames(s.get("propertyNames")) ?? []) ev.keys.add(k);
+	for (const k of keyNames(cx, s.get("propertyNames")) ?? []) ev.keys.add(k);
 	const group = leftOutKeys(cx, s);
 	for (const k of cx.leftOutIn(s)) group.add(k);
 	const allOf = s.get("allOf");
@@ -1922,17 +1916,31 @@ function notOnly(s: Value | undefined): Value | undefined {
 	return keys.length === 1 && keys[0] === "not" ? s.get("not") : undefined;
 }
 
-/** The keys `propertyNames: { enum }` or `{ const }` allow; undefined for any other. */
-function keyNames(names: Value | undefined): string[] | undefined {
+/**
+ * The keys a `propertyNames` with `enum` or `const` allows: the strings it lists that the
+ * rest of it admits (none where it lists no string); undefined for any other, or where
+ * the rest says what cannot be decided for them.
+ */
+function keyNames(cx: Ctx, names: Value | undefined): string[] | undefined {
 	if (!(names instanceof JsonObject)) return undefined;
-	const keys = names.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
-	if (keys.length !== 1) return undefined;
-	const e = names.get("enum");
 	const c = names.get("const");
-	const values =
-		keys[0] === "enum" && Array.isArray(e) ? e : keys[0] === "const" ? [c] : [];
+	const e = names.get("enum");
+	const values = c !== undefined ? [c] : Array.isArray(e) ? e : undefined;
+	if (values === undefined) return undefined;
 	const strings = values.filter((x): x is string => typeof x === "string");
-	return strings.length > 0 ? strings : undefined;
+	const admitted = strings.map((x) => accepts(cx, names, x));
+	if (admitted.includes(undefined)) return undefined;
+	return strings.filter((_, i) => admitted[i]);
+}
+
+/** Whether a `propertyNames` asks nothing of a key, which is a string: `true`, or a schema with at most `type` naming `string`. */
+function asksNothing(names: Value): boolean {
+	if (!(names instanceof JsonObject)) return names === true;
+	return names.entries.every(
+		([k, x]) =>
+			isAnnotation(k) ||
+			(k === "type" && (Array.isArray(x) ? x : [x]).includes("string")),
+	);
 }
 
 /**
@@ -2408,9 +2416,8 @@ function admitsAnyValue(cx: Ctx, s: Value): boolean {
 		);
 }
 
-/** Keywords that only apply to objects and that the object type reads; their presence implies `type: object`. */
+/** Keywords that only apply to objects; their presence implies `type: object`. */
 function hasObjectKeywords(v: JsonObject): boolean {
-	const names = v.get("propertyNames");
 	return (
 		[
 			"properties",
@@ -2420,10 +2427,14 @@ function hasObjectKeywords(v: JsonObject): boolean {
 		].some((k) => v.get(k) !== undefined) ||
 		unevaluated(v, "unevaluatedProperties") !== undefined ||
 		// maxProperties 0 says what keys an object has (none); other counts admit every object.
-		count(v, "maxProperties") === 0 ||
-		keyNames(names) !== undefined ||
-		keyPattern(names) !== undefined
+		count(v, "maxProperties") === 0
 	);
+}
+
+/** Whether `propertyNames` says which keys the object has, as the object type reads it. */
+function readsKeys(cx: Ctx, v: JsonObject): boolean {
+	const names = v.get("propertyNames");
+	return keyNames(cx, names) !== undefined || keyPattern(names) !== undefined;
 }
 
 /** The type given by `type`, or inferred from object / array keywords; `unknown` when neither says anything. */
@@ -2461,7 +2472,7 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 					: passed(cx, v, k, [...cx.around]),
 			),
 		);
-	if (hasObjectKeywords(v)) return object(cx, v, at);
+	if (hasObjectKeywords(v) || readsKeys(cx, v)) return object(cx, v, at);
 	if (hasArrayKeywords(v)) return array(cx, v, at);
 	// Keywords for strings and numbers without type constrain those kinds alone.
 	const s = text(v);
@@ -3119,16 +3130,18 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		[...new Set([v, ...cx.around].flatMap((s) => valueKeys(cx, s)))].filter(
 			(k) => !left.has(k) && !admits(k) && !props.some((p) => p.key === k),
 		);
-	// A closed object of these properties without them; one without properties already admits no key.
+	// A closed object of these properties without them; one without properties it admits
+	// a value of admits no key.
 	const closedOver = (admits: (key: string) => boolean, kept: Prop[]): Ty => {
-		const t = counted(v, kept);
+		const none = kept.every((p) => p.optional && p.ty.kind === "never");
+		const t = counted(v, none ? [] : kept);
 		return t.kind === "map" ? t : forbid(t, outside(admits));
 	};
 
 	// propertyNames that lists the keys closes the object over them: a declared property
 	// it does not list cannot be there, and one it lists but nothing declares has the
 	// value the patterns or additionalProperties give it.
-	const allowed = keyNames(v.get("propertyNames"));
+	const allowed = keyNames(cx, v.get("propertyNames"));
 	if (allowed !== undefined) {
 		if (props.some((p) => !p.optional && !allowed.includes(p.key)))
 			return NEVER;
