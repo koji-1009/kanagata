@@ -5,6 +5,7 @@ import {
 	BOOLEAN,
 	equal,
 	INTEGER,
+	inTemplate,
 	inter,
 	lit,
 	NEVER,
@@ -25,6 +26,28 @@ import {
 } from "../../src/ty.ts";
 
 const schemaRef = (schema: string) => ref(schema);
+
+test("a template admits a string by its segments, sets of longer strings too", () => {
+	const url = [
+		{ set: ["https://"] },
+		{ set: ["us", "eu"] },
+		{ set: [".api"] },
+		{ any: true as const },
+	];
+	assert.equal(inTemplate(url, "https://us.api/v1"), true);
+	assert.equal(inTemplate(url, "https://eu.api"), true);
+	assert.equal(inTemplate(url, "https://jp.api"), false);
+	assert.equal(
+		inTemplate(url, "https://us"),
+		false,
+		"the end before the segments",
+	);
+	assert.equal(
+		inTemplate([{ set: ["a"] }], "ab"),
+		false,
+		"text past the segments",
+	);
+});
 
 test("type keywords narrow sets of values", () => {
 	const ab = union([lit('"a"'), lit("1"), lit("true"), NULL]);
@@ -292,10 +315,10 @@ test("union keeps members that differ in structure and removes equal ones", () =
 test("many members are told apart by their keys as one by one, every kind", () => {
 	const id = prop("id", STRING);
 	const name = prop("name", STRING);
-	const x: Ty = { kind: "template", text: "`x-a`" };
+	const x: Ty = { kind: "template", text: "`x-a`", seq: [{ set: ["x-a"] }] };
 	const distinctOnes: Ty[] = [
 		lit('"a"'),
-		{ kind: "template", text: "`t`" },
+		{ kind: "template", text: "`t`", seq: [{ set: ["t"] }] },
 		ref("A"),
 		ref("A", "write"),
 		opRef("x"),
@@ -347,8 +370,8 @@ test("an object type's properties, a map's signatures and the members of a union
 	const lookup = schemaRef("Lookup");
 	const first: Ty = { kind: "inter", items: [lookup, ab] };
 	assert.equal(union([first, { kind: "inter", items: [ba, lookup] }]), first);
-	const x: Ty = { kind: "template", text: "`x-a`" };
-	const y: Ty = { kind: "template", text: "`y-a`" };
+	const x: Ty = { kind: "template", text: "`x-a`", seq: [{ set: ["x-a"] }] };
+	const y: Ty = { kind: "template", text: "`y-a`", seq: [{ set: ["y-a"] }] };
 	const map: Ty = {
 		kind: "map",
 		props: [prop("id", STRING), prop("name", STRING)],

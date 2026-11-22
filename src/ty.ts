@@ -18,6 +18,26 @@ export interface Keyed {
 /** Which view of a component schema a reference means: as returned, or as sent. */
 export type View = "read" | "write";
 
+/** Part of a template literal type: one of a finite set of strings, or any text. */
+export type Segment = { set: string[] } | { any: true };
+
+/**
+ * Whether a template literal type's segments admit a string, from segment `i` and its
+ * position `at`: a set by one of its strings there, any text by any run of it.
+ */
+export function inTemplate(seq: Segment[], s: string, i = 0, at = 0): boolean {
+	const x = seq[i];
+	if (x === undefined) return at === s.length;
+	if ("any" in x) {
+		for (let end = at; end <= s.length; end++)
+			if (inTemplate(seq, s, i + 1, end)) return true;
+		return false;
+	}
+	return x.set.some(
+		(e) => s.startsWith(e, at) && inTemplate(seq, s, i + 1, at + e.length),
+	);
+}
+
 export type Ty =
 	| { kind: "unknown" }
 	/** `{}`: any value but `null` and `undefined`. */
@@ -36,10 +56,10 @@ export type Ty =
 	/** Literal in JSON notation: `"admin"` with quotes, `1`, `true`. */
 	| { kind: "lit"; text: string }
 	/**
-	 * A template literal type, as printed: `` `https://${"us" | "eu"}.example.com` ``; the
-	 * `pattern` it is from, if it is, tells which strings it admits.
+	 * A template literal type, as printed: `` `https://${"us" | "eu"}.example.com` ``, and
+	 * its segments, which say which strings it admits (see `inTemplate`).
 	 */
-	| { kind: "template"; text: string; pattern?: string }
+	| { kind: "template"; text: string; seq: Segment[] }
 	/** A component schema, by its key in `components.schemas`; named when emitted. */
 	| { kind: "ref"; schema: string; view: View }
 	/** `operations[id]` */
@@ -802,7 +822,7 @@ function valueKind(t: Ty): ValueKind | undefined {
  * sets of values keep what K allows, and the kind types go; with no values, one
  * type says what K is. So `type` next to `enum` gives `"a"`, not `string & "a"`,
  * and contradictions (`number & string`, `"a" & "b"`) are `never`. A template
- * (from `pattern`) is some strings: it meets kinds as `string` does and stands for them,
+ * is some strings: it meets kinds as `string` does and stands for them,
  * and the values next to it keep the strings it admits.
  * Returns `items` itself when nothing changes.
  */
@@ -876,16 +896,13 @@ function isStrings(t: Ty): boolean {
 	);
 }
 
-/**
- * Whether a type of some strings admits a string literal: a template by its pattern (the
- * templates values meet are from `pattern`), a literal by its text.
- */
+/** Whether a type of some strings admits a string literal: a template by its segments, a literal by its text. */
 function admitsString(t: Ty, m: Ty): boolean {
 	const text = (m as { text: string }).text;
 	const s = JSON.parse(text) as string;
 	return (t.kind === "union" ? t.items : [t]).some((x) =>
 		x.kind === "template"
-			? new RegExp(x.pattern as string, "u").test(s)
+			? inTemplate(x.seq, s)
 			: (x as { text: string }).text === text,
 	);
 }

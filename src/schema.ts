@@ -1970,9 +1970,6 @@ function propertyKeys(cx: Ctx, v: JsonObject, at: string): Ty | undefined {
 	return meetKeys(inter([STRING, values]));
 }
 
-/** The templates `meet` gives, by the type of keys each is, read again by `templateOf`. */
-const metTemplates = new WeakMap<Ty, Template>();
-
 /**
  * A type of keys: where TypeScript keeps the strings as an intersection, of the templates of
  * patterns (`allOf: [{ pattern: "^x-" }, { pattern: "-y$" }]`), the strings all of them
@@ -1997,7 +1994,6 @@ function meetKeys(keys: Ty): Ty | undefined {
 			}
 		met = next;
 	}
-	for (const t of met) metTemplates.set(t.key, t);
 	return union(met.map((t) => t.key));
 }
 
@@ -2032,17 +2028,9 @@ function keyAdmits(cx: Ctx, names: Value, keys: Ty): (key: string) => boolean {
 		);
 }
 
-/**
- * The template a template literal type of keys is: one `meet` gave, or one of the pattern
- * it is from (see `patternType`), read again as the templates `object` compares.
- */
+/** The template a template literal type of keys is, as `object` compares templates: its segments. */
 function templateOf(t: Extract<Ty, { kind: "template" }>): Template {
-	return (
-		metTemplates.get(t) ??
-		(templates(t.pattern as string).find(
-			(o) => (o.key as { text: string }).text === t.text,
-		) as Template)
-	);
+	return { seq: t.seq, key: t };
 }
 
 /**

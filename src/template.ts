@@ -5,16 +5,13 @@
 // text, finite sets of characters, any text), the pattern is that type; anything else
 // (`.`, `+`, a negated class, lookarounds, …) is no type.
 
-import { lit, STRING, type Ty, union } from "./ty.ts";
+import { inTemplate, lit, type Segment, STRING, type Ty, union } from "./ty.ts";
 
 /**
  * The most strings TypeScript builds into one union from a template: it rejects 100,000
  * ("Expression produces a union type that is too complex to represent", TS2590).
  */
 export const MAX_UNION = 99_999;
-
-/** Part of a template: one of a finite set of strings, or any text. */
-export type Segment = { set: string[] } | { any: true };
 
 const ANY: Segment = { any: true };
 
@@ -429,7 +426,7 @@ function render(seq: Seq): Ty {
 					: `\${${"string"}}`,
 		)
 		.join("");
-	return { kind: "template", text: `\`${text}\`` };
+	return { kind: "template", text: `\`${text}\``, seq };
 }
 
 /**
@@ -488,12 +485,7 @@ export function includes(outer: Template, inner: Template): boolean {
 
 /** Whether a template admits a string. */
 export function admits(t: Template, key: string): boolean {
-	return contains(
-		t.seq,
-		[...key].map((c) => ({ set: [c] })),
-		0,
-		0,
-	);
+	return inTemplate(t.seq, key);
 }
 
 /** How the strings of template `a` stand to those of `b`: all among them, some, or none. */
@@ -771,10 +763,5 @@ function typeOf(pattern: string): Ty | undefined {
 		// NoType: the parser throws nothing else on a pattern RegExp reads.
 		return undefined;
 	}
-	// A template keeps the pattern, so that the values next to it can be read against it.
-	return union(
-		read
-			.map(render)
-			.map((t) => (t.kind === "template" ? { ...t, pattern } : t)),
-	);
+	return union(read.map(render));
 }

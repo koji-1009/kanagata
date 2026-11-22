@@ -12,7 +12,7 @@ import {
 	type Template,
 	templates,
 } from "../../src/template.ts";
-import type { Ty } from "../../src/ty.ts";
+import { inter, lit, NEVER, type Ty } from "../../src/ty.ts";
 
 /** The type a pattern is, as printed: `string`, string literals and templates joined by ` | `. */
 function printed(pattern: string): string | undefined {
@@ -283,10 +283,19 @@ test("whether a pattern that is a regular expression matches all strings of a te
 	);
 });
 
-test("templates keep the pattern they are from", () => {
+test("a template type admits the literals next to it by its own segments, one meet gives too", () => {
+	const [, xy] = meet(one("^x-"), one("-y$")) as Template[];
+	const t = (xy as Template).key;
+	assert.equal((t as { text: string }).text, "`x-${string}-y`");
+	assert.deepEqual(inter([t, lit('"x-a-y"')]), lit('"x-a-y"'));
+	assert.equal(inter([t, lit('"x-a"')]), NEVER, "x-a is no string of it");
+	assert.equal(inter([lit('"x-y"'), t]), NEVER, "nor x-y");
+});
+
+test("template types keep their segments", () => {
 	assert.deepEqual(patternType("^a"), {
 		kind: "template",
 		text: "`a${string}`",
-		pattern: "^a",
+		seq: [{ set: ["a"] }, { any: true }],
 	});
 });

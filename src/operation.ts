@@ -11,6 +11,7 @@ import {
 	opRef,
 	type Prop,
 	prop,
+	type Segment,
 	STRING,
 	type Ty,
 	tuple,
@@ -479,21 +480,33 @@ function serverUrl(url: string, variables: Value | undefined): Ty {
 	if (absolute && parts.length === 1) return lit(JSON.stringify(url));
 	const text = (s: string) =>
 		s.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
-	const hole = (name: string) => {
+	const values = (name: string) => {
 		const e = get(get(variables, name), "enum");
-		const values = Array.isArray(e)
+		return Array.isArray(e)
 			? e.filter((x): x is string => typeof x === "string")
 			: [];
-		return values.length === 0
+	};
+	const hole = (name: string) => {
+		const vs = values(name);
+		return vs.length === 0
 			? "string"
-			: values.map((x) => JSON.stringify(x)).join(" | ");
+			: vs.map((x) => JSON.stringify(x)).join(" | ");
 	};
 	const body = parts
 		.map((p, j) => (j % 2 === 0 ? text(p) : `\${${hole(p)}}`))
 		.join("");
 	// A relative URL starts with whatever leads to where it ends.
 	const lead = absolute ? "" : `\${${"string"}}/`;
-	return { kind: "template", text: `\`${lead}${body}\`` };
+	// The same strings as segments: the text, and each variable's values or any text.
+	const seq: Segment[] = [
+		...(absolute ? [] : [{ any: true as const }, { set: ["/"] }]),
+		...parts.flatMap((p, j): Segment[] => {
+			if (j % 2 === 0) return p === "" ? [] : [{ set: [p] }];
+			const vs = values(p);
+			return [vs.length === 0 ? { any: true } : { set: vs }];
+		}),
+	];
+	return { kind: "template", text: `\`${lead}${body}\``, seq };
 }
 
 function collectParams(
