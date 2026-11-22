@@ -735,7 +735,8 @@ function keywordParts(
 /**
  * The values `not` leaves, where TypeScript can say them: none for a schema that admits
  * everything, the other kinds for `not: { type }`, the objects without a key for
- * `not: { required }`. undefined otherwise (`not: false` leaves everything: unknown).
+ * `not: { required }`, and what X admits for `not: { not: X }`. undefined otherwise
+ * (`not: false` leaves everything: unknown).
  */
 function negation(n: Value): Ty | undefined {
 	if (n === false) return UNKNOWN;
@@ -745,9 +746,51 @@ function negation(n: Value): Ty | undefined {
 	if (keys.length === 0) return NEVER;
 	if (keys.length !== 1) return undefined;
 	if (keys[0] === "type") return otherKinds(n.get("type"));
+	if (keys[0] === "not") return admitted(n.get("not") as Value);
 	const req = n.get("required");
 	if (keys[0] === "required" && Array.isArray(req)) return lacking(req);
 	return undefined;
+}
+
+/**
+ * The values a schema admits, where its keywords say them exactly: every value for one
+ * without keywords, none for `false`, and the values each of `type`, `required`, `enum`,
+ * `const` and `not` (as `negation` reads it) admits. undefined for any other keyword.
+ */
+function admitted(s: Value): Ty | undefined {
+	if (s === false) return NEVER;
+	if (!(s instanceof JsonObject)) return UNKNOWN;
+	const parts: Ty[] = [];
+	for (const [k, x] of s.entries) {
+		if (isAnnotation(k)) continue;
+		let t: Ty | undefined;
+		if (k === "type")
+			// A type JSON Schema does not have says nothing.
+			t = union(
+				(Array.isArray(x) ? x : [x]).map((n) =>
+					typeof n === "string" && Object.hasOwn(KIND, n)
+						? (KIND[n] as Ty)
+						: UNKNOWN,
+				),
+			);
+		else if (k === "required" && Array.isArray(x))
+			// Values of the other kinds pass required.
+			t = union([
+				otherKinds("object") as Ty,
+				{
+					kind: "object",
+					props: x
+						.filter((r): r is string => typeof r === "string")
+						.map((key) => ({ ...prop(key, UNKNOWN), present: true })),
+				},
+			]);
+		else if (k === "enum" && Array.isArray(x)) t = union(x.map(literal));
+		else if (k === "const") t = literal(x);
+		else if (k === "not") t = negation(x);
+		if (t === undefined) return undefined;
+		parts.push(t);
+	}
+	return inter(parts);
 }
 
 /** The values of the kinds `type` does not name; undefined for `integer` without `number`. */
@@ -792,7 +835,11 @@ function refuted(cx: Ctx, cond: Value, around: Value[]): Ty | undefined {
 			if (t === undefined) return undefined;
 			terms.push(t);
 		} else if (k === "required" && Array.isArray(x)) terms.push(lacking(x));
-		else if (k === "properties" && x instanceof JsonObject) {
+		else if (k === "not") {
+			const t = admitted(x);
+			if (t === undefined) return undefined;
+			terms.push(t);
+		} else if (k === "properties" && x instanceof JsonObject) {
 			for (const [p, s] of x.entries) {
 				const t = rejected(cx, s, declared(cx, around, p));
 				if (t === undefined) return undefined;
@@ -822,8 +869,8 @@ function rejected(
 		if (verdicts.every((a) => a !== undefined))
 			return union(values.filter((_, i) => !verdicts[i]).map(literal));
 	}
-	return keys.length === 1 && keys[0] === "type"
-		? otherKinds(s.get("type"))
+	return keys.length === 1 && (keys[0] === "type" || keys[0] === "not")
+		? negation(s)
 		: undefined;
 }
 
@@ -913,6 +960,10 @@ function accepts(cx: Ctx, s: JsonObject, x: Value): boolean | undefined {
 			if (!sameValue(x, y)) return false;
 		} else if (k === "enum" && Array.isArray(y)) {
 			if (!y.some((e) => sameValue(x, e))) return false;
+		} else if (k === "not" && notOnly(y) instanceof JsonObject) {
+			// not: { not: X } admits what X admits.
+			const a = accepts(cx, notOnly(y) as JsonObject, x);
+			if (a !== true) return a;
 		} else return undefined;
 	}
 	return admitting(cx, s)(t);
@@ -1276,20 +1327,33 @@ function notContained(cx: Ctx, v: JsonObject, contains: Value): Ty | undefined {
 
 /**
  * The values `not: { enum }` or `not: { const }` leave out, each with where it is in
- * `not` (`enum/0`, `const`); undefined for any other `not`.
+ * `not` (`enum/0`, `const`); undefined for any other `not`. `not: { not: { not: X } }`
+ * is `not: X`.
  */
 function excluded(v: JsonObject): { ty: Ty; at: string }[] | undefined {
-	const n = v.get("not");
+	let n = v.get("not");
+	let path = "";
+	for (let x = notOnly(notOnly(n)); x !== undefined; x = notOnly(notOnly(n))) {
+		n = x;
+		path += "not/not/";
+	}
 	if (!(n instanceof JsonObject)) return undefined;
 	const keys = n.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
 	if (keys.length !== 1) return undefined;
 	const e = n.get("enum");
 	if (keys[0] === "enum" && Array.isArray(e))
-		return e.map((x, i) => ({ ty: literal(x), at: `enum/${i}` }));
+		return e.map((x, i) => ({ ty: literal(x), at: `${path}enum/${i}` }));
 	const c = n.get("const");
 	return keys[0] === "const" && c !== undefined
-		? [{ ty: literal(c), at: "const" }]
+		? [{ ty: literal(c), at: `${path}const` }]
 		: undefined;
+}
+
+/** X for a schema that has no keyword but `not: X`; undefined for any other. */
+function notOnly(s: Value | undefined): Value | undefined {
+	if (!(s instanceof JsonObject)) return undefined;
+	const keys = s.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	return keys.length === 1 && keys[0] === "not" ? s.get("not") : undefined;
 }
 
 /** The keys `propertyNames: { enum }` or `{ const }` allow; undefined for any other. */

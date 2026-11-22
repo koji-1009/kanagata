@@ -1,0 +1,3 @@
+#/components/schemas/TriplePartly/not/not/not/enum/1: not: leaving out this value cannot be expressed in TypeScript; ignored
+#/components/schemas/Other/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/IfNotOther/if: if / then / else cannot be expressed in TypeScript; ignored

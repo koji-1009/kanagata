@@ -1,0 +1,97 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "NullOnly": {
+        "description": "not: { not: X } is X: only null.",
+        "type": ["object", "null"],
+        "not": { "not": { "type": "null" } }
+      },
+      "Kinds": { "description": "The kinds a type list names.", "not": { "not": { "type": ["string", "null"] } } },
+      "AnyKind": { "description": "A type JSON Schema does not have says nothing.", "type": "string", "not": { "not": { "type": "file" } } },
+      "Named": { "description": "The values enum lists.", "type": "string", "not": { "not": { "title": "Letters", "enum": ["a", "b"] } } },
+      "One": { "description": "The value const names.", "not": { "not": { "const": 1 } } },
+      "Required": {
+        "description": "The objects with the keys required lists.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "not": { "not": { "required": ["a"] } }
+      },
+      "Present": { "description": "Values of other kinds pass required.", "type": ["object", "string"], "not": { "not": { "required": ["a"] } } },
+      "Both": { "description": "What each keyword of X admits.", "not": { "not": { "type": "string", "enum": ["a", 1] } } },
+      "Anything": { "description": "not: { not: {} } admits every value.", "type": "string", "not": { "not": {} } },
+      "AnythingTrue": { "description": "As does not: { not: true }.", "type": "string", "not": { "not": true } },
+      "Nothing": { "description": "not: { not: false } admits none.", "type": "string", "not": { "not": false } },
+      "Triple": { "description": "not: { not: { not: X } } is not: X.", "type": ["string", "null"], "not": { "not": { "not": { "type": "null" } } } },
+      "TripleEnum": { "description": "Its enum leaves out the values it lists.", "enum": ["a", "b", "c"], "not": { "not": { "not": { "enum": ["b"] } } } },
+      "TriplePartly": {
+        "description": "With a warning on a value a kind admits.",
+        "type": ["boolean", "string"],
+        "not": { "not": { "not": { "enum": [true, "a"] } } }
+      },
+      "Other": { "description": "An X TypeScript cannot say is ignored, with a warning.", "type": "string", "not": { "not": { "maxLength": 1 } } },
+      "IfNot": {
+        "description": "if: { not: X } does not admit what X admits.",
+        "if": { "not": { "type": "null" } },
+        "then": { "type": "string" },
+        "else": { "const": null }
+      },
+      "IfNotOther": {
+        "description": "An if: { not: X } whose X TypeScript cannot say is ignored, with a warning.",
+        "type": "string",
+        "if": { "not": { "maxLength": 1 } },
+        "then": { "minLength": 2 }
+      },
+      "IfNotProperty": {
+        "description": "Nor a property of not: { not: X } what X rejects.",
+        "type": "object",
+        "required": ["kind"],
+        "properties": { "kind": { "enum": ["a", "b"] }, "x": { "type": "string" }, "y": { "type": "string" } },
+        "if": { "properties": { "kind": { "not": { "not": { "const": "a" } } } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "IfNotKind": {
+        "description": "Of the kinds it names.",
+        "type": "object",
+        "required": ["v"],
+        "properties": { "v": { "type": ["string", "number"] } },
+        "if": { "properties": { "v": { "not": { "not": { "type": "string" } } } } },
+        "then": { "properties": { "v": { "minLength": 1 } } },
+        "else": { "properties": { "v": { "minimum": 0 } } }
+      },
+      "ContainsNoString": {
+        "description": "contains: { not: { not: X } } is contains: X.",
+        "type": "array",
+        "items": { "type": ["string", "number"] },
+        "contains": { "not": { "not": { "type": "string" } } },
+        "minContains": 0,
+        "maxContains": 0
+      },
+      "ContainsNoA": {
+        "description": "As read for the values items lists.",
+        "type": "array",
+        "items": { "enum": ["a", "b", "c"] },
+        "contains": { "not": { "not": { "const": "a" } } },
+        "minContains": 0,
+        "maxContains": 0
+      },
+      "Tags": { "type": ["array", "string"], "items": { "type": "string" }, "not": { "not": { "type": "array" } } },
+      "OneTag": {
+        "description": "A not: { not: X } that admits arrays only is an array.",
+        "allOf": [{ "$ref": "#/components/schemas/Tags" }, { "maxItems": 1 }]
+      },
+      "Pair": { "type": ["array", "string"], "not": { "not": { "const": ["a", "b"] } } },
+      "AtPair": {
+        "description": "A const array.",
+        "allOf": [{ "$ref": "#/components/schemas/Pair" }, { "minItems": 1 }]
+      },
+      "Corners": { "type": ["array", "string"], "not": { "not": { "enum": [[0, 0], [1, 1]] } } },
+      "AtCorner": {
+        "description": "Several.",
+        "allOf": [{ "$ref": "#/components/schemas/Corners" }, { "minItems": 1 }]
+      }
+    }
+  }
+}
