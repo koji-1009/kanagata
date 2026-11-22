@@ -73,6 +73,21 @@
         "type": ["object", "array"],
         "allOf": [{ "required": ["a"], "if": { "required": ["b"] }, "then": { "minItems": 1 } }]
       },
+      "UnknownTypeName": {
+        "description": "A type name JSON Schema does not have admits every value, so every other kind passes dependentRequired.",
+        "type": ["object", "file"],
+        "dependentRequired": { "a": ["b"] }
+      },
+      "UnknownTypeMember": {
+        "description": "And passes a member without type.",
+        "type": ["string", "file"],
+        "allOf": [{ "required": ["a"] }]
+      },
+      "PrototypeTypeName": {
+        "description": "A name objects inherit is no kind either.",
+        "type": ["object", "constructor"],
+        "dependentRequired": { "a": ["b"] }
+      },
       "TypedIf": {
         "description": "A typed if in a member is only a condition: strings fail it and pass.",
         "type": ["object", "string"],

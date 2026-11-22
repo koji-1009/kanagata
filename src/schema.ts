@@ -711,7 +711,10 @@ function passing(cx: Ctx, v: JsonObject, members: Value[], tys: Ty[]): Ty[] {
 	});
 }
 
-/** The kinds `type` names, and null where 3.0's `nullable: true` adds it; undefined without `type`. */
+/**
+ * The kinds `type` names, and null where 3.0's `nullable: true` adds it; every kind where
+ * it names one JSON Schema does not have; undefined without `type`.
+ */
 function typeKinds(cx: Ctx, v: JsonObject): string[] | undefined {
 	const t = v.get("type");
 	const kinds =
@@ -721,6 +724,8 @@ function typeKinds(cx: Ctx, v: JsonObject): string[] | undefined {
 				? t.filter((k): k is string => typeof k === "string")
 				: undefined;
 	if (kinds === undefined) return undefined;
+	// A name JSON Schema does not have admits every value (see `typed`).
+	if (kinds.some((k) => !Object.hasOwn(KIND, k))) return ALL_KINDS;
 	return !cx.refSiblings && v.get("nullable") === true
 		? [...kinds, "null"]
 		: kinds;
@@ -737,7 +742,7 @@ function widen(cx: Ctx, v: JsonObject, kinds: string[], ty: Ty, m?: Value): Ty {
 	return union([
 		ty,
 		...named
-			.filter((k) => !kinds.includes(k) && k in KIND)
+			.filter((k) => !kinds.includes(k))
 			.map((k) =>
 				m === undefined
 					? ofKind(cx, v, k)

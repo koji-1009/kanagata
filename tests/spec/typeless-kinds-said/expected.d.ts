@@ -19,6 +19,9 @@ export interface schemas {
   IfShort: IfShort;
   IfAnyLength: IfAnyLength;
   BranchOfOtherKind: BranchOfOtherKind;
+  UnknownTypeName: UnknownTypeName;
+  UnknownTypeMember: UnknownTypeMember;
+  PrototypeTypeName: PrototypeTypeName;
   TypedIf: TypedIf;
 }
 
@@ -81,6 +84,25 @@ export type BranchOfOtherKind = {
   a: {} | null;
   b?: never;
 } | [unknown, ...unknown[]];
+
+/** A type name JSON Schema does not have admits every value, so every other kind passes dependentRequired. */
+export type UnknownTypeName = {
+  a?: never;
+} | {
+  b: {} | null;
+} | string | number | boolean | null | unknown[];
+
+/** And passes a member without type. */
+export type UnknownTypeMember = {
+  a: {} | null;
+} | string | number | boolean | null | unknown[];
+
+/** A name objects inherit is no kind either. */
+export type PrototypeTypeName = {
+  a?: never;
+} | {
+  b: {} | null;
+} | string | number | boolean | null | unknown[];
 
 /** A typed if in a member is only a condition: strings fail it and pass. */
 export type TypedIf = {
