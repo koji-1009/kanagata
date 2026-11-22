@@ -1,0 +1,14 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Matched": {
+        "description": "contains evaluates the items it matches, so unevaluatedItems is not items here: [\"a\"] is valid.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "unevaluatedItems": false
+      }
+    }
+  }
+}

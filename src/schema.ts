@@ -57,13 +57,20 @@ const APPLICATORS = [
 ];
 
 /**
- * `unevaluatedProperties` / `unevaluatedItems` where no applicator evaluates anything:
- * then they are `additionalProperties` / `items`. undefined where they are not that.
+ * `unevaluatedProperties` / `unevaluatedItems` where nothing next to them evaluates: then
+ * they are `additionalProperties` / `items`. undefined where they are not that.
  */
 function unevaluated(v: JsonObject, key: string): Value | undefined {
-	return APPLICATORS.every((k) => v.get(k) === undefined)
+	return applicatorsFor(key).every((k) => v.get(k) === undefined)
 		? v.get(key)
 		: undefined;
+}
+
+/** The keywords next to an `unevaluated*` keyword that evaluate for it: `contains` evaluates the items it matches. */
+function applicatorsFor(key: string): string[] {
+	return key === "unevaluatedItems"
+		? [...APPLICATORS, "contains"]
+		: APPLICATORS;
 }
 
 /**
@@ -1081,11 +1088,13 @@ function evaluatingItems(
  * and items past those evaluated are as it says (none for `false`).
  */
 function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
-	const up = v.get("unevaluatedProperties");
-	const ui = v.get("unevaluatedItems");
+	// Where nothing next to them evaluates, they are additionalProperties / items (`unevaluated`).
+	const next = (key: string) =>
+		unevaluated(v, key) === undefined ? v.get(key) : undefined;
+	const up = next("unevaluatedProperties");
+	const ui = next("unevaluatedItems");
 	const asked = (x: Value | undefined) => x !== undefined && x !== true;
 	if (!asked(up) && !asked(ui)) return [];
-	if (APPLICATORS.every((k) => v.get(k) === undefined)) return [];
 	const ev = evaluates(cx, v, at, true, new Set());
 	const warn = (key: string, x: Value | undefined) => {
 		if (asked(x))
