@@ -64,6 +64,8 @@ interface Index {
 	dynamic: Set<string>;
 	/** The absolute URI of each schema with an `$id`, resolved against the schemas around it. */
 	resources: Map<Value, string>;
+	/** Whether a `$dynamicRef` is anywhere in the documents read. */
+	dynamicRefs: boolean;
 }
 
 /**
@@ -94,6 +96,7 @@ function indexIds(index: Index, doc: Value, base: string): void {
 		}
 		const dynamic = v.str("$dynamicAnchor");
 		if (dynamic !== undefined) index.dynamic.add(`${here}#${dynamic}`);
+		if (v.get("$dynamicRef") !== undefined) index.dynamicRefs = true;
 		for (const [k, x] of v.entries) {
 			if (!names && DATA.has(k)) continue;
 			walk(x, here, !names && NAME_MAPS.has(k));
@@ -130,6 +133,9 @@ export interface Place {
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
+
+/** What a schema without a reference reaches. */
+const NONE: readonly Located[] = [];
 
 /** Schema keywords a component may have next to `$ref` and still be another name for its target. */
 const ALIAS_KEYS = new Set(["$ref", "$dynamicRef", "description", "title"]);
@@ -492,13 +498,23 @@ export class Ctx {
 
 	// How a schema is looked through to the schemas it applies to the same value. Every
 	// reader of a schema goes through these, so that they all reach the same schemas.
+	// They are read for nearly every schema, most of which have no `$id` and no reference,
+	// so that case allocates nothing.
+
+	/**
+	 * The resource a schema is read in, its own (`$id`, 3.1 and 3.2), where it is one;
+	 * undefined otherwise. Reading it inside it already changes nothing (`inOwnResource`).
+	 */
+	ownResource(v: Value): string | undefined {
+		return this.refSiblings ? this.#ids().resources.get(v) : undefined;
+	}
 
 	/**
 	 * Reads a schema in its own resource: one with `$id` (3.1, 3.2) is one, and `$ref`s
 	 * inside it resolve against its URI. Reading it inside it already changes nothing.
 	 */
 	inOwnResource<T>(v: Value, f: () => T): T {
-		const uri = this.refSiblings ? this.resourceOf(v) : undefined;
+		const uri = this.ownResource(v);
 		return uri === undefined ? f() : this.inResource(uri, f);
 	}
 
@@ -517,12 +533,18 @@ export class Ctx {
 	 * The schemas a schema's `$ref` and `$dynamicRef` reach, where they are found: the
 	 * conversion reports one that is not.
 	 */
-	reached(s: Value): Located[] {
+	reached(s: Value): readonly Located[] {
+		if (!(s instanceof JsonObject)) return NONE;
+		const r = s.str("$ref");
+		// Without a $dynamicRef in the documents, only the $ref counts.
+		if (!this.#ids().dynamicRefs) {
+			const target = r === undefined ? undefined : this.tryLocate(r);
+			return target === undefined ? NONE : [target];
+		}
 		const targets: Located[] = [];
-		const r = str(s, "$ref");
 		const target = r === undefined ? undefined : this.tryLocate(r);
 		if (target !== undefined) targets.push(target);
-		const dr = str(s, "$dynamicRef");
+		const dr = s.str("$dynamicRef");
 		const found = dr === undefined ? undefined : this.tryLocate(dr);
 		if (found !== undefined) {
 			const outer = this.dynamicAnchorOf(found);
@@ -533,9 +555,10 @@ export class Ctx {
 
 	/** Reads a schema a reference reaches where it is: in the resource it is in, and its own. */
 	inTarget<T>(target: Located, f: () => T): T {
-		return this.inResource(target.base, () =>
-			this.inOwnResource(target.value, f),
-		);
+		const own = this.ownResource(target.value);
+		return own === undefined
+			? this.inResource(target.base, f)
+			: this.inResource(target.base, () => this.inResource(own, f));
 	}
 
 	/**
@@ -661,6 +684,7 @@ export class Ctx {
 			anchors: new Map(),
 			dynamic: new Set(),
 			resources: new Map(),
+			dynamicRefs: false,
 		};
 		indexIds(index, this.root, this.documentBase);
 		this.#index = index;

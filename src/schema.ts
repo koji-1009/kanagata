@@ -133,9 +133,13 @@ export function schema(cx: Ctx, v: Value, at: string): Ty {
 	cx.here = cx.raw;
 	try {
 		return cx.inSchema(() =>
-			cx.withRaw(undefined, () =>
-				cx.inOwnResource(v, () => convert(cx, v, at)),
-			),
+			cx.withRaw(undefined, () => {
+				// Most schemas are no resource of their own: they are read where they are.
+				const uri = cx.ownResource(v);
+				return uri === undefined
+					? convert(cx, v, at)
+					: cx.inResource(uri, () => convert(cx, v, at));
+			}),
 		);
 	} finally {
 		cx.here = saved;
@@ -153,7 +157,10 @@ function binaryAt(
 	seen = new Set<string>(),
 ): boolean {
 	if (!(v instanceof JsonObject)) return false;
-	return cx.inOwnResource(v, () => bytesIn(cx, v, pos, seen));
+	const uri = cx.ownResource(v);
+	return uri === undefined
+		? bytesIn(cx, v, pos, seen)
+		: cx.inResource(uri, () => bytesIn(cx, v, pos, seen));
 }
 
 function bytesIn(
@@ -236,6 +243,17 @@ function docText(
 	return desc === undefined ? "@deprecated" : `${desc}\n@deprecated`;
 }
 
+/** What a `$ref` or `$dynamicRef` of `v` refers to: the same value, the keywords of `v` around it. */
+function referenced(cx: Ctx, v: JsonObject, ref: string, at: string): Ty {
+	// The keys left out beside the target: those it leaves out itself it is written without anyway.
+	const beside = leftOutKeys(cx, v, new Set(), false);
+	for (const k of cx.leftOutIn(v)) beside.add(k);
+	return cx.withAround(
+		v,
+		() => leftOutTarget(cx, ref, at, beside) ?? reference(cx, ref, at),
+	);
+}
+
 /**
  * `nullable: true` (3.0 only; 3.1 has no such keyword) adds `null` to the `type` next
  * to it, and only then; the other keywords still apply to `null` (OAS 3.0.3). With
@@ -259,19 +277,9 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 							: NEVER
 						: t,
 				);
-	// The target is the same value, this schema's keywords around it.
-	const target = (ref: string) => {
-		// The keys left out beside the target: those it leaves out itself it is written without anyway.
-		const beside = leftOutKeys(cx, v, new Set(), false);
-		for (const k of cx.leftOutIn(v)) beside.add(k);
-		return cx.withAround(
-			v,
-			() => leftOutTarget(cx, ref, at, beside) ?? reference(cx, ref, at),
-		);
-	};
 	const r = v.str("$ref");
 	if (r !== undefined) {
-		const t = target(r);
+		const t = referenced(cx, v, r, at);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
 		// are ignored, nullable among them unless loose.
 		if (!cx.refSiblings) return loose ? union([t, NULL]) : t;
@@ -282,7 +290,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const dr = v.str("$dynamicRef");
 	if (dr !== undefined) {
 		const outer = cx.dynamicAnchorOf(cx.locate(dr, at));
-		out.push(...admitted([v], [target(outer ?? dr)]));
+		out.push(...admitted([v], [referenced(cx, v, outer ?? dr, at)]));
 	}
 	const c = v.get("const");
 	if (c !== undefined) out.push(literal(c));
@@ -462,9 +470,10 @@ function keysOf(
 	properties: boolean,
 	everywhere = false,
 ): string[] {
-	return cx.inOwnResource(s, () =>
-		ownKeysOf(cx, s, seen, properties, everywhere),
-	);
+	const uri = cx.ownResource(s);
+	return uri === undefined
+		? ownKeysOf(cx, s, seen, properties, everywhere)
+		: cx.inResource(uri, () => ownKeysOf(cx, s, seen, properties, everywhere));
 }
 
 function ownKeysOf(
@@ -621,19 +630,20 @@ function arraysIn(cx: Ctx, t: Ty, at: string): Arrays | undefined {
  */
 function namesArrays(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
 	if (!(v instanceof JsonObject)) return false;
-	return cx.inOwnResource(v, () => ownNamesArrays(cx, v, seen));
+	const uri = cx.ownResource(v);
+	return uri === undefined
+		? ownNamesArrays(cx, v, seen)
+		: cx.inResource(uri, () => ownNamesArrays(cx, v, seen));
 }
 
 function ownNamesArrays(cx: Ctx, v: JsonObject, seen: Set<string>): boolean {
-	const viaRef = cx
-		.reached(v)
-		.some(
-			(target) =>
-				!seen.has(target.uri) &&
-				cx.inTarget(target, () =>
-					namesArrays(cx, target.value, new Set([...seen, target.uri])),
-				),
-		);
+	let viaRef = false;
+	for (const target of cx.reached(v))
+		viaRef ||=
+			!seen.has(target.uri) &&
+			cx.inTarget(target, () =>
+				namesArrays(cx, target.value, new Set([...seen, target.uri])),
+			);
 	// In 3.0 the keywords next to $ref are ignored.
 	if (viaRef || (v.get("$ref") !== undefined && !cx.refSiblings)) return viaRef;
 	const type = v.get("type");
@@ -705,7 +715,10 @@ function passed(
 ): Ty {
 	if (!(m instanceof JsonObject))
 		return m === false ? NEVER : (KIND[kind] as Ty);
-	return cx.inOwnResource(m, () => ownPassed(cx, m, kind, around, seen));
+	const uri = cx.ownResource(m);
+	return uri === undefined
+		? ownPassed(cx, m, kind, around, seen)
+		: cx.inResource(uri, () => ownPassed(cx, m, kind, around, seen));
 }
 
 function ownPassed(
@@ -2062,7 +2075,10 @@ function madeKinds(
 	if (!(m instanceof JsonObject)) return kinds;
 	if (["type", "const", "enum"].some((k) => m.get(k) !== undefined))
 		return undefined;
-	return cx.inOwnResource(m, () => ownMadeKinds(cx, m, seen, kinds));
+	const uri = cx.ownResource(m);
+	return uri === undefined
+		? ownMadeKinds(cx, m, seen, kinds)
+		: cx.inResource(uri, () => ownMadeKinds(cx, m, seen, kinds));
 }
 
 function ownMadeKinds(
@@ -2077,11 +2093,13 @@ function ownMadeKinds(
 		if (made) for (const k of inner?.made ?? []) kinds.made.add(k);
 		return inner !== undefined;
 	};
-	const refs = [...REFS].filter((k) => m.get(k) !== undefined);
+	const refs =
+		(m.get("$ref") === undefined ? 0 : 1) +
+		(m.get("$dynamicRef") === undefined ? 0 : 1);
 	const targets = cx.reached(m);
 	// Each reference must reach its target; one seen on the way adds nothing.
 	const read =
-		targets.length === refs.length &&
+		targets.length === refs &&
 		targets.every(
 			(target) =>
 				seen.has(target.uri) ||
@@ -2134,12 +2152,12 @@ function kindsOfMember(cx: Ctx, m: JsonObject): string[] {
 	return typeKinds(cx, m) ?? typelessKinds(cx, m);
 }
 
+/** The keywords that say what a schema is beyond its keywords for kinds. */
+const TYPING = ["type", "$ref", "$dynamicRef", "const", "enum"];
+
 /** Whether a schema is an object without `type`, `$ref`, `$dynamicRef`, `const` or `enum`. */
 function isTypeless(m: Value | undefined): m is JsonObject {
-	return (
-		m instanceof JsonObject &&
-		["type", ...REFS, "const", "enum"].every((k) => m.get(k) === undefined)
-	);
+	return m instanceof JsonObject && TYPING.every((k) => m.get(k) === undefined);
 }
 
 /**
@@ -2207,35 +2225,42 @@ function saidKinds(
 		seen: ReadonlySet<string>,
 	): string[] | undefined => {
 		if (!(s instanceof JsonObject)) return undefined;
-		return cx.inOwnResource(s, () => {
-			const named: string[][] = [];
-			const add = (k: string[] | undefined) => {
-				if (k !== undefined) named.push(k);
-			};
-			if (self) {
-				// The target is the same value; in 3.0 the keywords next to $ref are ignored.
-				for (const target of cx.reached(s))
-					if (!seen.has(target.uri))
-						add(
-							cx.inTarget(target, () =>
-								says(target.value, true, new Set([...seen, target.uri])),
-							),
-						);
-				if (s.get("$ref") !== undefined && !cx.refSiblings) return meet(named);
-				add(typeKinds(cx, s));
-			}
-			add(valueKinds(s));
-			const allOf = s.get("allOf");
-			for (const m of Array.isArray(allOf) ? allOf : [])
-				add(says(m, true, seen));
-			for (const key of ["oneOf", "anyOf"]) {
-				const members = s.get(key);
-				if (!Array.isArray(members)) continue;
-				const each = members.map((m) => says(m, true, seen));
-				if (each.every((k) => k !== undefined)) add([...new Set(each.flat())]);
-			}
-			return meet(named);
-		});
+		const uri = cx.ownResource(s);
+		return uri === undefined
+			? saysHere(s, self, seen)
+			: cx.inResource(uri, () => saysHere(s, self, seen));
+	};
+	const saysHere = (
+		s: JsonObject,
+		self: boolean,
+		seen: ReadonlySet<string>,
+	): string[] | undefined => {
+		const named: string[][] = [];
+		const add = (k: string[] | undefined) => {
+			if (k !== undefined) named.push(k);
+		};
+		if (self) {
+			// The target is the same value; in 3.0 the keywords next to $ref are ignored.
+			for (const target of cx.reached(s))
+				if (!seen.has(target.uri))
+					add(
+						cx.inTarget(target, () =>
+							says(target.value, true, new Set([...seen, target.uri])),
+						),
+					);
+			if (s.get("$ref") !== undefined && !cx.refSiblings) return meet(named);
+			add(typeKinds(cx, s));
+		}
+		add(valueKinds(s));
+		const allOf = s.get("allOf");
+		for (const m of Array.isArray(allOf) ? allOf : []) add(says(m, true, seen));
+		for (const key of ["oneOf", "anyOf"]) {
+			const members = s.get(key);
+			if (!Array.isArray(members)) continue;
+			const each = members.map((m) => says(m, true, seen));
+			if (each.every((k) => k !== undefined)) add([...new Set(each.flat())]);
+		}
+		return meet(named);
 	};
 	const named: string[][] = [];
 	const own = says(v, false, new Set());
@@ -3070,27 +3095,32 @@ function count(v: JsonObject, key: string): number | undefined {
  */
 function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
 	if (!(s instanceof JsonObject)) return false;
-	return cx.inOwnResource(s, () => {
-		// In 3.0 the keywords next to $ref are ignored; only the target counts.
-		const siblings = s.get("$ref") === undefined || cx.refSiblings;
-		if (
-			siblings &&
-			s.get(cx.mode === "write" ? "readOnly" : "writeOnly") === true
-		)
+	const uri = cx.ownResource(s);
+	return uri === undefined
+		? leftOutHere(cx, s, seen)
+		: cx.inResource(uri, () => leftOutHere(cx, s, seen));
+}
+
+function leftOutHere(cx: Ctx, s: JsonObject, seen: Set<string>): boolean {
+	// In 3.0 the keywords next to $ref are ignored; only the target counts.
+	const siblings = s.get("$ref") === undefined || cx.refSiblings;
+	if (
+		siblings &&
+		s.get(cx.mode === "write" ? "readOnly" : "writeOnly") === true
+	)
+		return true;
+	for (const target of cx.reached(s)) {
+		if (seen.has(target.uri)) continue;
+		seen.add(target.uri);
+		if (cx.inTarget(target, () => isLeftOut(cx, target.value, seen)))
 			return true;
-		for (const target of cx.reached(s)) {
-			if (seen.has(target.uri)) continue;
-			seen.add(target.uri);
-			if (cx.inTarget(target, () => isLeftOut(cx, target.value, seen)))
-				return true;
-		}
-		const allOf = s.get("allOf");
-		return (
-			siblings &&
-			Array.isArray(allOf) &&
-			allOf.some((m) => isLeftOut(cx, m, seen))
-		);
-	});
+	}
+	const allOf = s.get("allOf");
+	return (
+		siblings &&
+		Array.isArray(allOf) &&
+		allOf.some((m) => isLeftOut(cx, m, seen))
+	);
 }
 
 /**
@@ -3104,28 +3134,39 @@ function leftOutKeys(
 	seen = new Set<string>(),
 	throughRef = true,
 ): Set<string> {
-	return cx.inOwnResource(v, () => {
-		const keys = new Set<string>();
-		// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
-		// are one schema.
-		if (get(v, "$ref") === undefined || cx.refSiblings) {
-			const props = get(v, "properties");
-			if (props instanceof JsonObject)
-				for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
-			const allOf = get(v, "allOf");
-			for (const m of Array.isArray(allOf) ? allOf : [])
-				for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
-		}
-		for (const target of throughRef ? cx.reached(v) : []) {
-			if (seen.has(target.uri)) continue;
-			seen.add(target.uri);
-			for (const k of cx.inTarget(target, () =>
-				leftOutKeys(cx, target.value, seen),
-			))
-				keys.add(k);
-		}
-		return keys;
-	});
+	const uri = cx.ownResource(v);
+	return uri === undefined
+		? leftOutKeysHere(cx, v, seen, throughRef)
+		: cx.inResource(uri, () => leftOutKeysHere(cx, v, seen, throughRef));
+}
+
+function leftOutKeysHere(
+	cx: Ctx,
+	v: Value,
+	seen: Set<string>,
+	throughRef: boolean,
+): Set<string> {
+	const keys = new Set<string>();
+	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
+	// are one schema.
+	if (get(v, "$ref") === undefined || cx.refSiblings) {
+		const props = get(v, "properties");
+		if (props instanceof JsonObject)
+			for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
+		const allOf = get(v, "allOf");
+		for (const m of Array.isArray(allOf) ? allOf : [])
+			for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
+	}
+	if (!throughRef) return keys;
+	for (const target of cx.reached(v)) {
+		if (seen.has(target.uri)) continue;
+		seen.add(target.uri);
+		for (const k of cx.inTarget(target, () =>
+			leftOutKeys(cx, target.value, seen),
+		))
+			keys.add(k);
+	}
+	return keys;
 }
 
 function object(cx: Ctx, v: JsonObject, at: string): Ty {
