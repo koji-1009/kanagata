@@ -353,8 +353,8 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	// The schema's own keywords drop the literals (from const, enum, members) they reject,
 	// and `not: { enum }` those it lists.
 	const t = inter(out);
-	const members = t.kind === "union" ? t.items : [t];
 	const out$ = excluded(v) ?? [];
+	const members = booleansListed(t.kind === "union" ? t.items : [t], out$);
 	const listed = (m: Ty) =>
 		out$.some(
 			(x) =>
@@ -1374,7 +1374,8 @@ function forbid(t: Ty, keys: string[]): Ty {
  * oneOf admits a value only one member admits, so a literal or `null` two members
  * admit is in neither. It is left out of the members that list it; one that admits it
  * by its kind (`string` for `"a"`) keeps it in their union, as TypeScript cannot leave
- * it out of that. Other members, refs among them, are not counted.
+ * it out of that; `boolean` is `true | false`, which it can. Other members, refs among
+ * them, are not counted.
  */
 function shared(tys: Ty[]): Ty[] {
 	const listed = (t: Ty): Ty[] => (t.kind === "union" ? t.items : [t]);
@@ -1384,15 +1385,26 @@ function shared(tys: Ty[]): Ty[] {
 	const values = tys
 		.flatMap(listed)
 		.filter((m) => m.kind === "lit" || m.kind === "null");
+	const members = tys.map((t) => booleansListed(listed(t), values));
 	const out = new Set<Ty>();
 	for (const value of values) {
-		if (tys.filter((t) => listed(t).some((m) => same(m, value))).length > 1)
+		if (members.filter((ms) => ms.some((m) => same(m, value))).length > 1)
 			out.add(value);
 	}
 	if (out.size === 0) return tys;
 	const drop = [...out];
-	return tys.map((t) =>
-		union(listed(t).filter((m) => !drop.some((d) => same(m, d)))),
+	return members.map((ms) =>
+		union(ms.filter((m) => !drop.some((d) => same(m, d)))),
+	);
+}
+
+/** `members`, `boolean` among them as `true` and `false` where `values` has one of them: TypeScript can leave either out. */
+function booleansListed(members: Ty[], values: Ty[]): Ty[] {
+	const isBoolean = (t: Ty) =>
+		t.kind === "lit" && (t.text === "true" || t.text === "false");
+	if (!values.some(isBoolean)) return members;
+	return members.flatMap((m) =>
+		m.kind === "boolean" ? [literal(true), literal(false)] : [m],
 	);
 }
 
