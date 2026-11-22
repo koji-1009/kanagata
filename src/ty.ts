@@ -200,8 +200,11 @@ export function refs(t: Ty, out = new Set<string>()): Set<string> {
  * The component schemas a type is made of directly: through unions and intersections,
  * not inside an object, array or tuple type, where TypeScript defers a reference.
  */
-export function bareRefs(t: Ty, out: string[] = []): string[] {
-	if (t.kind === "ref") out.push(t.schema);
+export function bareRefs(
+	t: Ty,
+	out: { schema: string; view: View }[] = [],
+): { schema: string; view: View }[] {
+	if (t.kind === "ref") out.push({ schema: t.schema, view: t.view });
 	else if (t.kind === "union" || t.kind === "inter")
 		for (const i of t.items) bareRefs(i, out);
 	return out;

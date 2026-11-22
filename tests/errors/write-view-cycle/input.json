@@ -1,0 +1,18 @@
+{
+  "openapi": "3.1.0",
+  "components": {
+    "schemas": {
+      "Tree": {
+        "anyOf": [
+          { "type": "string" },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/Tree" },
+              { "type": "object", "maxProperties": 0, "required": ["p"], "properties": { "p": { "readOnly": true } } }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
