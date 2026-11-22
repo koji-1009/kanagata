@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+	admits,
 	includes,
 	matching,
 	meet,
@@ -182,6 +183,16 @@ test("whether a template admits every string another does", () => {
 	assert.equal(includes(one("^x-a"), one("^x-")), false, "any text is not a");
 	assert.equal(includes(one("^x-a"), one("^x-b")), false);
 	assert.equal(includes(one("^x-[\\s\\S]*z"), one("^x-")), false);
+});
+
+test("whether a template admits a string", () => {
+	assert.equal(admits(one("^x-[\\s\\S]*-y$"), "x-a-y"), true);
+	assert.equal(
+		admits(one("^x-[\\s\\S]*-y$"), "x-y"),
+		false,
+		"not by the pattern",
+	);
+	assert.equal(admits(one("^x-[ab]$"), "x-b"), true);
 });
 
 test("how the strings of one template stand to another's", () => {

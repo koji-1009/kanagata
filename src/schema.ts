@@ -25,6 +25,7 @@ import {
 	type RawPosition,
 } from "./pointer.ts";
 import {
+	admits,
 	includes,
 	MAX_UNION,
 	matching,
@@ -3164,11 +3165,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	const keyedSignatures = (): Keyed[] => {
 		const out: Keyed[] = [];
 		for (const [i, k] of keyed.entries())
-			signature(
-				out,
-				k.t.key,
-				admitting(exact[i] as Ty, (key) => matches(k.pattern, key)),
-			);
+			signature(out, k.t.key, admitting(exact[i] as Ty, within(k.t)));
 		return out;
 	};
 	const allTypes = (): Ty[] => [
@@ -3200,19 +3197,18 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		// written as templates (see `meet`). Where those are too many to read, it stays.
 		const signatures: Keyed[] = [];
 		for (const [i, k] of keyed.entries()) {
-			const applies = (key: string) => matches(k.pattern, key);
 			const both = own.some((n) => includes(n, k.t))
 				? [k.t]
 				: own.map((n) => meet(n, k.t));
 			if (both.some((m) => m === undefined))
-				signature(signatures, k.t.key, admitting(exact[i] as Ty, applies));
+				signature(signatures, k.t.key, admitting(exact[i] as Ty, within(k.t)));
 			else
 				for (const t of (both as (Template | Template[])[]).flat())
 					if (t === k.t)
-						signature(signatures, t.key, admitting(exact[i] as Ty, applies));
+						signature(signatures, t.key, admitting(exact[i] as Ty, within(t)));
 					else if (strings(t) !== undefined) name(t);
 					else
-						signature(signatures, t.key, admitting(inter(types(t)), applies));
+						signature(signatures, t.key, admitting(inter(types(t)), within(t)));
 		}
 		// A template whose keys a pattern's include has that pattern's signature, and one a
 		// pattern of every key, or one no template says, matches has their types:
@@ -3229,11 +3225,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 			if (all.length === 0 && additional?.kind === "never") continue;
 			const ty =
 				all.length > 0 ? inter(all) : union([additional ?? UNKNOWN, ...others]);
-			signature(
-				out,
-				t.key,
-				admitting(ty, () => true),
-			);
+			signature(out, t.key, admitting(ty, within(t)));
 		}
 		if (out.length === 0) return shut();
 		return { kind: "map", props, keyed: out };
@@ -3284,6 +3276,12 @@ function keyPattern(names: Value | undefined): Ty | undefined {
  * A closed object, its properties all it can have: `minProperties` requires that many
  * of them (a union over which), `maxProperties` leaves out the others.
  */
+/**
+ * The properties a template's index signature applies to: those whose key it admits.
+ * Outside `object`, which would make the closure on every call.
+ */
+const within = (t: Template) => (key: string) => admits(t, key);
+
 function counted(v: JsonObject, props: Prop[]): Ty {
 	if (props.length === 0) return { kind: "map", props: [], index: NEVER };
 	const optional = props.filter((p) => p.optional).map((p) => p.key);

@@ -392,6 +392,16 @@ export function includes(outer: Template, inner: Template): boolean {
 	return contains(outer.seq, inner.seq, 0, 0);
 }
 
+/** Whether a template admits a string. */
+export function admits(t: Template, key: string): boolean {
+	return contains(
+		t.seq,
+		[...key].map((c) => ({ set: [c] })),
+		0,
+		0,
+	);
+}
+
 /** How the strings of template `a` stand to those of `b`: all among them, some, or none. */
 export function relation(
 	a: Template,

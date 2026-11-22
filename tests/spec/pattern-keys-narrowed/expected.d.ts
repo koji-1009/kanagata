@@ -66,7 +66,7 @@ export type NamesWithProperty = {
 /** The keys both admit: x-y and those of x-${string}-y. */
 export type NamesSomeKeysOfBoth = {
   "x-y"?: number;
-  [key: `x-${string}-y`]: number | undefined;
+  [key: `x-${string}-y`]: number;
   [key: `x-${string}`]: string | number | undefined;
 };
 
