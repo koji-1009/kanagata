@@ -563,9 +563,8 @@ const KIND: Record<string, Ty> = {
  */
 function passing(cx: Ctx, v: JsonObject, members: Value[], tys: Ty[]): Ty[] {
 	return tys.map((ty, i) => {
-		const m = members[i];
-		if (!(m instanceof JsonObject) || !typeless(m)) return ty;
-		return widen(cx, v, hasObjectKeywords(m) ? "object" : "array", ty);
+		const kind = typelessKind(members[i] as Value);
+		return kind === undefined ? ty : widen(cx, v, kind, ty);
 	});
 }
 
@@ -909,8 +908,8 @@ function sameValue(a: Value, b: Value): boolean {
  * it can be (their `type`s; any kind where none has one).
  */
 function anyKind(cx: Ctx, v: JsonObject, m: Value, ty: Ty): Ty {
-	if (!(m instanceof JsonObject) || !typeless(m)) return ty;
-	return orOther(cx, v, hasObjectKeywords(m) ? "object" : "array", ty);
+	const kind = typelessKind(m);
+	return kind === undefined ? ty : orOther(cx, v, kind, ty);
 }
 
 /**
@@ -1267,14 +1266,29 @@ function keyNames(names: Value | undefined): string[] | undefined {
 	return strings.length > 0 ? strings : undefined;
 }
 
-/** Whether a schema says nothing but keywords of one kind, without `type`. */
-function typeless(m: JsonObject): boolean {
-	return (
-		["type", "$ref", "const", "enum", "allOf", "oneOf", "anyOf"].every(
-			(k) => m.get(k) === undefined,
-		) &&
-		(hasObjectKeywords(m) || hasArrayKeywords(m))
-	);
+/**
+ * The kind a schema without `type` constrains where it says nothing but keywords of that
+ * kind (`dependentRequired`, `dependentSchemas` and `propertyNames` for objects, `contains`
+ * for arrays, as well as those that make a value one); undefined for any other.
+ */
+function typelessKind(m: Value): "object" | "array" | undefined {
+	if (
+		!(m instanceof JsonObject) ||
+		["type", "$ref", "const", "enum", "allOf", "oneOf", "anyOf"].some(
+			(k) => m.get(k) !== undefined,
+		)
+	)
+		return undefined;
+	if (
+		hasObjectKeywords(m) ||
+		["dependentRequired", "dependentSchemas", "propertyNames"].some(
+			(k) => m.get(k) !== undefined,
+		)
+	)
+		return "object";
+	return hasArrayKeywords(m) || m.get("contains") !== undefined
+		? "array"
+		: undefined;
 }
 
 /** Members, converted knowing the keys the group leaves out of this view (see `leftOutTarget`). */

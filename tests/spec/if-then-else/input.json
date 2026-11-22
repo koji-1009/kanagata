@@ -20,6 +20,13 @@
         "if": { "required": ["a"] },
         "then": { "required": ["b"] }
       },
+      "ByKeyOrString": {
+        "description": "Object keywords alone, dependentRequired among them, let the strings type names pass.",
+        "type": ["object", "string"],
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "if": { "required": ["a"] },
+        "then": { "dependentRequired": { "a": ["b"] } }
+      },
       "InAllOf": {
         "description": "Each member's if reads the values the schema declares, through a $ref too.",
         "type": "object",

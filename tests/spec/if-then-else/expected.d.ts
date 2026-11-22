@@ -8,6 +8,7 @@ export interface schemas {
   Kind: Kind;
   ByKind: ByKind;
   ByKey: ByKey;
+  ByKeyOrString: ByKeyOrString;
   InAllOf: InAllOf;
   ByType: ByType;
   Nothing: Nothing;
@@ -35,6 +36,20 @@ export type ByKey = {
   a?: never;
   b?: string;
 };
+
+/** Object keywords alone, dependentRequired among them, let the strings type names pass. */
+export type ByKeyOrString = ({
+  a?: string;
+  b?: string;
+} | string) & (({
+  a: {} | null;
+} | string) & ({
+  a?: never;
+} | {
+  b: {} | null;
+} | string) | {
+  a?: never;
+});
 
 /** Each member's if reads the values the schema declares, through a $ref too. */
 export type InAllOf = {
