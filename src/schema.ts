@@ -12,17 +12,34 @@ import {
 	get,
 	JsonNumber,
 	JsonObject,
-	str,
 	toJson,
 	unescapeToken,
 	type Value,
 } from "./json.ts";
-import { type Ctx, child, DiagError, type RawPosition } from "./pointer.ts";
-import { MAX_UNION, patternType } from "./template.ts";
+import {
+	type Ctx,
+	child,
+	DiagError,
+	type Located,
+	type Place,
+	type RawPosition,
+} from "./pointer.ts";
+import {
+	admits,
+	includes,
+	MAX_UNION,
+	matching,
+	meet,
+	patternType,
+	strings,
+	type Template,
+	templates,
+} from "./template.ts";
 import {
 	array as arrayTy,
 	BLOB,
 	BOOLEAN,
+	equal,
 	equalValues,
 	INTEGER,
 	inter,
@@ -72,6 +89,14 @@ function unevaluated(v: JsonObject, key: string): Value | undefined {
 const ITEM_APPLICATORS = [...APPLICATORS, "contains"];
 
 /**
+ * The most cases of what evaluates the items (`itemCases`) read where branches have
+ * `contains`: each set of them is one, so they double with each such branch. They are
+ * members of one union, kept to as many as a union kanagata builds (`MAX_UNION`); time
+ * grows with them about in proportion (65,536 take about 3 s).
+ */
+const MAX_CASES = MAX_UNION;
+
+/**
  * Accepts a `$schema` or `jsonSchemaDialect` that names the dialect kanagata reads: JSON
  * Schema 2020-12, or the OAS dialect built on it. Another dialect's keywords mean other
  * things (draft-07's array `items`, `dependencies`), so it is an error.
@@ -109,11 +134,11 @@ export function schema(cx: Ctx, v: Value, at: string): Ty {
 	try {
 		return cx.inSchema(() =>
 			cx.withRaw(undefined, () => {
-				// A schema with $id is a resource: $refs inside it resolve against its URI.
-				const id = v.str("$id");
-				if (id !== undefined && cx.refSiblings)
-					return cx.inResource(cx.baseOf(id), () => convert(cx, v, at));
-				return convert(cx, v, at);
+				// Most schemas are no resource of their own: they are read where they are.
+				const uri = cx.ownResource(v);
+				return uri === undefined
+					? convert(cx, v, at)
+					: cx.inResource(uri, () => convert(cx, v, at));
 			}),
 		);
 	} finally {
@@ -132,11 +157,22 @@ function binaryAt(
 	seen = new Set<string>(),
 ): boolean {
 	if (!(v instanceof JsonObject)) return false;
-	const r = v.str("$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined && !seen.has(target.uri)) {
+	const uri = cx.ownResource(v);
+	return uri === undefined
+		? bytesIn(cx, v, pos, seen)
+		: cx.inResource(uri, () => bytesIn(cx, v, pos, seen));
+}
+
+function bytesIn(
+	cx: Ctx,
+	v: JsonObject,
+	pos: RawPosition,
+	seen: Set<string>,
+): boolean {
+	for (const target of cx.reached(v)) {
+		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
-		if (cx.withBase(target.base, () => binaryAt(cx, target.value, pos, seen)))
+		if (cx.inTarget(target, () => binaryAt(cx, target.value, pos, seen)))
 			return true;
 	}
 	const inPlace = ["allOf", "oneOf", "anyOf"].flatMap((k) => {
@@ -166,8 +202,15 @@ function binaryAt(
 	);
 }
 
+/** The keywords that reach another schema for the same value (see `Ctx.reached`). */
+const REFS = new Set(["$ref", "$dynamicRef"]);
+
 function convert(cx: Ctx, v: JsonObject, at: string): Ty {
-	return parts(cx, v, at);
+	// The schemas in it with `contains` read what its `unevaluatedItems` says of their items.
+	const said = saying(cx, v, at);
+	return said === undefined
+		? parts(cx, v, at)
+		: cx.withSaid(v, said, () => parts(cx, v, at));
 }
 
 /**
@@ -203,6 +246,17 @@ function docText(
 	return desc === undefined ? "@deprecated" : `${desc}\n@deprecated`;
 }
 
+/** What a `$ref` or `$dynamicRef` of `v` refers to: the same value, the keywords of `v` around it. */
+function referenced(cx: Ctx, v: JsonObject, ref: string, at: string): Ty {
+	// The keys left out beside the target: those it leaves out itself it is written without anyway.
+	const beside = leftOutKeys(cx, v, new Set(), false);
+	for (const k of cx.leftOutIn(v)) beside.add(k);
+	return cx.withAround(
+		v,
+		() => leftOutTarget(cx, ref, at, beside) ?? reference(cx, ref, at),
+	);
+}
+
 /**
  * `nullable: true` (3.0 only; 3.1 has no such keyword) adds `null` to the `type` next
  * to it, and only then; the other keywords still apply to `null` (OAS 3.0.3). With
@@ -212,41 +266,34 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const nullable = !cx.refSiblings && v.get("nullable") === true;
 	const loose = nullable && cx.looseNullable;
 	const out: Ty[] = [];
-	// A member that requires a key this closed object forbids admits no value.
+	// A member that requires a key this closed object forbids admits no object: no value,
+	// or its arrays where its `type` or its keywords say it can be one. (A member that
+	// requires a key is an object.)
 	const closed = closedKeys(v);
 	const admitted = (members: Value[], tys: Ty[]) =>
 		closed === undefined
 			? tys
 			: tys.map((t, i) =>
 					requiredKeys(cx, members[i] as Value).some((k) => !closed.has(k))
-						? NEVER
+						? kindsOfMember(cx, members[i] as JsonObject).includes("array")
+							? inter([t, KIND.array as Ty])
+							: NEVER
 						: t,
 				);
 	const r = v.str("$ref");
 	if (r !== undefined) {
-		// The keys left out beside the target: those it leaves out itself it is written without anyway.
-		const beside = leftOutKeys(cx, v, new Set(), false);
-		for (const k of cx.leftOutIn(v)) beside.add(k);
-		// The target is the same value, this schema's keywords around it.
-		const target = cx.withAround(
-			v,
-			() => leftOutTarget(cx, r, at, beside) ?? reference(cx, r, at),
-		);
+		const t = referenced(cx, v, r, at);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
 		// are ignored, nullable among them unless loose.
-		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
-		out.push(...admitted([v], [target]));
+		if (!cx.refSiblings) return loose ? union([t, NULL]) : t;
+		out.push(...admitted([v], [t]));
 	}
 	// $dynamicRef is $ref, except where it reaches a $dynamicAnchor: then it reaches the
 	// one of that name in the outermost resource the value was reached through.
 	const dr = v.str("$dynamicRef");
 	if (dr !== undefined) {
-		const target = cx.locate(dr, at);
-		const name = new URL(target.uri).hash.slice(1);
-		const outer = cx.isDynamicAnchor(target.uri)
-			? cx.dynamicTarget(name)
-			: undefined;
-		out.push(cx.withAround(v, () => reference(cx, outer ?? dr, at)));
+		const outer = cx.dynamicAnchorOf(cx.locate(dr, at));
+		out.push(...admitted([v], [referenced(cx, v, outer ?? dr, at)]));
 	}
 	const c = v.get("const");
 	if (c !== undefined) out.push(literal(c));
@@ -285,11 +332,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 			),
 		);
 		out.push(
-			union(
-				key === "oneOf"
-					? shared(exclusive(cx, members, tys, child(at, key), group))
-					: tys,
-			),
+			union(key === "oneOf" ? shared(exclusive(cx, members, tys, group)) : tys),
 		);
 	}
 	// A key present asks what its dependent schema asks: without the key, or that schema.
@@ -309,7 +352,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 				widen(
 					cx,
 					v,
-					"object",
+					["object"],
 					union([
 						{ kind: "object", props: [{ key, ty: NEVER, optional: true }] },
 						tys[i] as Ty,
@@ -354,7 +397,8 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	// The schema's own keywords drop the literals (from const, enum, members) they reject,
 	// and `not: { enum }` those it lists.
 	const t = inter(out);
-	const out$ = excluded(v) ?? [];
+	const not = excluded(v) ?? NOTHING_EXCLUDED;
+	const out$ = not === NOTHING_EXCLUDED ? NO_TYS : not.map((x) => x.ty);
 	const members = booleansListed(t.kind === "union" ? t.items : [t], out$);
 	const listed = (m: Ty) =>
 		out$.some(
@@ -371,11 +415,27 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const keep = (m: Ty) => admits(m) && !listed(m);
 	const kept = members.every(keep) ? t : union(members.filter(keep));
 	// A value `not` lists that a member may admit other than by listing it (`string` for
-	// "a", a reference) stays.
-	if (out$.some((x) => members.some((m) => mayAdmit(m, x))))
+	// "a", a reference) stays in that member: `not` is ignored where it leaves out nothing,
+	// and for those values where it leaves out others.
+	const stay = not.filter((x) => members.some((m) => mayAdmit(m, x.ty)));
+	if (stay.length > 0 && !members.some(listed))
 		cx.warn(child(at, "not"), "not cannot be expressed in TypeScript; ignored");
+	else
+		for (const x of stay)
+			cx.warn(
+				`${child(at, "not")}/${x.at}`,
+				"not: leaving out this value cannot be expressed in TypeScript; ignored",
+			);
 	return loose ? union([kept, NULL]) : kept;
 }
+
+/**
+ * What most schemas, which have no `not`, exclude: one list for all of them. A list made
+ * anew for each can be of another kind of array than those `parts` was compiled for, and
+ * the engine then compiles `parts` again.
+ */
+const NOTHING_EXCLUDED: readonly { ty: Ty; at: string }[] = [];
+const NO_TYS: readonly Ty[] = [];
 
 /**
  * The keys a closed object admits (`additionalProperties: false`, no
@@ -393,16 +453,25 @@ function closedKeys(v: JsonObject): Set<string> | undefined {
 }
 
 /**
- * The keys a schema requires: its own `required`, and those of the schema its `$ref`
- * reaches and of its `allOf` members.
+ * The keys a schema requires: its own `required`, and those of the schemas its `$ref`
+ * and `$dynamicRef` reach and of its `allOf` members.
  */
 function requiredKeys(cx: Ctx, s: Value, seen = new Set<string>()): string[] {
 	return keysOf(cx, s, seen, false);
 }
 
-/** The keys a schema names, as properties or as required, there or through `$ref` and `allOf`. */
+/** The keys a schema names, as properties or as required, there or through `$ref`, `$dynamicRef` and `allOf`. */
 function namedKeys(cx: Ctx, s: Value, seen = new Set<string>()): string[] {
 	return keysOf(cx, s, seen, true);
+}
+
+/**
+ * The keys the schemas that apply to the value a schema is name, as properties or as
+ * required: there, through `$ref`, and in its members, `if` / `then` / `else` and dependent
+ * schemas, wherever they match.
+ */
+function valueKeys(cx: Ctx, s: Value): string[] {
+	return keysOf(cx, s, new Set(), true, true);
 }
 
 function keysOf(
@@ -410,6 +479,20 @@ function keysOf(
 	s: Value,
 	seen: Set<string>,
 	properties: boolean,
+	everywhere = false,
+): string[] {
+	const uri = cx.ownResource(s);
+	return uri === undefined
+		? ownKeysOf(cx, s, seen, properties, everywhere)
+		: cx.inResource(uri, () => ownKeysOf(cx, s, seen, properties, everywhere));
+}
+
+function ownKeysOf(
+	cx: Ctx,
+	s: Value,
+	seen: Set<string>,
+	properties: boolean,
+	everywhere: boolean,
 ): string[] {
 	const req = get(s, "required");
 	const keys = Array.isArray(req)
@@ -419,136 +502,175 @@ function keysOf(
 	if (properties && props instanceof JsonObject)
 		keys.push(...props.entries.map(([k]) => k));
 	const allOf = get(s, "allOf");
-	for (const m of Array.isArray(allOf) ? allOf : [])
-		keys.push(...keysOf(cx, m, seen, properties));
-	const r = str(s, "$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target === undefined || seen.has(target.uri)) return keys;
-	seen.add(target.uri);
-	// The target's own $refs resolve against the document it is in.
-	return [
-		...keys,
-		...cx.withBase(target.base, () =>
-			keysOf(cx, target.value, seen, properties),
-		),
-	];
+	const members = everywhere ? applied(s) : Array.isArray(allOf) ? allOf : [];
+	for (const m of members)
+		keys.push(...keysOf(cx, m, seen, properties, everywhere));
+	for (const target of cx.reached(s)) {
+		if (seen.has(target.uri)) continue;
+		seen.add(target.uri);
+		keys.push(
+			...cx.inTarget(target, () =>
+				keysOf(cx, target.value, seen, properties, everywhere),
+			),
+		);
+	}
+	return keys;
+}
+
+/** The schemas that apply to the same value as a schema where they match: its members, `if` / `then` / `else` and dependent schemas. */
+function applied(s: Value): Value[] {
+	const out: Value[] = [];
+	for (const key of ["allOf", "oneOf", "anyOf"]) {
+		const members = get(s, key);
+		if (Array.isArray(members)) out.push(...members);
+	}
+	for (const key of ["if", "then", "else"]) {
+		const branch = get(s, key);
+		if (branch !== undefined) out.push(branch);
+	}
+	const ds = get(s, "dependentSchemas");
+	if (ds instanceof JsonObject) out.push(...ds.entries.map(([, d]) => d));
+	return out;
 }
 
 /**
- * The keys a closed object's `$ref` target (3.1, 3.2) and members name that it does not
- * declare: it admits none of them.
+ * The keys the schemas that apply to the same value as a closed object name (its `$ref`
+ * and `$dynamicRef` targets in 3.1 and 3.2, members, `if` / `then` / `else`, dependent
+ * schemas) that it does not declare: it admits none of them.
  */
 function outsideKeys(cx: Ctx, v: JsonObject, closed: Set<string>): string[] {
-	const named: string[] = [];
-	const r = v.str("$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined)
-		named.push(...cx.withBase(target.base, () => namedKeys(cx, target.value)));
-	for (const key of ["allOf", "oneOf", "anyOf"]) {
-		const members = v.get(key);
-		for (const m of Array.isArray(members) ? members : [])
-			named.push(...namedKeys(cx, m));
-	}
-	return [...new Set(named)].filter((k) => !closed.has(k));
+	return [...new Set(valueKeys(cx, v))].filter((k) => !closed.has(k));
 }
 
-/** The keys a closed member admits: its own, or those of the closed schema its `$ref` alone reaches. */
+/** The keys a closed member admits: its own, or those of the closed schema its `$ref` or `$dynamicRef` alone reaches. */
 function closedMember(cx: Ctx, s: Value): Set<string> | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const r = s.str("$ref");
-	if (
-		r === undefined ||
-		!s.entries.every(([k]) => k === "$ref" || isAnnotation(k))
-	)
-		return closedKeys(s);
-	const target = cx.tryLocate(r);
-	return target?.value instanceof JsonObject
+	const target = onlyTarget(cx, s);
+	if (target === undefined) return closedKeys(s);
+	return target.value instanceof JsonObject
 		? closedKeys(target.value)
 		: undefined;
 }
 
 /**
- * The array types of the components among `out` that are arrays, where another array
- * meets them: the reference stays, and its type beside it lets the items read as it
- * says (`Tags & [unknown?]` is `Tags & [string?]`). TypeScript reads an item of an
- * intersection of arrays as one member's alone.
+ * What a schema that is only a reference reaches: one `$ref` or `$dynamicRef`, with
+ * annotations at most. undefined for any other schema.
+ */
+function onlyTarget(cx: Ctx, s: JsonObject): Located | undefined {
+	const targets = cx.reached(s);
+	return targets.length === 1 &&
+		s.entries.every(([k]) => REFS.has(k) || isAnnotation(k))
+		? targets[0]
+		: undefined;
+}
+
+/** The array types a component admits, and the types of the other values it admits. */
+type Arrays = { ty: Ty; rest: Ty[] };
+
+/**
+ * The types of the components among `out` that admit arrays, where an array meets
+ * them: the reference stays, and its type beside it lets the items read as it says
+ * (`Tags & [unknown?]` is `Tags & [string?]`). TypeScript reads an item of an
+ * intersection of arrays as one member's alone. Where something there admits arrays
+ * only, a component's other values (`null` of `string[] | null`) meet none of it, and
+ * its arrays alone are put beside it.
  */
 function arrayTargets(cx: Ctx, out: Ty[], at: string): Ty[] {
+	// Each part is an array or a reference at most: one part is never two of them.
+	if (out.length < 2) return [];
 	const isArray = (t: Ty) => t.kind === "array" || t.kind === "tuple";
-	const arrays = out.filter(isArray).length;
+	const arrays = out.filter(
+		(t) => isArray(t) || (t.kind === "union" && t.items.some(isArray)),
+	);
 	const refs = out.filter(
 		(t): t is Extract<Ty, { kind: "ref" }> =>
 			t.kind === "ref" && cx.schemas.has(t.schema),
 	);
-	if (refs.length + arrays < 2) return [];
-	const targets: Ty[] = [];
+	if (refs.length + arrays.length < 2) return [];
+	const targets: Arrays[] = [];
 	for (const t of refs) {
 		const target = arrayOf(cx, t.schema, at);
 		if (target !== undefined) targets.push(target);
 	}
-	return targets.length > 0 && targets.length + arrays > 1 ? targets : [];
+	if (targets.length + arrays.length < 2) return [];
+	const only = arrays.some(isArray) || targets.some((t) => t.rest.length === 0);
+	return targets.map((t) => (only ? t.ty : union([t.ty, ...t.rest])));
 }
 
-/** The array type of a component that admits arrays only, through the components it is a `$ref` to. */
-function arrayOf(cx: Ctx, name: string, at: string): Ty | undefined {
-	const { value, base, uri, where } = cx.withBase(cx.documentBase, () =>
+/** The arrays of a component that names arrays, through the components it is a `$ref` to. */
+function arrayOf(cx: Ctx, name: string, at: string): Arrays | undefined {
+	const located = cx.withBase(cx.documentBase, () =>
 		cx.locate(SCHEMA_PREFIX + escapeToken(name), at),
 	);
-	// Only an array schema has an array type; others are not converted for it.
-	if (!cx.withBase(base, () => arraysOnly(cx, value)) || !cx.enter(uri))
+	const { value, uri, where } = located;
+	// Only a schema that names arrays has array types; others are not converted for them.
+	if (!cx.inTarget(located, () => namesArrays(cx, value)) || !cx.enter(uri))
 		return undefined;
 	try {
-		const target = cx.withBase(base, () => schema(cx, value, where));
-		if (target.kind === "array" || target.kind === "tuple") return target;
-		return target.kind === "ref" && cx.schemas.has(target.schema)
-			? arrayOf(cx, target.schema, at)
-			: undefined;
+		return arraysIn(
+			cx,
+			cx.inTarget(located, () => schema(cx, value, where)),
+			at,
+		);
 	} finally {
 		cx.leave();
 	}
 }
 
+/** The arrays of a type: an array or tuple, those of a component it refers to, or those among a union's members. */
+function arraysIn(cx: Ctx, t: Ty, at: string): Arrays | undefined {
+	if (t.kind === "array" || t.kind === "tuple") return { ty: t, rest: [] };
+	if (t.kind === "ref" && cx.schemas.has(t.schema))
+		return arrayOf(cx, t.schema, at);
+	if (t.kind !== "union") return undefined;
+	const arrays: Ty[] = [];
+	const rest: Ty[] = [];
+	for (const m of t.items) {
+		const found = arraysIn(cx, m, at);
+		if (found === undefined) rest.push(m);
+		else {
+			arrays.push(found.ty);
+			rest.push(...found.rest);
+		}
+	}
+	return arrays.length === 0 ? undefined : { ty: union(arrays), rest };
+}
+
 /**
- * Whether a schema says it admits arrays only, by any of: `type` naming `array` alone,
- * `const` / `enum` arrays, array keywords without `type`, a `not` that leaves arrays or
- * nothing, a `$ref` to such a schema, an `allOf` member that is one, or `oneOf` / `anyOf`
- * members that all are; `false` admits nothing, so arrays only.
+ * Whether a schema names arrays, so that its type may have array types: by a `type` that
+ * names `array`, `const` / `enum` with an array, array keywords without `type`, a `$ref`
+ * or `$dynamicRef` to such a schema, or an `allOf`, `oneOf` or `anyOf` member that is one.
  */
-function arraysOnly(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
-	// false admits no value, so none but arrays.
-	if (!(v instanceof JsonObject)) return v === false;
-	const r = v.str("$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	const viaRef =
-		target !== undefined &&
-		!seen.has(target.uri) &&
-		cx.withBase(target.base, () =>
-			arraysOnly(cx, target.value, new Set([...seen, target.uri])),
-		);
+function namesArrays(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
+	if (!(v instanceof JsonObject)) return false;
+	const uri = cx.ownResource(v);
+	return uri === undefined
+		? ownNamesArrays(cx, v, seen)
+		: cx.inResource(uri, () => ownNamesArrays(cx, v, seen));
+}
+
+function ownNamesArrays(cx: Ctx, v: JsonObject, seen: Set<string>): boolean {
+	let viaRef = false;
+	for (const target of cx.reached(v))
+		viaRef ||=
+			!seen.has(target.uri) &&
+			cx.inTarget(target, () =>
+				namesArrays(cx, target.value, new Set([...seen, target.uri])),
+			);
 	// In 3.0 the keywords next to $ref are ignored.
-	if (viaRef || (r !== undefined && !cx.refSiblings)) return viaRef;
-	// A value meets every keyword, so one that admits arrays only is enough.
+	if (viaRef || (v.get("$ref") !== undefined && !cx.refSiblings)) return viaRef;
 	const type = v.get("type");
-	if (
-		type === "array" ||
-		(Array.isArray(type) && type.every((t) => t === "array"))
-	)
+	if (type === "array" || (Array.isArray(type) && type.includes("array")))
 		return true;
 	const c = v.get("const");
 	const values = c === undefined ? v.get("enum") : [c];
-	if (Array.isArray(values) && values.every((x) => Array.isArray(x)))
+	if (Array.isArray(values) && values.some((x) => Array.isArray(x)))
 		return true;
 	if (type === undefined && hasArrayKeywords(v)) return true;
-	const n = v.get("not");
-	const left = n === undefined ? undefined : negation(n);
-	if (left === NEVER || left?.kind === "array") return true;
-	const allOf = v.get("allOf");
-	if (Array.isArray(allOf) && allOf.some((m) => arraysOnly(cx, m, seen)))
-		return true;
-	return ["oneOf", "anyOf"].some((k) => {
+	return ["allOf", "oneOf", "anyOf"].some((k) => {
 		const members = v.get(k);
 		return (
-			Array.isArray(members) && members.every((m) => arraysOnly(cx, m, seen))
+			Array.isArray(members) && members.some((m) => namesArrays(cx, m, seen))
 		);
 	});
 }
@@ -564,19 +686,138 @@ const KIND: Record<string, Ty> = {
 	object: RECORD,
 };
 
+/** The kinds of JSON value, `integer` among the numbers, in the order types are written. */
+const ALL_KINDS = [
+	"string",
+	"number",
+	"integer",
+	"boolean",
+	"null",
+	"array",
+	"object",
+];
+
 /**
- * A member without `type` whose keywords are all of one kind (`{ required: [a] }`,
- * `{ minItems: 1 }`) constrains only values of that kind. Where the schema's own `type`
- * (or `nullable: true`, 3.0) names other kinds, their values pass the member.
+ * The values of a kind as a schema's keywords for it say: its lengths and `pattern` for
+ * strings, its bounds for numbers; any value of the kind for the others.
+ */
+function ofKind(cx: Ctx, s: JsonObject, kind: string): Ty {
+	if (kind === "string") return text(s);
+	if (kind === "number" || kind === "integer")
+		return numeric(cx, s, kind === "integer");
+	return KIND[kind] as Ty;
+}
+
+/**
+ * The values of a kind that a member `typelessKinds` reads admits: every one for `true`
+ * (and anything else read as a schema that admits every value), none for `false`;
+ * otherwise those its keywords for the kind admit, its `$ref` target (that alone in 3.0)
+ * and `$dynamicRef` target,
+ * all its `allOf` members, one of its `anyOf` members and one of its `oneOf` members (a
+ * literal or `null` two of them admit is in none; see `shared`), and, where TypeScript
+ * can say them, those its `not` leaves (`negation`, `excluded`) and its `if` / `then` /
+ * `else` admit (`refuted`). A `not` or `if` it cannot say is ignored, as the member's own
+ * type ignores it, with a warning. `around` are the schemas `m` is a member of.
+ */
+function passed(
+	cx: Ctx,
+	m: Value,
+	kind: string,
+	around: Value[],
+	seen: ReadonlySet<string> = new Set(),
+): Ty {
+	if (!(m instanceof JsonObject))
+		return m === false ? NEVER : (KIND[kind] as Ty);
+	const uri = cx.ownResource(m);
+	return uri === undefined
+		? ownPassed(cx, m, kind, around, seen)
+		: cx.inResource(uri, () => ownPassed(cx, m, kind, around, seen));
+}
+
+function ownPassed(
+	cx: Ctx,
+	m: JsonObject,
+	kind: string,
+	around: Value[],
+	seen: ReadonlySet<string>,
+): Ty {
+	const inner = (n: Value, s = seen) => passed(cx, n, kind, [m, ...around], s);
+	const parts: Ty[] = [];
+	for (const target of cx.reached(m))
+		if (!seen.has(target.uri))
+			parts.push(
+				cx.inTarget(target, () =>
+					inner(target.value, new Set([...seen, target.uri])),
+				),
+			);
+	// In 3.0 the keywords next to $ref are ignored.
+	if (m.get("$ref") !== undefined && !cx.refSiblings) return inter(parts);
+	const each = (key: string): Ty[] | undefined => {
+		const members = m.get(key);
+		return Array.isArray(members) ? members.map((n) => inner(n)) : undefined;
+	};
+	const any = each("anyOf");
+	const one = each("oneOf");
+	parts.push(
+		ofKind(cx, m, kind),
+		...(each("allOf") ?? []),
+		...(any === undefined ? [] : [union(any)]),
+		...(one === undefined ? [] : [union(shared(one))]),
+	);
+	const n = m.get("not");
+	const left = n === undefined ? undefined : negation(n);
+	if (left !== undefined) parts.push(left);
+	// As `then` says where `if` admits the value, and as `else` says where it does not.
+	const cond = m.get("if");
+	const not =
+		cond === undefined ||
+		(m.get("then") === undefined && m.get("else") === undefined)
+			? undefined
+			: refuted(cx, cond, [m, ...around]);
+	if (not !== undefined)
+		parts.push(
+			union([
+				inter([inner(cond as Value), inner(m.get("then") ?? true)]),
+				...(not.kind === "union" ? not.items : [not]).map((x) =>
+					inter([x, inner(m.get("else") ?? true)]),
+				),
+			]),
+		);
+	const t = inter(parts);
+	// `not: { enum }` and `not: { const }` leave out the literals they list.
+	const out = excluded(m)?.map((x) => x.ty);
+	if (out === undefined) return t;
+	return union(
+		(t.kind === "union" ? t.items : [t]).filter(
+			(x) =>
+				!out.some(
+					(o) =>
+						o.kind === x.kind &&
+						(x.kind !== "lit" || (o as { text: string }).text === x.text),
+				),
+		),
+	);
+}
+
+/**
+ * A member without `type` whose object or array keywords (`{ required: [a] }`,
+ * `{ minItems: 1 }`), or those of its members, make it those kinds constrains only values
+ * of those kinds. Where the schema is of other kinds (its `type`, or `nullable: true` in
+ * 3.0; `severalKinds` without `type`), their values pass the member as its keywords and
+ * its members' for them say.
  */
 function passing(cx: Ctx, v: JsonObject, members: Value[], tys: Ty[]): Ty[] {
 	return tys.map((ty, i) => {
-		const kind = typelessKind(members[i] as Value);
-		return kind === undefined ? ty : widen(cx, v, kind, ty);
+		const m = members[i] as Value;
+		const kinds = typelessKinds(cx, m);
+		return kinds.length === 0 ? ty : widen(cx, v, kinds, ty, m);
 	});
 }
 
-/** The kinds `type` names, and null where 3.0's `nullable: true` adds it; undefined without `type`. */
+/**
+ * The kinds `type` names, and null where 3.0's `nullable: true` adds it; every kind where
+ * it names one JSON Schema does not have; undefined without `type`.
+ */
 function typeKinds(cx: Ctx, v: JsonObject): string[] | undefined {
 	const t = v.get("type");
 	const kinds =
@@ -586,19 +827,37 @@ function typeKinds(cx: Ctx, v: JsonObject): string[] | undefined {
 				? t.filter((k): k is string => typeof k === "string")
 				: undefined;
 	if (kinds === undefined) return undefined;
+	// A name JSON Schema does not have admits every value (see `typed`).
+	if (kinds.some((k) => !Object.hasOwn(KIND, k))) return ALL_KINDS;
 	return !cx.refSiblings && v.get("nullable") === true
 		? [...kinds, "null"]
 		: kinds;
 }
 
-/** `ty`, a constraint on values of `kind` only, with the other kinds `type` names, which pass it. */
-function widen(cx: Ctx, v: JsonObject, kind: string, ty: Ty): Ty {
-	const kinds = typeKinds(cx, v);
-	if (kinds === undefined) return ty;
+/**
+ * `ty`, a constraint on values of `kinds` only, with the other kinds the schema is (those
+ * `type` names; without it, `severalKinds`), which pass it as the keywords of `v` for them
+ * say, or as those of `m`, the member `ty` is of, and of its members (`passed`).
+ */
+function widen(cx: Ctx, v: JsonObject, kinds: string[], ty: Ty, m?: Value): Ty {
+	const named = typeKinds(cx, v) ?? saidKinds(cx, v, false) ?? severalKinds(v);
+	if (named === undefined) return ty;
 	return union([
 		ty,
-		...kinds.filter((k) => k !== kind && k in KIND).map((k) => KIND[k] as Ty),
+		...named
+			.filter((k) => !kinds.includes(k))
+			.map((k) =>
+				m === undefined
+					? ofKind(cx, v, k)
+					: passed(cx, m, k, [v, ...cx.around]),
+			),
 	]);
+}
+
+/** The kinds the keywords of a schema without `type` say it is, where they say several (`keywordKinds`); undefined otherwise. */
+function severalKinds(v: JsonObject): string[] | undefined {
+	const kinds = keywordKinds(v);
+	return kinds.length > 1 ? kinds : undefined;
 }
 
 /**
@@ -621,7 +880,7 @@ function keywordParts(
 			widen(
 				cx,
 				v,
-				"object",
+				["object"],
 				union([
 					{ kind: "object", props: [{ key, ty: NEVER, optional: true }] },
 					{
@@ -635,20 +894,43 @@ function keywordParts(
 	const names = v.get("propertyNames");
 	if (names === false)
 		parts.push(
-			widen(cx, v, "object", { kind: "map", props: [], index: NEVER }),
+			widen(cx, v, ["object"], { kind: "map", props: [], index: NEVER }),
 		);
-	else if (
-		names !== undefined &&
-		keyNames(names) === undefined &&
-		keyPattern(names) === undefined
-	)
-		cx.warn(
-			child(at, "propertyNames"),
-			"propertyNames cannot be expressed in TypeScript; ignored",
-		);
+	// Reached again while it is read, it asks nothing more there (see `propertyKeys`): the
+	// outer reading warns of what it cannot say.
+	else if (names !== undefined && !cx.readsKeysOf(names)) {
+		// The keys are the strings it admits; a type of strings says the lengths only by
+		// the keys it names (and `""`), not by templates or `string`, nor a pattern no
+		// template says (one every string matches is `string`, and asks nothing).
+		const keys = propertyKeys(cx, v, at);
+		// `true` has no keywords.
+		const s = names instanceof JsonObject ? names : new JsonObject();
+		const lengths = [
+			...((count(s, "minLength") ?? 0) > 0 ? ["minLength"] : []),
+			...(count(s, "maxLength") !== undefined ? ["maxLength"] : []),
+		];
+		const pattern = s.str("pattern");
+		if (
+			keys === undefined ||
+			(keys.kind === "string" &&
+				(lengths.length > 0 ||
+					(pattern !== undefined && patternType(pattern) === undefined)))
+		)
+			cx.warn(
+				child(at, "propertyNames"),
+				"propertyNames cannot be expressed in TypeScript; ignored",
+			);
+		else if (keyTerms(keys).some((k) => k.kind === "template"))
+			for (const key of lengths)
+				cx.warn(
+					child(child(at, "propertyNames"), key),
+					`${key} cannot be expressed in TypeScript; ignored`,
+				);
+	}
 	// contains requires from minContains (1 if not given) to maxContains items that match
 	// it; TypeScript can say how many, and which where every item matches or, for none,
-	// where it can say the values contains does not admit.
+	// where it can say the values contains does not admit. An `unevaluatedItems: false`
+	// beside it may say which, and then how many (see `saidHolders`).
 	const contains = v.get("contains");
 	if (contains !== undefined) {
 		const min = count(v, "minContains") ?? 1;
@@ -656,42 +938,46 @@ function keywordParts(
 		const none = max === 0 ? notContained(cx, v, contains) : undefined;
 		const items = (n: number): Ty[] => Array.from({ length: n }, () => UNKNOWN);
 		if (max !== undefined && min > max)
-			parts.push(widen(cx, v, "array", NEVER));
+			parts.push(widen(cx, v, ["array"], NEVER));
 		else if (negation(contains) === NEVER) {
 			// Every item matches: the length is from min to max.
 			if (max !== undefined)
 				parts.push(
-					widen(cx, v, "array", { kind: "tuple", items: items(max), min }),
+					widen(cx, v, ["array"], { kind: "tuple", items: items(max), min }),
 				);
 			else if (min > 0)
 				parts.push(
-					widen(cx, v, "array", {
+					widen(cx, v, ["array"], {
 						kind: "tuple",
 						items: items(min),
 						min,
 						rest: UNKNOWN,
 					}),
 				);
-		} else if (none !== undefined) parts.push(widen(cx, v, "array", none));
+		} else if (none !== undefined) parts.push(widen(cx, v, ["array"], none));
 		else {
 			if (min > 0)
 				parts.push(
-					widen(cx, v, "array", {
+					widen(cx, v, ["array"], {
 						kind: "tuple",
 						items: items(min),
 						min,
 						rest: UNKNOWN,
 					}),
 				);
-			cx.warn(
-				child(at, "contains"),
-				"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
-			);
-			if (max !== undefined)
+			// minContains 0 without maxContains asks nothing; the type of the schema with the
+			// unevaluatedItems that says which items match says how many.
+			if ((min > 0 || max !== undefined) && !cx.containsSaid(v)) {
 				cx.warn(
-					child(at, "maxContains"),
-					"maxContains cannot be expressed in TypeScript; ignored",
+					child(at, "contains"),
+					"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
 				);
+				if (max !== undefined)
+					cx.warn(
+						child(at, "maxContains"),
+						"maxContains cannot be expressed in TypeScript; ignored",
+					);
+			}
 		}
 	}
 	const n = v.get("not");
@@ -710,7 +996,8 @@ function keywordParts(
 /**
  * The values `not` leaves, where TypeScript can say them: none for a schema that admits
  * everything, the other kinds for `not: { type }`, the objects without a key for
- * `not: { required }`. undefined otherwise (`not: false` leaves everything: unknown).
+ * `not: { required }`, and what X admits for `not: { not: X }`. undefined otherwise
+ * (`not: false` leaves everything: unknown).
  */
 function negation(n: Value): Ty | undefined {
 	if (n === false) return UNKNOWN;
@@ -720,14 +1007,61 @@ function negation(n: Value): Ty | undefined {
 	if (keys.length === 0) return NEVER;
 	if (keys.length !== 1) return undefined;
 	if (keys[0] === "type") return otherKinds(n.get("type"));
+	if (keys[0] === "not") return admitted(n.get("not") as Value);
 	const req = n.get("required");
 	if (keys[0] === "required" && Array.isArray(req)) return lacking(req);
 	return undefined;
 }
 
-/** The values of the kinds `type` does not name; undefined for `integer` without `number`. */
+/**
+ * The values a schema admits, where its keywords say them exactly: every value for one
+ * without keywords, none for `false`, and the values each of `type`, `required`, `enum`,
+ * `const` and `not` (as `negation` reads it) admits. undefined for any other keyword.
+ */
+function admitted(s: Value): Ty | undefined {
+	if (s === false) return NEVER;
+	if (!(s instanceof JsonObject)) return UNKNOWN;
+	const parts: Ty[] = [];
+	for (const [k, x] of s.entries) {
+		if (isAnnotation(k)) continue;
+		let t: Ty | undefined;
+		if (k === "type")
+			// A type JSON Schema does not have says nothing.
+			t = union(
+				(Array.isArray(x) ? x : [x]).map((n) =>
+					typeof n === "string" && Object.hasOwn(KIND, n)
+						? (KIND[n] as Ty)
+						: UNKNOWN,
+				),
+			);
+		else if (k === "required" && Array.isArray(x))
+			// Values of the other kinds pass required.
+			t = union([
+				otherKinds("object") as Ty,
+				{
+					kind: "object",
+					props: x
+						.filter((r): r is string => typeof r === "string")
+						.map((key) => ({ ...prop(key, UNKNOWN), present: true })),
+				},
+			]);
+		else if (k === "enum" && Array.isArray(x)) t = union(x.map(literal));
+		else if (k === "const") t = literal(x);
+		else if (k === "not") t = negation(x);
+		if (t === undefined) return undefined;
+		parts.push(t);
+	}
+	return inter(parts);
+}
+
+/**
+ * The values of the kinds `type` does not name: none where it names one JSON Schema does
+ * not have, which says nothing; undefined for `integer` without `number`.
+ */
 function otherKinds(t: Value | undefined): Ty | undefined {
 	const named = Array.isArray(t) ? t : [t];
+	if (!named.every((k) => typeof k === "string" && Object.hasOwn(KIND, k)))
+		return NEVER;
 	// Without number, an integer is a number TypeScript cannot leave out.
 	if (named.includes("integer") && !named.includes("number")) return undefined;
 	return union(
@@ -751,7 +1085,8 @@ function lacking(names: Value[]): Ty {
 
 /**
  * The values `if` does not admit, where TypeScript can say them: the other kinds for
- * `type`, the objects without a key for `required`, and for `properties` the objects with
+ * `type`, the objects without a key for `required`, the shorter arrays for `minItems` and
+ * the longer for `maxItems`, and for `properties` the objects with
  * a property it does not admit: of the other kinds for one with `type`, or of the values
  * the schema and the schemas around it declare the property with (`enum`, `const`) that
  * it rejects. undefined for any other `if`.
@@ -767,7 +1102,27 @@ function refuted(cx: Ctx, cond: Value, around: Value[]): Ty | undefined {
 			if (t === undefined) return undefined;
 			terms.push(t);
 		} else if (k === "required" && Array.isArray(x)) terms.push(lacking(x));
-		else if (k === "properties" && x instanceof JsonObject) {
+		else if (k === "minItems" || k === "maxItems") {
+			// The arrays shorter or longer than it; a count that is none asks nothing.
+			const n = count(cond, k);
+			if (n !== undefined && k === "maxItems")
+				terms.push({
+					kind: "tuple",
+					items: Array(n + 1).fill(UNKNOWN),
+					min: n + 1,
+					rest: UNKNOWN,
+				});
+			else if (n !== undefined && n > 0)
+				terms.push({
+					kind: "tuple",
+					items: Array(n - 1).fill(UNKNOWN),
+					min: 0,
+				});
+		} else if (k === "not") {
+			const t = admitted(x);
+			if (t === undefined) return undefined;
+			terms.push(t);
+		} else if (k === "properties" && x instanceof JsonObject) {
 			for (const [p, s] of x.entries) {
 				const t = rejected(cx, s, declared(cx, around, p));
 				if (t === undefined) return undefined;
@@ -797,8 +1152,8 @@ function rejected(
 		if (verdicts.every((a) => a !== undefined))
 			return union(values.filter((_, i) => !verdicts[i]).map(literal));
 	}
-	return keys.length === 1 && keys[0] === "type"
-		? otherKinds(s.get("type"))
+	return keys.length === 1 && (keys[0] === "type" || keys[0] === "not")
+		? negation(s)
 		: undefined;
 }
 
@@ -821,38 +1176,42 @@ function declared(
 				? values
 				: out.filter((x) => values.some((y) => sameValue(x, y)));
 	};
-	for (const s of schemas) {
-		meet(listed(cx, get(get(s, "properties"), key), new Set()));
-		const allOf = get(s, "allOf");
-		if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
-		const r = str(s, "$ref");
-		const target = r === undefined ? undefined : cx.tryLocate(r);
-		if (target !== undefined && !seen.has(target.uri)) {
-			seen.add(target.uri);
-			meet(
-				cx.withBase(target.base, () => declared(cx, [target.value], key, seen)),
-			);
-		}
-	}
+	for (const s of schemas)
+		cx.inOwnResource(s, () => {
+			meet(listed(cx, get(get(s, "properties"), key), new Set()));
+			const allOf = get(s, "allOf");
+			if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
+			for (const target of cx.reached(s)) {
+				if (seen.has(target.uri)) continue;
+				seen.add(target.uri);
+				meet(
+					cx.inTarget(target, () => declared(cx, [target.value], key, seen)),
+				);
+			}
+		});
 	return out;
 }
 
-/** The values a schema lists (`enum`, `const`, `type: boolean` or `null`), through its `$ref`. */
+/** The values a schema lists (`enum`, `const`, `type: boolean` or `null`), through its `$ref` and `$dynamicRef`. */
 function listed(
 	cx: Ctx,
 	s: Value | undefined,
 	seen: Set<string>,
 ): Value[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const r = s.str("$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined && !seen.has(target.uri)) {
-		seen.add(target.uri);
-		const values = cx.withBase(target.base, () =>
-			listed(cx, target.value, seen),
-		);
-		if (values !== undefined) return values;
-	}
+	return cx.inOwnResource(s, () => {
+		for (const target of cx.reached(s)) {
+			if (seen.has(target.uri)) continue;
+			seen.add(target.uri);
+			const values = cx.inTarget(target, () => listed(cx, target.value, seen));
+			if (values !== undefined) return values;
+		}
+		return ownValues(s);
+	});
+}
+
+/** The values a schema itself lists. */
+function ownValues(s: JsonObject): Value[] | undefined {
 	const c = s.get("const");
 	if (c !== undefined) return [c];
 	const e = s.get("enum");
@@ -888,6 +1247,10 @@ function accepts(cx: Ctx, s: JsonObject, x: Value): boolean | undefined {
 			if (!sameValue(x, y)) return false;
 		} else if (k === "enum" && Array.isArray(y)) {
 			if (!y.some((e) => sameValue(x, e))) return false;
+		} else if (k === "not" && notOnly(y) instanceof JsonObject) {
+			// not: { not: X } admits what X admits.
+			const a = accepts(cx, notOnly(y) as JsonObject, x);
+			if (a !== true) return a;
 		} else return undefined;
 	}
 	return admitting(cx, s)(t);
@@ -911,39 +1274,44 @@ function sameValue(a: Value, b: Value): boolean {
 }
 
 /**
- * A member's type as the values it admits: one with keywords of one kind only (no `type`)
- * admits every value of the other kinds too, of those the schema and the schemas around
- * it can be (their `type`s; any kind where none has one).
+ * A member's type as the values it admits: one whose object or array keywords, or those of
+ * its members, make it those kinds (no `type`) admits the values of the other kinds too,
+ * of those the schema and the schemas around it can be (their `type`s; any kind where none
+ * has one), as its keywords and its members' for them say.
  */
 function anyKind(cx: Ctx, v: JsonObject, m: Value, ty: Ty): Ty {
-	const kind = typelessKind(m);
-	return kind === undefined ? ty : orOther(cx, v, kind, ty);
+	const kinds = typelessKinds(cx, m);
+	return kinds.length === 0 ? ty : orOther(cx, v, kinds, ty, m);
 }
 
 /**
- * `ty`, a constraint on values of `kind` only, with the values of the other kinds the
- * schema and the schemas around it can be (their `type`s; any kind where none has one).
+ * `ty`, a constraint on values of `kinds` only, with the values of the other kinds the
+ * schema and the schemas around it can be (their `type`s; any kind where none has one),
+ * as the keywords of `v` for them say, or as those of `m`, the member `ty` is of, and of
+ * its members (`passed`).
  */
-function orOther(cx: Ctx, v: JsonObject, kind: string, ty: Ty): Ty {
+function orOther(
+	cx: Ctx,
+	v: JsonObject,
+	kinds: string[],
+	ty: Ty,
+	m?: Value,
+): Ty {
 	return union([
 		ty,
 		...contextKinds(cx, v)
-			.filter((k) => k !== kind)
-			.map((k) => KIND[k] as Ty),
+			.filter((k) => !kinds.includes(k))
+			.map((k) =>
+				m === undefined
+					? ofKind(cx, v, k)
+					: passed(cx, m, k, [v, ...cx.around]),
+			),
 	]);
 }
 
 /** The kinds the schema and the schemas around it can be: those their `type`s all name; any where none has one. */
 function contextKinds(cx: Ctx, v: JsonObject): string[] {
-	let kinds = [
-		"string",
-		"number",
-		"integer",
-		"boolean",
-		"null",
-		"array",
-		"object",
-	];
+	let kinds = ALL_KINDS;
 	for (const s of [v, ...cx.around]) {
 		const named = typeKinds(cx, s);
 		if (named !== undefined)
@@ -958,11 +1326,11 @@ function contextKinds(cx: Ctx, v: JsonObject): string[] {
 /**
  * What a schema evaluates for `unevaluatedProperties` / `unevaluatedItems` wherever it
  * matches: property names, `patternProperties`, every key (`all`), the first `length`
- * items or every item (`rest`); and what its `oneOf` / `anyOf` members, `if` / `then` /
- * `else` and dependent schemas evaluate where they match, `cond` (`branches`). `keys` are
- * the keys it names, which a type can leave out. `contains` evaluates the items it
- * matches, and an `else` where TypeScript cannot say which values `if` does not admit
- * evaluates where no type says (`undecided`).
+ * items or every item (`rest`), the items the `contains` of the schemas in `contained`
+ * match; and what its `oneOf` / `anyOf` members (of `group`), `if` / `then` / `else` and
+ * dependent schemas evaluate where they match, `cond` (`branches`). `keys` are the keys it names,
+ * which a type can leave out. An `else` where TypeScript cannot say which values `if`
+ * does not admit evaluates where no type says (`undecided`).
  */
 interface Evaluated {
 	names: Set<string>;
@@ -970,10 +1338,17 @@ interface Evaluated {
 	all: boolean;
 	length: number;
 	rest: boolean;
-	contains: boolean;
+	contained: Holder[];
 	undecided: boolean;
 	keys: Set<string>;
-	branches: { cond: Ty; ev: Evaluated }[];
+	branches: { cond: () => Ty; ev: Evaluated; group: Value[] | undefined }[];
+}
+
+/** A schema with `contains`, where it is and where it is read (see `Ctx.place`). */
+interface Holder {
+	schema: JsonObject;
+	at: string;
+	place: Place;
 }
 
 const nothingEvaluated = (): Evaluated => ({
@@ -982,7 +1357,7 @@ const nothingEvaluated = (): Evaluated => ({
 	all: false,
 	length: 0,
 	rest: false,
-	contains: false,
+	contained: [],
 	undecided: false,
 	keys: new Set(),
 	branches: [],
@@ -995,15 +1370,25 @@ function evaluateBoth(a: Evaluated, b: Evaluated): void {
 	a.all ||= b.all;
 	a.length = Math.max(a.length, b.length);
 	a.rest ||= b.rest;
-	a.contains ||= b.contains;
+	a.contained.push(...b.contained);
 	a.undecided ||= b.undecided;
 	for (const k of b.keys) a.keys.add(k);
 	a.branches.push(...b.branches);
 }
 
+/** `f`, run where it is read now (see `Ctx.place`) when first asked, and remembered. */
+function later<T>(cx: Ctx, f: () => T): () => T {
+	const place = cx.place;
+	let value: T | undefined;
+	return () => {
+		value ??= cx.inPlace(place, f);
+		return value;
+	};
+}
+
 /**
  * What a schema evaluates (see `Evaluated`); its own `unevaluated*` too unless `top`, the
- * schema they are read for.
+ * schema they are read for. The conditions are converted when asked for.
  */
 function evaluates(
 	cx: Ctx,
@@ -1014,21 +1399,22 @@ function evaluates(
 ): Evaluated {
 	const ev = nothingEvaluated();
 	if (!(s instanceof JsonObject)) return ev;
-	const r = s.str("$ref");
-	if (r !== undefined) {
-		const target = cx.locate(r, at);
-		if (!seen.has(target.uri)) {
-			seen.add(target.uri);
-			evaluateBoth(
-				ev,
-				cx.withBase(target.base, () =>
-					evaluates(cx, target.value, target.where, false, seen),
-				),
-			);
-		}
-		// In 3.0 the keywords next to $ref are ignored.
-		if (!cx.refSiblings) return ev;
+	// What a schema in its own resource evaluates, a member or the target of a reference.
+	const inner = (m: Value, where: string) =>
+		cx.inOwnResource(m, () => evaluates(cx, m, where, false, seen));
+	// A schema reached again inside itself evaluates nothing more; reached again
+	// elsewhere, in another member, it evaluates there too.
+	for (const target of cx.reached(s)) {
+		if (seen.has(target.uri)) continue;
+		seen.add(target.uri);
+		evaluateBoth(
+			ev,
+			cx.inTarget(target, () => inner(target.value, target.where)),
+		);
+		seen.delete(target.uri);
 	}
+	// In 3.0 the keywords next to $ref are ignored.
+	if (s.get("$ref") !== undefined && !cx.refSiblings) return ev;
 	const props = s.get("properties");
 	for (const [k] of props instanceof JsonObject ? props.entries : []) {
 		ev.names.add(k);
@@ -1045,64 +1431,75 @@ function evaluates(
 	ev.rest ||=
 		s.get("items") !== undefined ||
 		(!top && s.get("unevaluatedItems") !== undefined);
-	ev.contains ||= s.get("contains") !== undefined;
+	// With maxContains 0 no item matches contains, so it evaluates none.
+	if (s.get("contains") !== undefined && count(s, "maxContains") !== 0)
+		ev.contained.push({ schema: s, at, place: cx.place });
 	for (const k of requiredKeys(cx, s)) ev.keys.add(k);
 	for (const [k, names] of dependencies(s)) {
 		ev.keys.add(k);
 		for (const n of names) ev.keys.add(n);
 	}
-	for (const k of keyNames(s.get("propertyNames")) ?? []) ev.keys.add(k);
+	for (const k of keyLiterals(propertyKeys(cx, s, at))) ev.keys.add(k);
 	const group = leftOutKeys(cx, s);
 	for (const k of cx.leftOutIn(s)) group.add(k);
 	const allOf = s.get("allOf");
+	// Members are the same value: the schema's keywords apply to it too.
+	const member = (m: Value, where: string) =>
+		cx.withAround(s, () => inner(m, where));
 	for (const [i, m] of (Array.isArray(allOf) ? allOf : []).entries())
-		evaluateBoth(
-			ev,
-			cx.withAround(s, () =>
-				evaluates(cx, m, child(child(at, "allOf"), String(i)), false, seen),
-			),
-		);
+		evaluateBoth(ev, member(m, child(child(at, "allOf"), String(i))));
 	// A member, if or dependent schema evaluates where it matches.
-	const branch = (cond: Ty, e: Evaluated): void => {
+	const branch = (cond: () => Ty, e: Evaluated, group?: Value[]): void => {
 		for (const k of e.keys) ev.keys.add(k);
-		ev.contains ||= e.contains;
 		ev.undecided ||= e.undecided;
-		ev.branches.push({ cond, ev: e });
+		ev.branches.push({ cond, ev: e, group });
 	};
-	const inner = (m: Value, where: string) =>
-		cx.withAround(s, () => evaluates(cx, m, where, false, seen));
 	for (const key of ["oneOf", "anyOf"]) {
 		const members = s.get(key);
 		if (!Array.isArray(members)) continue;
-		const tys = membersIn(cx, s, members, group, child(at, key));
+		const tys = later(cx, () =>
+			membersIn(cx, s, members, group, child(at, key)),
+		);
 		for (const [i, m] of members.entries())
-			branch(tys[i] as Ty, inner(m, child(child(at, key), String(i))));
+			branch(
+				() => tys()[i] as Ty,
+				member(m, child(child(at, key), String(i))),
+				members,
+			);
 	}
 	const cond = s.get("if");
 	if (cond !== undefined) {
 		const then = s.get("then") ?? true;
 		const otherwise = s.get("else") ?? true;
-		const [i, t, e] = membersIn(cx, s, [cond, then, otherwise], group, at, [
-			"if",
-			"then",
-			"else",
-		]) as [Ty, Ty, Ty];
+		const tys = later(
+			cx,
+			() =>
+				membersIn(cx, s, [cond, then, otherwise], group, at, [
+					"if",
+					"then",
+					"else",
+				]) as [Ty, Ty, Ty],
+		);
 		// if and then evaluate where if admits the value; else where it does not.
-		const both = inner(cond, child(at, "if"));
-		evaluateBoth(both, inner(then, child(at, "then")));
-		branch(inter([i, t]), both);
+		const both = member(cond, child(at, "if"));
+		evaluateBoth(both, member(then, child(at, "then")));
+		branch(() => inter([tys()[0], tys()[1]]), both);
 		const not = refuted(cx, cond, [s, ...cx.around]);
 		if (not === undefined) ev.undecided ||= otherwise !== true;
-		else branch(inter([not, e]), inner(otherwise, child(at, "else")));
+		else
+			branch(
+				() => inter([not, tys()[2]]),
+				member(otherwise, child(at, "else")),
+			);
 	}
 	const ds = s.get("dependentSchemas");
 	for (const [k, d] of ds instanceof JsonObject ? ds.entries : [])
 		branch(
-			{
+			() => ({
 				kind: "object",
 				props: [{ key: k, ty: UNKNOWN, optional: false, present: true }],
-			},
-			inner(d, child(child(at, "dependentSchemas"), k)),
+			}),
+			member(d, child(child(at, "dependentSchemas"), k)),
 		);
 	return ev;
 }
@@ -1111,27 +1508,281 @@ function evaluates(
 function evaluating(ev: Evaluated, key: string): Ty[] {
 	return ev.branches.flatMap(({ cond, ev: e }) =>
 		e.all || e.names.has(key) || e.patterns.some((p) => matches(p, key))
-			? [cond]
-			: evaluating(e, key).map((c) => inter([cond, c])),
+			? [cond()]
+			: evaluating(e, key).map((c) => inter([cond(), c])),
 	);
 }
 
-/** Each branch of `ev` that evaluates more items than `length`: its condition and how many, or every one. */
+/**
+ * What evaluates the items where `cond` holds: the first `length`, or every one (`rest`),
+ * and those the `contains` of the schemas in `contained` match.
+ */
+interface ItemsEvaluated {
+	cond: () => Ty;
+	length: number;
+	rest: boolean;
+	contained: Holder[];
+}
+
+/**
+ * A branch and what evaluates the items where it matches: whether it is one of the
+ * schema's own (`top`, not a member's), and the `oneOf` / `anyOf` members the top branch
+ * it is in is one of (`group`; undefined for `if` / `then` / `else` and dependent schemas).
+ */
+interface BranchItems extends ItemsEvaluated {
+	top: boolean;
+	group: Value[] | undefined;
+}
+
+/** A case of what evaluates the items: the branches that match in it (`parts`). */
+interface ItemsCase extends ItemsEvaluated {
+	parts: BranchItems[];
+}
+
+/** Each branch of `ev` and what evaluates the items where it matches, with what the branches it is in evaluate. */
 function evaluatingItems(
 	ev: Evaluated,
 	length: number,
-): { cond: Ty; length: number; rest: boolean }[] {
-	return ev.branches.flatMap(({ cond, ev: e }) => {
-		const n = Math.max(length, e.length);
-		const own = { cond, length: n, rest: e.rest };
+	contained: Holder[],
+	top = true,
+	group: Value[] | undefined = undefined,
+): BranchItems[] {
+	return ev.branches.flatMap((b) => {
+		const n = Math.max(length, b.ev.length);
+		const c = [...contained, ...b.ev.contained];
+		const g = top ? b.group : group;
+		const own = { cond: b.cond, length: n, rest: b.ev.rest, contained: c };
 		return [
-			own,
-			...evaluatingItems(e, n).map((x) => ({
+			{ ...own, top, group: g },
+			...evaluatingItems(b.ev, n, c, false, g).map((x) => ({
 				...x,
-				cond: inter([cond, x.cond]),
+				cond: () => inter([b.cond(), x.cond()]),
 			})),
 		];
 	});
+}
+
+/**
+ * What evaluates the items of a value `ev` is read for, in each case that can be: where
+ * it matches, and where each set of branches whose `contains` evaluates (which can match
+ * together) and one other branch matches. A branch that evaluates a prefix or every item
+ * needs no other such branch beside it: the longest is enough. undefined where branches
+ * with `contains` make more than `MAX_CASES` cases.
+ */
+function itemCases(
+	ev: Evaluated,
+): { branches: BranchItems[]; cases: ItemsCase[] } | undefined {
+	const branches = evaluatingItems(ev, ev.length, []);
+	const counting = branches.filter((b) => b.contained.length > 0);
+	const others = branches.filter((b) => b.contained.length === 0);
+	const size = 2 ** counting.length * (others.length + 1);
+	if (counting.length > 0 && size > MAX_CASES) return undefined;
+	const both = (a: ItemsCase, b: BranchItems): ItemsCase => ({
+		cond: () => inter([a.cond(), b.cond()]),
+		length: Math.max(a.length, b.length),
+		rest: a.rest || b.rest,
+		contained: [...a.contained, ...b.contained],
+		parts: [...a.parts, b],
+	});
+	let cases: ItemsCase[] = [
+		{
+			cond: () => UNKNOWN,
+			length: ev.length,
+			rest: ev.rest,
+			contained: ev.contained,
+			parts: [],
+		},
+	];
+	for (const b of counting) cases = [...cases, ...cases.map((c) => both(c, b))];
+	return {
+		branches,
+		cases: cases.flatMap((c) => [c, ...others.map((b) => both(c, b))]),
+	};
+}
+
+/** `holders`, each schema once. */
+function distinctHolders(holders: Holder[]): Holder[] {
+	const seen = new Set<JsonObject>();
+	const out: Holder[] = [];
+	for (const h of holders) {
+		if (seen.has(h.schema)) continue;
+		seen.add(h.schema);
+		out.push(h);
+	}
+	return out;
+}
+
+/**
+ * The one schema whose `contains` every item past those evaluated matches in this case of
+ * `unevaluatedItems: false`: where it alone evaluates them. undefined where none does.
+ */
+function soleHolder(c: Omit<ItemsEvaluated, "cond">): Holder | undefined {
+	const holders = distinctHolders(c.contained);
+	return !c.rest && holders.length === 1 ? holders[0] : undefined;
+}
+
+const isHolder = (c: ItemsEvaluated, h: JsonObject): boolean =>
+	c.contained.some((x) => x.schema === h);
+
+/** Whether `contains` asks no more than one matching item, so a value fails it only where none matches. */
+const asksOne = (h: JsonObject): boolean =>
+	(count(h, "minContains") ?? 1) <= 1 && count(h, "maxContains") === undefined;
+
+/**
+ * The schemas with `contains` whose matching items the type of `v` says, its
+ * `unevaluatedItems` being `false`, read when first asked for; undefined where it says none.
+ */
+function saying(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+): (() => ReadonlySet<JsonObject>) | undefined {
+	if (v.get("unevaluatedItems") !== false) return undefined;
+	const ev = evaluates(cx, v, at, true, new Set());
+	const read = ev.undecided || ev.rest ? undefined : itemCases(ev);
+	if (read === undefined) return undefined;
+	return later(cx, () => saidHolders(cx, v, at, ev, read.branches, read.cases));
+}
+
+/**
+ * The schemas with `contains` whose matching items the type says, with `unevaluatedItems:
+ * false` (see `unevaluatedItems`). One the value always has (of `v`, its `$ref` target, its
+ * `allOf` members): where it alone evaluates the items past those evaluated in every case,
+ * and whether each item before them matches is told. One a branch has, where nothing else
+ * evaluates the items unless a branch does: where it alone evaluates every item in every
+ * case it is in; or where it asks for one matching item at most, it is in a `oneOf` /
+ * `anyOf` member of the schema whose members alone evaluate the items, and in every case
+ * it is in, the others evaluate as many items without it and, where the one `contains`
+ * left evaluates every item (and so is counted), it asks for one matching item at most.
+ * Then a value that matches none of its items evaluates the same without it.
+ */
+function saidHolders(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	ev: Evaluated,
+	branches: BranchItems[],
+	cases: ItemsCase[],
+): ReadonlySet<JsonObject> {
+	const sole = (c: ItemsEvaluated, h: Holder): boolean =>
+		soleHolder(c)?.schema === h.schema &&
+		prefixMarks(cx, v, at, h, c.length) !== undefined;
+	const always = new Set(ev.contained.map((h) => h.schema));
+	const evaluating = branches.filter(
+		(b) => b.length > 0 || b.rest || b.contained.length > 0,
+	);
+	// What evaluates the items in a case without the branches the holder is in.
+	const without = (c: ItemsCase, h: JsonObject): boolean => {
+		const parts = c.parts.filter((p) => !isHolder(p, h));
+		const length = Math.max(ev.length, ...parts.map((p) => p.length));
+		const rest = ev.rest || parts.some((p) => p.rest);
+		if (length !== c.length || rest !== c.rest) return false;
+		const other = soleHolder({
+			length,
+			rest,
+			contained: [...ev.contained, ...parts.flatMap((p) => p.contained)],
+		});
+		// Past items evaluated otherwise, the one left is not counted (see `prefixMarks`).
+		return other === undefined || length > 0 || asksOne(other.schema);
+	};
+	const said = distinctHolders(cases.flatMap((c) => c.contained)).filter(
+		(h) => {
+			const within = cases.filter((c) => isHolder(c, h.schema));
+			if (always.has(h.schema)) return within.every((c) => sole(c, h));
+			if (ev.length > 0 || ev.contained.length > 0) return false;
+			if (within.every((c) => c.length === 0 && sole(c, h))) return true;
+			const group = branches.find((b) => b.top && isHolder(b, h.schema))?.group;
+			return (
+				asksOne(h.schema) &&
+				group !== undefined &&
+				evaluating.every((b) => b.group === group) &&
+				within.every((c) => without(c, h.schema))
+			);
+		},
+	);
+	return new Set(said.map((h) => h.schema));
+}
+
+/**
+ * Whether each of the first `length` items matches the holder's `contains`, where that is
+ * told: by the schema's own `prefixItems` (whose items are those of the type), as their
+ * types meet nowhere, as every value it lists is or is not admitted, or as `contains`
+ * admits every value or says only a kind that the prefix item's type is within.
+ * undefined where some is not told.
+ */
+function prefixMarks(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	h: Holder,
+	length: number,
+): boolean[] | undefined {
+	const own = v.get("prefixItems");
+	const prefix = Array.isArray(own) ? own.slice(0, length) : [];
+	if (prefix.length < length) return undefined;
+	const c = h.schema.get("contains") as Value;
+	if (negation(c) === NEVER) return prefix.map(() => true);
+	const item = containsTy(cx, h);
+	const marks = prefix.map((p, i): boolean | undefined => {
+		const ty = schema(cx, p, child(child(at, "prefixItems"), String(i)));
+		const met = inter([ty, item]);
+		if (met.kind === "never") return false;
+		// negation reads every schema but an object and false (whose type meets nothing) as admitting all.
+		const s = c as JsonObject;
+		const verdicts = listed(cx, p, new Set())?.map((x) => accepts(cx, s, x));
+		if (verdicts?.every((x) => x === true)) return true;
+		if (verdicts?.every((x) => x === false)) return false;
+		const kindOnly = s.entries.every(([k]) => k === "type" || isAnnotation(k));
+		return kindOnly && equal(met, ty) ? true : undefined;
+	});
+	return marks.every((m) => m !== undefined) ? (marks as boolean[]) : undefined;
+}
+
+/**
+ * The arrays whose matching items are from `min` to `max` (no bound if undefined), where
+ * the items the `marks` say match it before every item past them does, which are `item`.
+ */
+function containsCount(
+	item: Ty,
+	marks: boolean[],
+	min: number,
+	max: number | undefined,
+): Ty {
+	const length = marks.length;
+	const matching = (n: number) =>
+		marks.slice(0, n).filter(Boolean).length + Math.max(0, n - length);
+	const at = (i: number) => (i < length ? UNKNOWN : item);
+	// The fewest items with min matching: within the prefix, or past it one by one.
+	let lo = 0;
+	while (lo < length && matching(lo) < min) lo++;
+	lo += Math.max(0, min - matching(lo));
+	if (max === undefined) {
+		const n = Math.max(length, lo);
+		return n === 0
+			? arrayTy(item)
+			: {
+					kind: "tuple",
+					items: Array.from({ length: n }, (_, i) => at(i)),
+					min: lo,
+					rest: item,
+				};
+	}
+	// The most items with max matching at most.
+	let hi = length;
+	while (matching(hi) > max) hi--;
+	if (hi === length) hi += max - matching(length);
+	return {
+		kind: "tuple",
+		items: Array.from({ length: hi }, (_, i) => at(i)),
+		min: lo,
+	};
+}
+
+/** The type of a holder's `contains`: an item it matches. */
+function containsTy(cx: Ctx, h: Holder): Ty {
+	return cx.inPlace(h.place, () =>
+		schema(cx, h.schema.get("contains") as Value, child(h.at, "contains")),
+	);
 }
 
 /**
@@ -1172,7 +1823,7 @@ function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 				orOther(
 					cx,
 					v,
-					"object",
+					["object"],
 					union([
 						{ kind: "object", props: [{ key, ty, optional: true }] },
 						...evaluating(ev, key),
@@ -1181,37 +1832,69 @@ function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 			);
 		}
 	}
-	if (asked(ui) && !ev.rest) {
-		if (ev.contains) warn("unevaluatedItems", ui);
-		else {
-			const ty = schema(cx, ui as Value, child(at, "unevaluatedItems"));
-			const upTo = (n: number): Ty =>
-				ty.kind === "never"
-					? { kind: "tuple", items: Array(n).fill(UNKNOWN), min: 0 }
-					: n === 0
-						? arrayTy(ty)
-						: {
-								kind: "tuple",
-								items: Array(n).fill(UNKNOWN),
-								min: 0,
-								rest: ty,
-							};
-			parts.push(
-				orOther(
-					cx,
-					v,
-					"array",
-					union([
-						upTo(ev.length),
-						...evaluatingItems(ev, ev.length).map((b) =>
-							b.rest ? b.cond : inter([b.cond, upTo(b.length)]),
-						),
-					]),
+	const read = asked(ui) && !ev.rest ? itemCases(ev) : undefined;
+	if (asked(ui) && !ev.rest && read === undefined) warn("unevaluatedItems", ui);
+	if (read !== undefined) {
+		const ty = schema(cx, ui as Value, child(at, "unevaluatedItems"));
+		parts.push(
+			orOther(
+				cx,
+				v,
+				["array"],
+				union(
+					read.cases.map((c) =>
+						c.rest
+							? c.cond()
+							: inter([
+									c.cond(),
+									unevaluatedItems(cx, v, at, c, ui as Value, ty),
+								]),
+					),
 				),
-			);
-		}
+			),
+		);
 	}
 	return parts;
+}
+
+/**
+ * The arrays `unevaluatedItems` admits in one case of what evaluates the items: past those
+ * evaluated, an item matches a `contains` there or is of the keyword's type `ty`. Where one
+ * `contains` alone evaluates them and the keyword admits none, every item past them matches
+ * it; where it is told which items before them match it too (`prefixMarks`), its
+ * `minContains` and `maxContains` bound the length.
+ */
+function unevaluatedItems(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	c: ItemsEvaluated,
+	ui: Value,
+	ty: Ty,
+): Ty {
+	const sole = ui === false ? soleHolder(c) : undefined;
+	const marks =
+		sole === undefined ? undefined : prefixMarks(cx, v, at, sole, c.length);
+	if (sole !== undefined && marks !== undefined) {
+		const min = count(sole.schema, "minContains") ?? 1;
+		const max = count(sole.schema, "maxContains");
+		if (max !== undefined && max < min) return NEVER;
+		return containsCount(containsTy(cx, sole), marks, min, max);
+	}
+	const rest = union([
+		...distinctHolders(c.contained).map((h) => containsTy(cx, h)),
+		ty,
+	]);
+	if (rest.kind === "never")
+		return { kind: "tuple", items: Array(c.length).fill(UNKNOWN), min: 0 };
+	return c.length === 0
+		? arrayTy(rest)
+		: {
+				kind: "tuple",
+				items: Array(c.length).fill(UNKNOWN),
+				min: 0,
+				rest,
+			};
 }
 
 /** `dependentRequired`: each key and the keys it requires. */
@@ -1249,54 +1932,374 @@ function notContained(cx: Ctx, v: JsonObject, contains: Value): Ty | undefined {
 		: arrayTy(rest);
 }
 
-/** The values `not: { enum }` or `not: { const }` leave out; undefined for any other `not`. */
-function excluded(v: JsonObject): Ty[] | undefined {
-	const n = v.get("not");
+/**
+ * The values `not: { enum }` or `not: { const }` leave out, each with where it is in
+ * `not` (`enum/0`, `const`); undefined for any other `not`. `not: { not: { not: X } }`
+ * is `not: X`.
+ */
+function excluded(v: JsonObject): { ty: Ty; at: string }[] | undefined {
+	let n = v.get("not");
+	let path = "";
+	for (let x = notOnly(notOnly(n)); x !== undefined; x = notOnly(notOnly(n))) {
+		n = x;
+		path += "not/not/";
+	}
 	if (!(n instanceof JsonObject)) return undefined;
 	const keys = n.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
 	if (keys.length !== 1) return undefined;
 	const e = n.get("enum");
-	if (keys[0] === "enum" && Array.isArray(e)) return e.map(literal);
+	if (keys[0] === "enum" && Array.isArray(e))
+		return e.map((x, i) => ({ ty: literal(x), at: `${path}enum/${i}` }));
 	const c = n.get("const");
-	return keys[0] === "const" && c !== undefined ? [literal(c)] : undefined;
+	return keys[0] === "const" && c !== undefined
+		? [{ ty: literal(c), at: `${path}const` }]
+		: undefined;
 }
 
-/** The keys `propertyNames: { enum }` or `{ const }` allow; undefined for any other. */
-function keyNames(names: Value | undefined): string[] | undefined {
-	if (!(names instanceof JsonObject)) return undefined;
-	const keys = names.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
-	if (keys.length !== 1) return undefined;
-	const e = names.get("enum");
-	const c = names.get("const");
-	const values =
-		keys[0] === "enum" && Array.isArray(e) ? e : keys[0] === "const" ? [c] : [];
-	const strings = values.filter((x): x is string => typeof x === "string");
-	return strings.length > 0 ? strings : undefined;
+/** X for a schema that has no keyword but `not: X`; undefined for any other. */
+function notOnly(s: Value | undefined): Value | undefined {
+	if (!(s instanceof JsonObject)) return undefined;
+	const keys = s.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	return keys.length === 1 && keys[0] === "not" ? s.get("not") : undefined;
 }
 
 /**
- * The kind a schema without `type` constrains where it says nothing but keywords of that
- * kind (`dependentRequired`, `dependentSchemas` and `propertyNames` for objects, `contains`
- * for arrays, as well as those that make a value one); undefined for any other.
+ * The keys an object's `propertyNames` admits: every key is a string it must admit, so
+ * they are the strings its schema admits, as the schema reads for strings (`string` for
+ * any key, literals for keys it names, template literal types, `never` for none).
+ * undefined without `propertyNames`, or where its strings are a type that is none of
+ * these (an intersection TypeScript keeps, a reference to a schema being read).
  */
-function typelessKind(m: Value): "object" | "array" | undefined {
+function propertyKeys(cx: Ctx, v: JsonObject, at: string): Ty | undefined {
+	const names = v.get("propertyNames");
+	if (names === undefined) return undefined;
+	// Reached again while it is read, it keys an object inside the value read, whose
+	// strings that reading says; here it asks nothing more.
+	if (cx.readsKeysOf(names)) return STRING;
+	// Its references are written out: a key is one of the strings their targets admit.
+	const values = cx.withKeysRead(names, () =>
+		cx.withRaw(undefined, () => schema(cx, names, child(at, "propertyNames"))),
+	);
+	return meetKeys(inter([STRING, values]));
+}
+
+/**
+ * A type of keys: where TypeScript keeps the strings as an intersection, of the templates of
+ * patterns (`allOf: [{ pattern: "^x-" }, { pattern: "-y$" }]`), the strings all of them
+ * admit, as templates (see `meet`): `"x-y" | `x-${string}-y``. undefined where those are
+ * too many to read.
+ */
+function meetKeys(keys: Ty): Ty | undefined {
+	if (keys.kind !== "inter") return keys;
+	const [first, ...rest] = keys.items.map((item) =>
+		keyTerms(item).map((t) =>
+			templateOf(t as Extract<Ty, { kind: "template" }>),
+		),
+	);
+	let met = first as Template[];
+	for (const terms of rest) {
+		const next: Template[] = [];
+		for (const a of met)
+			for (const b of terms) {
+				const both = meet(a, b);
+				if (both === undefined) return undefined;
+				next.push(...both);
+			}
+		met = next;
+	}
+	return union(met.map((t) => t.key));
+}
+
+/** The members of a type of keys: none for `never`. */
+function keyTerms(keys: Ty): Ty[] {
+	return keys.kind === "union"
+		? keys.items
+		: keys.kind === "never"
+			? []
+			: [keys];
+}
+
+/** The keys a type of keys names one by one. */
+function keyLiterals(keys: Ty | undefined): string[] {
+	return (keys === undefined ? [] : keyTerms(keys)).flatMap((k) =>
+		k.kind === "lit" ? [JSON.parse(k.text) as string] : [],
+	);
+}
+
+/**
+ * Whether a `propertyNames` admits a key: as its keywords decide for the string, or, where
+ * they say what that cannot decide, as the type of its keys says (a literal by its text, a
+ * template as `admits` reads it).
+ */
+function keyAdmits(cx: Ctx, names: Value, keys: Ty): (key: string) => boolean {
+	return (key) =>
+		(names instanceof JsonObject ? accepts(cx, names, key) : undefined) ??
+		keyTerms(keys).some((k) =>
+			k.kind === "lit"
+				? k.text === JSON.stringify(key)
+				: admits(templateOf(k as Extract<Ty, { kind: "template" }>), key),
+		);
+}
+
+/** The template a template literal type of keys is, as `object` compares templates: its segments. */
+function templateOf(t: Extract<Ty, { kind: "template" }>): Template {
+	return { seq: t.seq, key: t };
+}
+
+/**
+ * The kinds a schema without `type` constrains where its keywords and those of the schemas
+ * it applies (`$ref` target, `allOf` / `oneOf` / `anyOf` members, `if` / `then` / `else`)
+ * make it those kinds (`ownKinds`), and none of them has `type`, `const` or `enum`; none
+ * for any other.
+ */
+function typelessKinds(cx: Ctx, m: Value): string[] {
+	const kinds = madeKinds(cx, m);
+	return kinds !== undefined && kinds.all.size === kinds.made.size
+		? [...kinds.made]
+		: [];
+}
+
+/**
+ * The kinds a schema's keywords and those of the schemas it applies make it (`made`: its
+ * own, its `$ref` and `$dynamicRef` targets' and its members'), and those its `if` /
+ * `then` / `else` add (`all`), which let the other kinds pass in its own type already;
+ * undefined where one of them says more, or a reference reaches nothing (`typelessKinds`). `true`, and anything
+ * else read as a schema that admits every value, makes no kind; nor does `false`, which
+ * admits none (`passed`).
+ */
+function madeKinds(
+	cx: Ctx,
+	m: Value,
+	seen: ReadonlySet<string> = new Set(),
+): { made: Set<string>; all: Set<string> } | undefined {
 	if (
-		!(m instanceof JsonObject) ||
-		["type", "$ref", "const", "enum", "allOf", "oneOf", "anyOf"].some(
-			(k) => m.get(k) !== undefined,
-		)
+		m instanceof JsonObject &&
+		(m.get("type") !== undefined ||
+			m.get("const") !== undefined ||
+			m.get("enum") !== undefined)
 	)
 		return undefined;
+	const kinds = { made: new Set<string>(), all: new Set<string>() };
+	if (!(m instanceof JsonObject)) return kinds;
+	const uri = cx.ownResource(m);
+	return uri === undefined
+		? ownMadeKinds(cx, m, seen, kinds)
+		: cx.inResource(uri, () => ownMadeKinds(cx, m, seen, kinds));
+}
+
+function ownMadeKinds(
+	cx: Ctx,
+	m: JsonObject,
+	seen: ReadonlySet<string>,
+	kinds: { made: Set<string>; all: Set<string> },
+): { made: Set<string>; all: Set<string> } | undefined {
+	const add = (n: Value, made: boolean, s = seen): boolean => {
+		const inner = madeKinds(cx, n, s);
+		for (const k of inner?.all ?? []) kinds.all.add(k);
+		if (made) for (const k of inner?.made ?? []) kinds.made.add(k);
+		return inner !== undefined;
+	};
+	const refs =
+		(m.get("$ref") === undefined ? 0 : 1) +
+		(m.get("$dynamicRef") === undefined ? 0 : 1);
+	const targets = cx.reached(m);
+	// Each reference must reach its target; one seen on the way adds nothing.
+	const read =
+		targets.length === refs &&
+		targets.every(
+			(target) =>
+				seen.has(target.uri) ||
+				cx.inTarget(target, () =>
+					add(target.value, true, new Set([...seen, target.uri])),
+				),
+		);
+	if (!read) return undefined;
+	// In 3.0 the keywords next to $ref are ignored.
+	if (m.get("$ref") !== undefined && !cx.refSiblings) return kinds;
+	for (const k of ownKinds(m)) {
+		kinds.made.add(k);
+		kinds.all.add(k);
+	}
+	const members = ["allOf", "oneOf", "anyOf"].flatMap((key) => {
+		const ms = m.get(key);
+		return Array.isArray(ms) ? ms : [];
+	});
+	const branches = ["if", "then", "else"].flatMap((key) => {
+		const b = m.get(key);
+		return b === undefined ? [] : [b];
+	});
+	return members.every((n) => add(n, true)) &&
+		branches.every((n) => add(n, false))
+		? kinds
+		: undefined;
+}
+
+/**
+ * The kinds a schema's keywords make it: object for `dependentRequired`,
+ * `dependentSchemas`, `propertyNames` and those that make a value one; array for
+ * `contains` and those that make a value one.
+ */
+function ownKinds(m: JsonObject): string[] {
+	const kinds: string[] = [];
 	if (
 		hasObjectKeywords(m) ||
 		["dependentRequired", "dependentSchemas", "propertyNames"].some(
 			(k) => m.get(k) !== undefined,
 		)
 	)
-		return "object";
-	return hasArrayKeywords(m) || m.get("contains") !== undefined
-		? "array"
-		: undefined;
+		kinds.push("object");
+	if (hasArrayKeywords(m) || m.get("contains") !== undefined)
+		kinds.push("array");
+	return kinds;
+}
+
+/** The kinds a member constrains: those its `type` names, or else `typelessKinds`. */
+function kindsOfMember(cx: Ctx, m: JsonObject): string[] {
+	return typeKinds(cx, m) ?? typelessKinds(cx, m);
+}
+
+/** The keywords that say what a schema is beyond its keywords for kinds. */
+const TYPING = ["type", "$ref", "$dynamicRef", "const", "enum"];
+
+/** Whether a schema is an object without `type`, `$ref`, `$dynamicRef`, `const` or `enum`. */
+function isTypeless(m: Value | undefined): m is JsonObject {
+	return m instanceof JsonObject && TYPING.every((k) => m.get(k) === undefined);
+}
+
+/**
+ * The kinds the keywords of a schema without `type` say it is, read with those of the
+ * schemas it applies without `type`, `$ref`, `const` or `enum` (`allOf` / `oneOf` /
+ * `anyOf` members, `if` / `then` / `else`, at any depth), which ask the same value: where
+ * they make it an object or an array (`ownKinds`), those kinds, and strings and numbers
+ * for their keywords among them. None otherwise: string and number keywords alone say
+ * nothing of the kind.
+ */
+function keywordKinds(v: JsonObject): string[] {
+	const kinds = new Set<string>();
+	const read = (s: JsonObject) => {
+		const has = (keys: string[]) => keys.some((k) => s.get(k) !== undefined);
+		for (const k of ownKinds(s)) kinds.add(k);
+		if (has(["pattern", "minLength", "maxLength"])) kinds.add("string");
+		if (
+			has([
+				"minimum",
+				"maximum",
+				"exclusiveMinimum",
+				"exclusiveMaximum",
+				"multipleOf",
+			])
+		)
+			kinds.add("number").add("integer");
+		for (const key of ["allOf", "oneOf", "anyOf"]) {
+			const members = s.get(key);
+			for (const m of Array.isArray(members) ? members : [])
+				if (isTypeless(m)) read(m);
+		}
+		for (const key of ["if", "then", "else"]) {
+			const b = s.get(key);
+			if (isTypeless(b)) read(b);
+		}
+	};
+	read(v);
+	return kinds.has("object") || kinds.has("array") ? [...kinds] : [];
+}
+
+/**
+ * The kinds the schema's `const` / `enum` and the `type`s and `const` / `enum` of its
+ * members allow, at any depth: those of each `allOf` member, of its `$ref` and `$dynamicRef` targets, and of
+ * every `oneOf` / `anyOf` member together (none where one says none); with `around`,
+ * those of the schemas it is a member of too. undefined where none of them says any.
+ */
+function saidKinds(
+	cx: Ctx,
+	v: JsonObject,
+	around: boolean,
+): string[] | undefined {
+	const meet = (lists: string[][]): string[] | undefined =>
+		lists.length === 0
+			? undefined
+			: ALL_KINDS.filter((k) =>
+					lists.every(
+						(n) => n.includes(k) || (k === "integer" && n.includes("number")),
+					),
+				);
+	// What a schema's `const` / `enum` and `type`s say (`self`: its own `type` and its `$ref`
+	// and `$dynamicRef` targets' too), and its members'.
+	const says = (
+		s: Value,
+		self: boolean,
+		seen: ReadonlySet<string>,
+	): string[] | undefined => {
+		if (!(s instanceof JsonObject)) return undefined;
+		const uri = cx.ownResource(s);
+		return uri === undefined
+			? saysHere(s, self, seen)
+			: cx.inResource(uri, () => saysHere(s, self, seen));
+	};
+	const saysHere = (
+		s: JsonObject,
+		self: boolean,
+		seen: ReadonlySet<string>,
+	): string[] | undefined => {
+		const named: string[][] = [];
+		const add = (k: string[] | undefined) => {
+			if (k !== undefined) named.push(k);
+		};
+		if (self) {
+			// The target is the same value; in 3.0 the keywords next to $ref are ignored.
+			for (const target of cx.reached(s))
+				if (!seen.has(target.uri))
+					add(
+						cx.inTarget(target, () =>
+							says(target.value, true, new Set([...seen, target.uri])),
+						),
+					);
+			if (s.get("$ref") !== undefined && !cx.refSiblings) return meet(named);
+			add(typeKinds(cx, s));
+		}
+		add(valueKinds(s));
+		const allOf = s.get("allOf");
+		for (const m of Array.isArray(allOf) ? allOf : []) add(says(m, true, seen));
+		for (const key of ["oneOf", "anyOf"]) {
+			const members = s.get(key);
+			if (!Array.isArray(members)) continue;
+			const each = members.map((m) => says(m, true, seen));
+			if (each.every((k) => k !== undefined)) add([...new Set(each.flat())]);
+		}
+		return meet(named);
+	};
+	const named: string[][] = [];
+	const own = says(v, false, new Set());
+	if (own !== undefined) named.push(own);
+	if (around)
+		for (const s of cx.around)
+			for (const t of [typeKinds(cx, s), valueKinds(s)])
+				if (t !== undefined) named.push(t);
+	return meet(named);
+}
+
+/** The kinds of the values `const` or `enum` lists, which say the kinds as `type` does; undefined without them. */
+function valueKinds(v: JsonObject): string[] | undefined {
+	const c = v.get("const");
+	const values = c === undefined ? v.get("enum") : [c];
+	if (!Array.isArray(values)) return undefined;
+	return [
+		...new Set(
+			values.map((x) =>
+				x === null
+					? "null"
+					: Array.isArray(x)
+						? "array"
+						: x instanceof JsonObject
+							? "object"
+							: x instanceof JsonNumber
+								? "number"
+								: typeof x === "string"
+									? "string"
+									: "boolean",
+			),
+		),
+	];
 }
 
 /** Members, converted knowing the keys the group leaves out of this view (see `leftOutTarget`). */
@@ -1320,9 +2323,9 @@ function membersIn(
 }
 
 /**
- * A `$ref`'s target written out without the keys the group leaves out of this view, where
- * it names one that it does not leave out itself: the reference's own view would have it.
- * Undefined where the reference stays.
+ * A `$ref`'s or `$dynamicRef`'s target written out without the keys the group leaves out
+ * of this view, where it names one that it does not leave out itself: the reference's own
+ * view would have it. Undefined where the reference stays.
  */
 function leftOutTarget(
 	cx: Ctx,
@@ -1331,13 +2334,14 @@ function leftOutTarget(
 	group: ReadonlySet<string>,
 ): Ty | undefined {
 	if (group.size === 0) return undefined;
-	const { value, base, uri, where } = cx.locate(r, at);
-	const named = cx.withBase(base, () => namedKeys(cx, value));
-	const own = cx.withBase(base, () => leftOutKeys(cx, value));
+	const target = cx.locate(r, at);
+	const { value, uri, where } = target;
+	const named = cx.inTarget(target, () => namedKeys(cx, value));
+	const own = cx.inTarget(target, () => leftOutKeys(cx, value));
 	if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
 		return undefined;
 	try {
-		return cx.withBase(base, () =>
+		return cx.inTarget(target, () =>
 			cx.withLeftOut([value], group, () => schema(cx, value, where)),
 		);
 	} finally {
@@ -1400,7 +2404,7 @@ function shared(tys: Ty[]): Ty[] {
 }
 
 /** `members`, `boolean` among them as `true` and `false` where `values` has one of them: TypeScript can leave either out. */
-function booleansListed(members: Ty[], values: Ty[]): Ty[] {
+function booleansListed(members: Ty[], values: readonly Ty[]): Ty[] {
 	const isBoolean = (t: Ty) =>
 		t.kind === "lit" && (t.text === "true" || t.text === "false");
 	if (!values.some(isBoolean)) return members;
@@ -1444,13 +2448,10 @@ function exclusive(
 	cx: Ctx,
 	members: Value[],
 	tys: Ty[],
-	at: string,
 	left: ReadonlySet<string>,
 ): Ty[] {
 	// A key left out of this view is required on the other side only.
-	const keys = members.map((m, i) =>
-		keysOnly(cx, m, child(at, String(i)))?.filter((k) => !left.has(k)),
-	);
+	const keys = members.map((m) => keysOnly(cx, m)?.filter((k) => !left.has(k)));
 	const without = (key: string, ty: Ty): Prop => ({ key, ty, optional: true });
 	return tys.map((t, i) => {
 		const own = keys[i];
@@ -1498,16 +2499,13 @@ const isAnnotation = (k: string): boolean =>
 /**
  * The keys a schema requires, when that is all it asks of an object: a non-empty
  * `required`, with at most `type: object`, properties that admit any value and
- * annotations; or a `$ref`, with annotations at most, to such a schema.
+ * annotations; or a `$ref` or `$dynamicRef`, with annotations at most, to such a schema.
  */
-function keysOnly(cx: Ctx, s: Value, at: string): string[] | undefined {
+function keysOnly(cx: Ctx, s: Value): string[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const r = s.str("$ref");
-	if (r !== undefined)
-		return s.entries.every(([k]) => k === "$ref" || isAnnotation(k))
-			? follow(cx, r, at, (t, where) => keysOnly(cx, t, where))
-			: undefined;
-	const props = child(at, "properties");
+	const target = onlyTarget(cx, s);
+	if (target !== undefined)
+		return cx.inTarget(target, () => keysOnly(cx, target.value));
 	const allowed = s.entries.every(
 		([k, x]) =>
 			k === "required" ||
@@ -1515,7 +2513,7 @@ function keysOnly(cx: Ctx, s: Value, at: string): string[] | undefined {
 			(k === "type" && x === "object") ||
 			(k === "properties" &&
 				x instanceof JsonObject &&
-				x.entries.every(([p, ps]) => admitsAnyValue(cx, ps, child(props, p)))),
+				x.entries.every(([, ps]) => admitsAnyValue(cx, ps))),
 	);
 	const req = s.get("required");
 	return allowed && Array.isArray(req) && req.length > 0
@@ -1523,27 +2521,19 @@ function keysOnly(cx: Ctx, s: Value, at: string): string[] | undefined {
 		: undefined;
 }
 
-/** Whether a schema admits every value: `true`, annotations alone, or a `$ref` to such a schema next to them. */
-function admitsAnyValue(cx: Ctx, s: Value, at: string): boolean {
+/**
+ * Whether a schema admits every value: `true`, annotations alone, or a `$ref` or
+ * `$dynamicRef` to such a schema next to them.
+ */
+function admitsAnyValue(cx: Ctx, s: Value): boolean {
 	if (s === true) return true;
 	if (!(s instanceof JsonObject)) return false;
-	if (!s.entries.every(([k]) => k === "$ref" || isAnnotation(k))) return false;
-	const r = s.str("$ref");
-	return (
-		r === undefined ||
-		follow(cx, r, at, (t, where) => admitsAnyValue(cx, t, where))
-	);
-}
-
-/** `f` on the schema a `$ref` reaches, with the base URI of the document it is in. */
-function follow<T>(
-	cx: Ctx,
-	r: string,
-	at: string,
-	f: (target: Value, where: string) => T,
-): T {
-	const { value, base, where } = cx.locate(r, at);
-	return cx.withBase(base, () => f(value, where));
+	if (!s.entries.every(([k]) => REFS.has(k) || isAnnotation(k))) return false;
+	return cx
+		.reached(s)
+		.every((target) =>
+			cx.inTarget(target, () => admitsAnyValue(cx, target.value)),
+		);
 }
 
 /** Keywords that only apply to objects; their presence implies `type: object`. */
@@ -1561,13 +2551,35 @@ function hasObjectKeywords(v: JsonObject): boolean {
 	);
 }
 
+/** Whether `propertyNames` says which keys the object has, as the object type reads it. */
+function readsKeys(cx: Ctx, v: JsonObject, at: string): boolean {
+	const keys = propertyKeys(cx, v, at);
+	return keys !== undefined && keys.kind !== "string";
+}
+
 /** The type given by `type`, or inferred from object / array keywords; `unknown` when neither says anything. */
 function own(cx: Ctx, v: JsonObject, at: string): Ty {
 	const type = v.get("type");
 	if (typeof type === "string") return typed(cx, v, type, at);
 	if (Array.isArray(type))
 		return union(type.map((t) => typed(cx, v, t as string, at)));
-	if (hasObjectKeywords(v)) return object(cx, v, at);
+	// Object and array keywords say the value is of the kinds its keywords are of, each as
+	// its keywords and its members' say, unless a `type` in its `allOf` members says the
+	// kinds: then those kinds, the keywords constraining their own. So does a `type` around
+	// it, except for a member whose other kinds the schemas around it pass (`passing`,
+	// `typelessKinds`): it is of its object and array kinds.
+	const keyed = keywordKinds(v);
+	// Keywords of no kind say none (most schemas without `type`: references, compositions).
+	const of = keyed.length === 0 ? undefined : keywordsOf(cx, v, keyed);
+	if (of !== undefined)
+		return union(
+			of.map((k) =>
+				k === "object" || k === "array"
+					? typed(cx, v, k, at)
+					: passed(cx, v, k, [...cx.around]),
+			),
+		);
+	if (hasObjectKeywords(v) || readsKeys(cx, v, at)) return object(cx, v, at);
 	if (hasArrayKeywords(v)) return array(cx, v, at);
 	// Keywords for strings and numbers without type constrain those kinds alone.
 	const s = text(v);
@@ -1591,6 +2603,29 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 						: (KIND[k] as Ty),
 		),
 	);
+}
+
+/**
+ * The kinds a schema without `type` is of, its keywords being of the kinds `keyed`
+ * (`own`); undefined where its keywords say one kind, as `own` reads them then.
+ */
+function keywordsOf(
+	cx: Ctx,
+	v: JsonObject,
+	keyed: string[],
+): string[] | undefined {
+	const passes = cx.around.length > 0 && typelessKinds(cx, v).length > 0;
+	const said = saidKinds(cx, v, !passes);
+	if (said !== undefined)
+		return [
+			...keyed.filter((k) => said.includes(k)),
+			...said.filter((k) => !keyed.includes(k)),
+		];
+	const context = contextKinds(cx, v);
+	const several = keyed.filter(
+		(k) => k === "object" || k === "array" || (!passes && context.includes(k)),
+	);
+	return several.length > 1 ? several : undefined;
 }
 
 /** Keywords that only apply to arrays and that the type reads; their presence implies `type: array`. */
@@ -1626,12 +2661,17 @@ function literal(v: Value): Ty {
  * in another file, under a key of its own; any other target is expanded inline.
  */
 function reference(cx: Ctx, r: string, at: string): Ty {
+	// Strings read for keys are what the target admits, not a named type (see `propertyKeys`).
+	if (cx.readingKeys) {
+		const located = cx.locate(r, at);
+		return expand(cx, located, cx.componentKey(located.value));
+	}
 	// Where bytes are bytes, a schema with them is written out here: its named type,
 	// which is the same wherever it is used, has text.
 	const here = cx.here;
 	if (here !== undefined) {
 		const located = cx.locate(r, at);
-		if (cx.withBase(located.base, () => binaryAt(cx, located.value, here)))
+		if (cx.inTarget(located, () => binaryAt(cx, located.value, here)))
 			return expand(cx, located, cx.componentKey(located.value));
 	}
 	if (r.startsWith(SCHEMA_PREFIX) && cx.inDocument && !cx.dynamicScope) {
@@ -1688,9 +2728,7 @@ function dynamicNames(
 			return;
 		}
 		if (!(x instanceof JsonObject)) return;
-		const id = x.str("$id");
-		const here =
-			id === undefined ? base : cx.withBase(base, () => cx.baseOf(id));
+		const here = cx.resourceOf(x) ?? base;
 		for (const key of ["$ref", "$dynamicRef"]) {
 			const r = x.str(key);
 			const target =
@@ -2069,23 +3107,32 @@ function count(v: JsonObject, key: string): number | undefined {
 /**
  * A readOnly property is not sent and a writeOnly one is not returned, even when
  * required. The keyword counts on the property schema, or on a schema it reaches
- * through `$ref` or an `allOf` member (`{ allOf: [{ $ref }], description }`).
+ * through `$ref`, `$dynamicRef` or an `allOf` member (`{ allOf: [{ $ref }], description }`).
  */
 function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
 	if (!(s instanceof JsonObject)) return false;
-	const r = s.str("$ref");
+	const uri = cx.ownResource(s);
+	return uri === undefined
+		? leftOutHere(cx, s, seen)
+		: cx.inResource(uri, () => leftOutHere(cx, s, seen));
+}
+
+function leftOutHere(cx: Ctx, s: JsonObject, seen: Set<string>): boolean {
 	// In 3.0 the keywords next to $ref are ignored; only the target counts.
-	const siblings = r === undefined || cx.refSiblings;
+	const ref = s.get("$ref");
+	const siblings = ref === undefined || cx.refSiblings;
 	if (
 		siblings &&
 		s.get(cx.mode === "write" ? "readOnly" : "writeOnly") === true
 	)
 		return true;
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined && !seen.has(target.uri)) {
+	for (const target of cx.reachedBy(
+		s,
+		typeof ref === "string" ? ref : undefined,
+	)) {
+		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
-		// The target's own $refs resolve against the document it is in.
-		if (cx.withBase(target.base, () => isLeftOut(cx, target.value, seen)))
+		if (cx.inTarget(target, () => isLeftOut(cx, target.value, seen)))
 			return true;
 	}
 	const allOf = s.get("allOf");
@@ -2099,7 +3146,7 @@ function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
 /**
  * The properties left out of this view: the schema's own, and those of its `allOf`
  * members, so that `required` next to `allOf` does not bring one back, and of its `$ref`
- * target unless `throughRef` is false.
+ * and `$dynamicRef` targets unless `throughRef` is false.
  */
 function leftOutKeys(
 	cx: Ctx,
@@ -2107,11 +3154,23 @@ function leftOutKeys(
 	seen = new Set<string>(),
 	throughRef = true,
 ): Set<string> {
+	const uri = cx.ownResource(v);
+	return uri === undefined
+		? leftOutKeysHere(cx, v, seen, throughRef)
+		: cx.inResource(uri, () => leftOutKeysHere(cx, v, seen, throughRef));
+}
+
+function leftOutKeysHere(
+	cx: Ctx,
+	v: Value,
+	seen: Set<string>,
+	throughRef: boolean,
+): Set<string> {
 	const keys = new Set<string>();
-	const r = str(v, "$ref");
 	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
 	// are one schema.
-	if (r === undefined || cx.refSiblings) {
+	const ref = get(v, "$ref");
+	if (ref === undefined || cx.refSiblings) {
 		const props = get(v, "properties");
 		if (props instanceof JsonObject)
 			for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
@@ -2119,14 +3178,19 @@ function leftOutKeys(
 		for (const m of Array.isArray(allOf) ? allOf : [])
 			for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
 	}
-	const target = r === undefined || !throughRef ? undefined : cx.tryLocate(r);
-	if (target === undefined || seen.has(target.uri)) return keys;
-	seen.add(target.uri);
-	// The target's own $refs resolve against the document it is in.
-	for (const k of cx.withBase(target.base, () =>
-		leftOutKeys(cx, target.value, seen),
-	))
-		keys.add(k);
+	// Only an object has a reference.
+	if (!throughRef || !(v instanceof JsonObject)) return keys;
+	for (const target of cx.reachedBy(
+		v,
+		typeof ref === "string" ? ref : undefined,
+	)) {
+		if (seen.has(target.uri)) continue;
+		seen.add(target.uri);
+		for (const k of cx.inTarget(target, () =>
+			leftOutKeys(cx, target.value, seen),
+		))
+			keys.add(k);
+	}
 	return keys;
 }
 
@@ -2219,41 +3283,78 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		props.push({ ...prop(name, ty), present: true });
 	}
 
-	// propertyNames that lists the keys closes the object over them: a declared property
-	// it does not list cannot be there, and one it lists but nothing declares has the
-	// value the patterns or additionalProperties give it.
-	const allowed = keyNames(v.get("propertyNames"));
-	if (allowed !== undefined) {
-		if (props.some((p) => !p.optional && !allowed.includes(p.key)))
-			return NEVER;
-		const kept = props.map((p) =>
-			allowed.includes(p.key) ? p : { ...p, ty: NEVER },
+	// The keys the schemas that apply to the same value name, through it and the schemas it
+	// is a member of, are keys of the same object, which its propertyNames asks of too:
+	// those it does not admit cannot be there.
+	const outside = (admits: (key: string) => boolean): string[] =>
+		[...new Set([v, ...cx.around].flatMap((s) => valueKeys(cx, s)))].filter(
+			(k) => !left.has(k) && !admits(k) && !props.some((p) => p.key === k),
 		);
-		for (const name of allowed) {
-			if (left.has(name) || kept.some((p) => p.key === name)) continue;
-			const ty = keyValue(name);
-			if (ty.kind !== "never") kept.push({ key: name, ty, optional: true });
-		}
-		return counted(v, kept);
-	}
+	// A closed object of these properties without them; one without properties it admits
+	// a value of admits no key.
+	const closedOver = (admits: (key: string) => boolean, kept: Prop[]): Ty => {
+		const none = kept.every((p) => p.optional && p.ty.kind === "never");
+		const t = counted(v, none ? [] : kept);
+		return t.kind === "map" ? t : forbid(t, outside(admits));
+	};
 
 	// Keys a pattern matches have its type whatever additionalProperties says. A pattern
 	// whose keys template literal types say keys index signatures by them, and a key it
 	// names is a property; another pattern's type joins the index signature by any string.
-	const keyed: { pattern: string; key: Ty; ty: Ty }[] = [];
-	const unwritten: Ty[] = [];
+	// Patterns of the same template are one index signature of both types.
+	const keyed: { pattern: string; all: Template[]; t: Template; ty: Ty }[] = [];
+	const unwritten: { pattern: string; ty: Ty }[] = [];
+	// A key no value is admitted for is absent, which an open object says; a closed one
+	// has no such key anyway (see `shut`).
+	const absent = new Set<string>();
 	const named = (name: string, ty: Ty) => {
 		if (left.has(name) || props.some((p) => p.key === name)) return;
-		if (ty.kind !== "never") props.push({ key: name, ty, optional: true });
+		if (ty.kind === "never") absent.add(name);
+		props.push({ key: name, ty, optional: true });
+	};
+	const shut = () =>
+		counted(
+			v,
+			props.filter((p) => !absent.has(p.key)),
+		);
+	// A pattern every key matches leaves additionalProperties no key: its type is every other key's.
+	const everyKey: Ty[] = [];
+	// A template without any text names its keys, as a literal does: TypeScript keys no
+	// index signature by them. Each has the type of every pattern that matches it.
+	const name = (t: Template) => {
+		for (const key of strings(t) as string[]) named(key, keyValue(key));
 	};
 	for (const [pattern, ty] of patterns) {
 		const keys = patternType(pattern);
-		if (keys === undefined) unwritten.push(ty);
-		else
-			for (const key of keys.kind === "union" ? keys.items : [keys])
-				if (key.kind === "lit") named(JSON.parse(key.text) as string, ty);
-				else keyed.push({ pattern, key, ty });
+		if (keys === undefined) unwritten.push({ pattern, ty });
+		else if (keys.kind === "string") everyKey.push(ty);
+		else {
+			const all = templates(pattern);
+			for (const t of all)
+				if (strings(t) !== undefined) name(t);
+				else keyed.push({ pattern, all, t, ty });
+		}
 	}
+	if (everyKey.length > 0) additional = inter(everyKey);
+	// The types of every pattern that matches all keys of a template: those of a template
+	// that includes it, those of a pattern no template says where its machine says so (see
+	// `matching`), and those of a pattern of every key.
+	const types = (t: Template): Ty[] => [
+		...keyed.filter((k) => k.all.some((o) => includes(o, t))).map((k) => k.ty),
+		...unwritten
+			.filter((u) => matching(u.pattern, t) === "within")
+			.map((u) => u.ty),
+		...everyKey,
+	];
+	const textOf = (key: Ty) => (key as { text: string }).text;
+	// Patterns of the same template are one index signature of both types, which `types`
+	// gives each of them.
+	const signature = (out: Keyed[], key: Ty, ty: Ty): void => {
+		if (!out.some((s) => textOf(s.key) === textOf(key))) out.push({ key, ty });
+	};
+	// A key has the type of every signature that applies to it, as TypeScript reads them, and
+	// a narrower one's type is within a wider one's, as TypeScript requires.
+	const exact = keyed.map((k) => inter(types(k.t)));
 	// An index signature admits each property it applies to, `undefined` too for an optional one.
 	const admitting = (ty: Ty, applies: (key: string) => boolean): Ty => {
 		const own = props.filter((p) => applies(p.key));
@@ -2264,50 +3365,87 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		]);
 	};
 	// Read once the properties are all there.
-	const keyedSignatures = (): Keyed[] =>
-		keyed.map((k) => ({
-			key: k.key,
-			ty: admitting(k.ty, (key) => matches(k.pattern, key)),
-		}));
+	const keyedSignatures = (): Keyed[] => {
+		const out: Keyed[] = [];
+		for (const [i, k] of keyed.entries())
+			signature(out, k.t.key, admitting(exact[i] as Ty, within(k.t)));
+		return out;
+	};
 	const allTypes = (): Ty[] => [
-		...unwritten,
-		...keyed.map((k) => k.ty),
+		...unwritten.map((u) => u.ty),
+		...exact,
 		...props.map((p) => p.ty),
 	];
 
-	// propertyNames: { pattern } keys the object by it: a property it does not admit cannot
-	// be there, a key it names is a property with the value the patterns or
-	// additionalProperties give it, and the others index signatures by its templates.
-	const names = keyPattern(v.get("propertyNames"));
-	if (names !== undefined) {
-		const pattern = (v.get("propertyNames") as JsonObject).str(
-			"pattern",
-		) as string;
-		if (props.some((p) => !p.optional && !matches(pattern, p.key)))
-			return NEVER;
-		for (const p of props) if (!matches(pattern, p.key)) p.ty = NEVER;
-		const keys = names.kind === "union" ? names.items : [names];
-		for (const key of keys)
-			if (key.kind === "lit") {
-				const name = JSON.parse(key.text) as string;
-				named(name, keyValue(name));
-			}
-		const templates = keys.filter((k) => k.kind !== "lit");
+	// propertyNames keys the object by the strings it admits (see `propertyKeys`): a
+	// property it does not admit cannot be there, a key it names is a property with the
+	// value the patterns or additionalProperties give it, and the others index signatures
+	// by its templates. Any string asks nothing.
+	const keys = propertyKeys(cx, v, at);
+	if (keys !== undefined && keys.kind !== "string") {
+		const admits = keyAdmits(cx, v.get("propertyNames") as Value, keys);
+		if (props.some((p) => !p.optional && !admits(p.key))) return NEVER;
+		for (const p of props) if (!admits(p.key)) p.ty = NEVER;
+		// The keys a template without any text names that its keywords admit (the lengths
+		// beside a pattern, which the template does not carry).
+		const nameAdmitted = (t: Template) => {
+			for (const key of strings(t) as string[])
+				if (admits(key)) named(key, keyValue(key));
+		};
+		for (const name of keyLiterals(keys)) named(name, keyValue(name));
+		const own = keyTerms(keys)
+			.flatMap((k) => (k.kind === "template" ? [templateOf(k)] : []))
+			.filter((t) => {
+				if (strings(t) === undefined) return true;
+				nameAdmitted(t);
+				return false;
+			});
+		// The object without the keys it names that no value is admitted for (see `shut`).
+		const kept = () => props.filter((p) => !absent.has(p.key));
 		// Where it names every key, those are the properties: no other key is admitted.
-		if (templates.length === 0) return counted(v, props);
-		const rest: Keyed[] =
-			additional?.kind === "never"
-				? []
-				: templates.map((key) => ({
-						key,
-						ty: admitting(
-							union([additional ?? UNKNOWN, ...allTypes()]),
-							() => true,
-						),
-					}));
-		const byPattern = keyedSignatures();
-		if (byPattern.length === 0 && rest.length === 0) return counted(v, props);
-		return { kind: "map", props, keyed: [...byPattern, ...rest] };
+		if (own.length === 0) return closedOver(admits, kept());
+		// A pattern's signature is by the keys propertyNames admits too: all of its own
+		// where they are, else the keys each template of propertyNames shares with it,
+		// written as templates (see `meet`). Where those are too many to read, it stays.
+		const signatures: Keyed[] = [];
+		for (const [i, k] of keyed.entries()) {
+			const both = own.some((n) => includes(n, k.t))
+				? [k.t]
+				: own.map((n) => meet(n, k.t));
+			if (both.some((m) => m === undefined))
+				signature(signatures, k.t.key, admitting(exact[i] as Ty, within(k.t)));
+			else
+				for (const t of (both as (Template | Template[])[]).flat())
+					if (t === k.t)
+						signature(signatures, t.key, admitting(exact[i] as Ty, within(t)));
+					else if (strings(t) !== undefined) nameAdmitted(t);
+					else
+						signature(signatures, t.key, admitting(inter(types(t)), within(t)));
+		}
+		// A template whose keys a pattern's include has that pattern's signature, and one a
+		// pattern of every key, or one no template says, matches has their types:
+		// additionalProperties applies to none of them.
+		const others = [
+			...unwritten.map((u) => u.ty),
+			...signatures.map((s) => s.ty),
+			...props.map((p) => p.ty),
+		];
+		const out = [...signatures];
+		for (const t of own) {
+			if (keyed.some((k) => k.all.some((o) => includes(o, t)))) continue;
+			const all = types(t);
+			if (all.length === 0 && additional?.kind === "never") continue;
+			const ty =
+				all.length > 0 ? inter(all) : union([additional ?? UNKNOWN, ...others]);
+			signature(out, t.key, admitting(ty, within(t)));
+		}
+		if (out.length === 0) return closedOver(admits, kept());
+		const forbidden = outside(admits).map((key) => ({
+			key,
+			ty: NEVER,
+			optional: true,
+		}));
+		return { kind: "map", props: [...props, ...forbidden], keyed: out };
 	}
 
 	const byPattern = keyedSignatures();
@@ -2328,7 +3466,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		byPattern.length === 0 &&
 		unwritten.length === 0
 	)
-		return counted(v, props);
+		return shut();
 	const index =
 		additional.kind === "never" && unwritten.length === 0
 			? undefined
@@ -2341,20 +3479,16 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	};
 }
 
-/** The keys a `propertyNames` with only `pattern` admits, as template literal types; undefined for any other, or a pattern none says. */
-function keyPattern(names: Value | undefined): Ty | undefined {
-	if (!(names instanceof JsonObject)) return undefined;
-	const keys = names.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
-	const pattern = names.str("pattern");
-	return keys.length === 1 && pattern !== undefined
-		? patternType(pattern)
-		: undefined;
-}
-
 /**
  * A closed object, its properties all it can have: `minProperties` requires that many
  * of them (a union over which), `maxProperties` leaves out the others.
  */
+/**
+ * The properties a template's index signature applies to: those whose key it admits.
+ * Outside `object`, which would make the closure on every call.
+ */
+const within = (t: Template) => (key: string) => admits(t, key);
+
 function counted(v: JsonObject, props: Prop[]): Ty {
 	if (props.length === 0) return { kind: "map", props: [], index: NEVER };
 	const optional = props.filter((p) => p.optional).map((p) => p.key);

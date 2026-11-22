@@ -1,0 +1,128 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "RequiredOrItems": {
+        "description": "Object keywords constrain only the objects and array keywords only the arrays.",
+        "required": ["a"],
+        "minItems": 1
+      },
+      "DependentOrItems": {
+        "description": "So do dependentRequired and minItems.",
+        "dependentRequired": { "a": ["b"] },
+        "minItems": 1
+      },
+      "KeysOrContains": {
+        "description": "So do propertyNames and contains.",
+        "propertyNames": { "enum": ["a"] },
+        "contains": {}
+      },
+      "SchemasOrItems": {
+        "description": "So do dependentSchemas and items.",
+        "items": { "type": "string" },
+        "dependentSchemas": { "a": { "required": ["b"] } }
+      },
+      "ItemsOrRequired": {
+        "description": "So do items and required.",
+        "items": { "type": "string" },
+        "required": ["a"]
+      },
+      "ContainsOrDependent": {
+        "description": "So do contains and dependentRequired.",
+        "contains": {},
+        "dependentRequired": { "a": ["b"] }
+      },
+      "ContainsOrClosed": {
+        "description": "So do contains and unevaluatedProperties, which contains does not evaluate for.",
+        "contains": {},
+        "unevaluatedProperties": false
+      },
+      "ContainsOrPrefixed": {
+        "description": "String keywords beside them constrain the strings, which are a kind the value can be.",
+        "contains": {},
+        "pattern": "^a"
+      },
+      "RequiredOrEmpty": {
+        "description": "So do string lengths beside object keywords.",
+        "required": ["a"],
+        "maxLength": 0
+      },
+      "ItemsOrNumber": {
+        "description": "Bounds constrain the numbers, of which they admit more than TypeScript can list.",
+        "minItems": 1,
+        "minimum": 1,
+        "maximum": 2
+      },
+      "RequiredOrMemberItems": {
+        "description": "allOf members without type ask the same value, so their keywords count with the schema's own.",
+        "required": ["a"],
+        "allOf": [{ "minItems": 1 }]
+      },
+      "ItemsOrMemberDependent": {
+        "description": "So do those of members of members.",
+        "minItems": 1,
+        "allOf": [{ "allOf": [{ "dependentRequired": { "a": ["b"] } }] }]
+      },
+      "OneOfKind": {
+        "description": "So do anyOf and oneOf members: each constrains its own kind, and the schema's other kinds pass it.",
+        "anyOf": [{ "required": ["a"] }, { "minItems": 1 }]
+      },
+      "MemberDependentOrItems": {
+        "description": "A member with keywords of several kinds constrains each kind by its own.",
+        "type": ["array", "object"],
+        "allOf": [{ "dependentRequired": { "a": ["b"] }, "minItems": 1 }]
+      },
+      "MemberKeysOrContains": {
+        "description": "So does one with propertyNames and contains.",
+        "type": ["array", "object"],
+        "allOf": [{ "propertyNames": { "enum": ["a"] }, "contains": {} }]
+      },
+      "MemberOrNull": {
+        "description": "Other kinds the parent's type names pass it.",
+        "type": ["array", "object", "null"],
+        "allOf": [{ "required": ["a"], "minItems": 1 }]
+      },
+      "NestedMemberOrNull": {
+        "description": "So does one whose own member has keywords of another kind.",
+        "type": ["object", "null"],
+        "allOf": [{ "required": ["a"], "allOf": [{ "minItems": 1 }] }]
+      },
+      "EitherMemberOrNull": {
+        "description": "So does one whose anyOf members are of several kinds: every object passes one, every array the other.",
+        "type": ["array", "object", "null"],
+        "allOf": [{ "anyOf": [{ "required": ["a"] }, { "minItems": 1 }] }]
+      },
+      "MemberOfAnyType": {
+        "description": "Without type in the parent, the member is the kinds its keywords say.",
+        "allOf": [{ "contains": {}, "pattern": "^a" }]
+      },
+      "ClosedMember": {
+        "description": "A closed object admits no object that requires a key it forbids; the member's arrays stay.",
+        "type": ["array", "object", "null"],
+        "additionalProperties": false,
+        "allOf": [{ "required": ["x"], "minItems": 1 }]
+      },
+      "ClosedMemberOrString": {
+        "description": "So do its strings.",
+        "type": ["object", "string"],
+        "additionalProperties": false,
+        "allOf": [{ "required": ["x"], "pattern": "^a" }]
+      },
+      "AnyMember": {
+        "description": "anyOf members constrain each kind by their own keywords too.",
+        "type": ["array", "object"],
+        "anyOf": [
+          { "required": ["a"], "minItems": 1 },
+          { "required": ["b"], "maxItems": 0 }
+        ]
+      },
+      "ThenSeveralKinds": {
+        "description": "So does then: if admits every array, so then's maxItems applies to them.",
+        "type": ["array", "object"],
+        "if": { "required": ["a"] },
+        "then": { "required": ["b"], "maxItems": 2 }
+      }
+    }
+  }
+}

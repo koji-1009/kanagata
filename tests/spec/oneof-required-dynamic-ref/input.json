@@ -1,0 +1,18 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Anything": true,
+      "ByC": { "required": ["c"] },
+      "Forms": {
+        "description": "Each member asks only for keys, through $dynamicRef too: each lacks the others'.",
+        "oneOf": [
+          { "required": ["a"] },
+          { "$dynamicRef": "#/components/schemas/ByC", "description": "by c" },
+          { "properties": { "d": { "$dynamicRef": "#/components/schemas/Anything" } }, "required": ["d"] }
+        ]
+      }
+    }
+  }
+}

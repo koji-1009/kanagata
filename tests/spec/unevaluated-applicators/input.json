@@ -149,7 +149,7 @@
         "unevaluatedItems": false
       },
       "Contains": {
-        "description": "contains evaluates the items that match it, which no type says.",
+        "description": "contains evaluates the items that match it, and no other item is admitted: every item is a string.",
         "type": "array",
         "allOf": [{ "contains": { "type": "string" } }],
         "unevaluatedItems": false

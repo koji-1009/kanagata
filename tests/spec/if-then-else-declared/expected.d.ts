@@ -74,10 +74,9 @@ export type Undecided = {
 export type Amount = ({
   unit?: "fixed" | "percent";
   currency?: string;
-} | number) & (({
-  unit?: "fixed";
 } | number) & ({
+  unit?: "fixed";
   currency: {} | null;
-} | number) | {
+} | number | {
   unit: "percent";
 });

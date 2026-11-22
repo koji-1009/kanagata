@@ -1,0 +1,172 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Empty": {
+        "description": "propertyNames: {} asks nothing.",
+        "type": "object",
+        "propertyNames": {}
+      },
+      "True": {
+        "description": "Nor does true.",
+        "type": "object",
+        "propertyNames": true
+      },
+      "Strings": {
+        "description": "Nor does type: string: every key is a string.",
+        "type": "object",
+        "propertyNames": { "type": "string" }
+      },
+      "StringsAmong": {
+        "description": "Nor does a type that names string among others.",
+        "type": "object",
+        "propertyNames": { "type": ["string", "null"] }
+      },
+      "Annotated": {
+        "description": "Nor do annotations alone.",
+        "type": "object",
+        "propertyNames": { "description": "Any key." }
+      },
+      "AnyAlone": {
+        "description": "Without type, one that asks nothing admits any value.",
+        "propertyNames": {}
+      },
+      "NoStrings": {
+        "description": "An enum without strings lists no key: the object has none.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "propertyNames": { "enum": [1] }
+      },
+      "NoStringsRequired": {
+        "description": "So one that requires a key admits nothing.",
+        "type": "object",
+        "required": ["a"],
+        "propertyNames": { "const": 1 }
+      },
+      "Short": {
+        "description": "The keys are the enum's strings the keywords for strings admit.",
+        "type": "object",
+        "propertyNames": { "enum": ["a", "bb"], "maxLength": 1 }
+      },
+      "Prefixed": {
+        "description": "pattern among them.",
+        "type": "object",
+        "propertyNames": { "enum": ["x-a", "b"], "pattern": "^x-" }
+      },
+      "NotStrings": {
+        "description": "A type that does not name string admits no key: every key is a string.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "propertyNames": { "type": "number" }
+      },
+      "NotStringsAlone": {
+        "description": "Without type, it says the value is an object without keys.",
+        "propertyNames": { "type": ["integer", "null"] }
+      },
+      "PatternShort": {
+        "description": "A pattern next to lengths keys the object by its templates; the lengths they cannot carry are ignored, with a warning.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-", "maxLength": 5 },
+        "additionalProperties": { "type": "string" }
+      },
+      "PatternLong": {
+        "description": "A declared property they reject is never.",
+        "type": "object",
+        "properties": { "x-abcdef": { "type": "string" }, "x-a": { "type": "string" } },
+        "propertyNames": { "type": "string", "pattern": "^x-", "minLength": 4 }
+      },
+      "PatternNamed": {
+        "description": "Where the pattern names every key, the lengths leave out those they reject, with no warning.",
+        "type": "object",
+        "propertyNames": { "pattern": "^(a|bb)$", "maxLength": 1 }
+      },
+      "NotAll": {
+        "description": "The keys are the strings propertyNames admits: not: {} admits none.",
+        "type": "object",
+        "propertyNames": { "not": {} }
+      },
+      "PatternMinimum": {
+        "description": "Keywords for numbers say nothing of the keys.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-", "minimum": 1 },
+        "additionalProperties": { "type": "string" }
+      },
+      "EmptyKey": {
+        "description": "maxLength: 0 admits the empty key alone.",
+        "type": "object",
+        "propertyNames": { "maxLength": 0 }
+      },
+      "InAllOf": {
+        "description": "Members of propertyNames say which strings it admits too.",
+        "type": "object",
+        "properties": { "x-a": { "type": "string" }, "b": { "type": "string" } },
+        "propertyNames": { "allOf": [{ "pattern": "^x-" }] }
+      },
+      "FalseDeclared": {
+        "description": "false admits no key, a declared property among them.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "propertyNames": false
+      },
+      "KeyName": { "type": "string", "enum": ["a"] },
+      "ByReference": {
+        "description": "A reference says the strings its target admits.",
+        "type": "object",
+        "propertyNames": { "$ref": "#/components/schemas/KeyName" }
+      },
+      "InFile": {
+        "description": "One to another file too, which names no type of its own for it.",
+        "type": "object",
+        "propertyNames": { "$ref": "keys.json" }
+      },
+      "SelfKeys": {
+        "description": "Keys this schema admits, an object, are no string: no key, read once.",
+        "type": "object",
+        "propertyNames": { "$ref": "#/components/schemas/SelfKeys" }
+      },
+      "SelfKeysShort": {
+        "description": "Nor do lengths next to it ask more of it there.",
+        "type": "object",
+        "propertyNames": { "$ref": "#/components/schemas/SelfKeysShort", "maxLength": 3 }
+      },
+      "TwoPatterns": {
+        "description": "The keys two patterns admit are the strings their templates share: a key they name, and templates.",
+        "type": "object",
+        "propertyNames": { "allOf": [{ "pattern": "^x-" }, { "pattern": "-y$" }] }
+      },
+      "InTwoPatterns": {
+        "description": "A declared property they do not both admit is never.",
+        "type": "object",
+        "properties": { "x-a-y": { "type": "string" }, "x-a": { "type": "string" } },
+        "propertyNames": { "allOf": [{ "pattern": "^x-" }, { "pattern": "-y$" }] }
+      },
+      "InAllOfNames": {
+        "description": "So is one a member's list leaves out.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "propertyNames": { "allOf": [{ "enum": ["a"] }] }
+      },
+      "TooManyWays": {
+        "description": "Patterns whose templates line up in too many ways to read are ignored, with a warning.",
+        "type": "object",
+        "propertyNames": {
+          "allOf": [
+            { "pattern": "a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a" },
+            { "pattern": "b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b" }
+          ]
+        }
+      },
+      "NotUnread": {
+        "description": "A not TypeScript cannot say is ignored, with a warning.",
+        "type": "object",
+        "propertyNames": { "not": { "minLength": 2 } }
+      },
+      "Unread": {
+        "description": "Lengths without a list of keys are ignored, with a warning.",
+        "type": "object",
+        "propertyNames": { "maxLength": 3 }
+      }
+    }
+  }
+}

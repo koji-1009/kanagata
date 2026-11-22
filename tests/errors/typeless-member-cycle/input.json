@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "components": {
+    "schemas": {
+      "Outer": { "type": ["object", "null"], "allOf": [{ "$ref": "#/components/schemas/Loop" }] },
+      "Loop": { "allOf": [{ "required": ["a"], "allOf": [{ "$ref": "#/components/schemas/Loop" }] }] }
+    }
+  }
+}

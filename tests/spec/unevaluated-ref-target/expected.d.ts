@@ -10,6 +10,10 @@ export interface schemas {
   Beside: Beside;
   Pair: Pair;
   AtMostPair: AtMostPair;
+  Named: Named;
+  Owned: Owned;
+  Dated: Dated;
+  Entry: Entry;
   Strings: Strings;
   AnyStrings: AnyStrings;
 }
@@ -33,6 +37,23 @@ export type Pair = [string?, number?, ...unknown[]];
 
 /** Pair's prefixItems evaluate the first two items; no others are admitted. */
 export type AtMostPair = Pair & [string?, number?];
+
+export type Named = {
+  name?: string;
+};
+
+export type Owned = Named & {
+  owner?: string;
+};
+
+export type Dated = Named & {
+  date?: string;
+};
+
+/** Both members reach Named, which evaluates name. */
+export type Entry = Owned & Dated & {
+  name: {} | null;
+};
 
 export type Strings = string[];
 

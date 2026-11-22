@@ -1,0 +1,15 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Leaf": { "$id": "schemas/leaf", "type": "object", "properties": { "x": { "type": "string" } } },
+      "Holder": {
+        "description": "Reached by its $id, the inner schema's $id is resolved once: its $ref reaches schemas/leaf.",
+        "type": "object",
+        "properties": { "inner": { "$ref": "schemas/inner" } },
+        "$defs": { "inner": { "$id": "schemas/inner", "type": "object", "properties": { "leaf": { "$ref": "leaf" } } } }
+      }
+    }
+  }
+}

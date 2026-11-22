@@ -1,0 +1,59 @@
+{
+  "openapi": "3.1.0",
+  "components": {
+    "schemas": {
+      "AnyAndTemplate": {
+        "description": "An x- key matches both patterns, number and string: it cannot be there.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "number" }, "^[\\s\\S]*$": { "type": "string" } }
+      },
+      "NarrowAndWide": {
+        "description": "An x-a key matches both patterns; other x- keys the wider one.",
+        "type": "object",
+        "patternProperties": { "^x-a": { "type": "string" }, "^x-": { "type": "number" } },
+        "additionalProperties": false
+      },
+      "WideAndNarrowOthers": {
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "number" }, "^x-a": { "type": "string" } },
+        "additionalProperties": { "type": "boolean" }
+      },
+      "SameKeys": {
+        "description": "Two patterns of the same keys are one index signature of both types.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": ["string", "number"] }, "^x-[\\s\\S]*": { "type": ["number", "boolean"] } },
+        "additionalProperties": false
+      },
+      "SomeKeysOfBoth": {
+        "description": "TypeScript meets the index signatures of a key both template types admit.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": ["string", "number"] }, "-y$": { "type": ["number", "boolean"] } },
+        "additionalProperties": false
+      },
+      "WithProperty": {
+        "type": "object",
+        "properties": { "x-id": { "type": "string" } },
+        "patternProperties": { "^x-": { "type": ["string", "number"] }, "^x-i": { "type": ["string", "boolean"] } }
+      },
+      "NamesWithinPattern": {
+        "description": "Every key propertyNames admits matches the pattern: additionalProperties applies to none.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-a" },
+        "patternProperties": { "^x-": { "type": "number" } },
+        "additionalProperties": { "type": "string" }
+      },
+      "NamesWithinPatternClosed": {
+        "type": "object",
+        "propertyNames": { "pattern": "^x-a" },
+        "patternProperties": { "^x-": { "type": "number" } },
+        "additionalProperties": false
+      },
+      "NamesSamePattern": {
+        "type": "object",
+        "propertyNames": { "pattern": "^x-" },
+        "patternProperties": { "^x-": { "type": "number" } },
+        "additionalProperties": { "type": "string" }
+      }
+    }
+  }
+}

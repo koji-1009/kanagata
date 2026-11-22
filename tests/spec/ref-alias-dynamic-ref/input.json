@@ -1,0 +1,15 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Holder": { "type": "object", "$defs": { "inner": { "type": "object", "properties": { "a": { "type": "string" } } } } },
+      "Inner": {
+        "description": "Only a $dynamicRef: another name for what it reaches, which references to it are written as.",
+        "$dynamicRef": "#/components/schemas/Holder/$defs/inner"
+      },
+      "AnyValue": { "description": "Annotations only: no reference, so another name for nothing." },
+      "Use": { "type": "object", "properties": { "inner": { "$ref": "#/components/schemas/Holder/$defs/inner" } } }
+    }
+  }
+}

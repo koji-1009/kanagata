@@ -261,9 +261,7 @@ export type AccountInput = ({
 });
 
 /** Without an applicator they are additionalProperties and items, which say the value is an object or an array. */
-export type Alone = {
-  [key: string]: string;
-} | number[];
+export type Alone = Record<string, unknown> | unknown[];
 
 /** Items past those prefixItems evaluate are not admitted. */
 export type Prefix = [string?, number?];
@@ -277,8 +275,8 @@ export type DeepItems = [] | [string?] | [never?, ...number[]] | [never?] | numb
 /** items in a member evaluates every item. */
 export type AllItems = string[];
 
-/** contains evaluates the items that match it, which no type says. */
-export type Contains = [unknown, ...unknown[]];
+/** contains evaluates the items that match it, and no other item is admitted: every item is a string. */
+export type Contains = [string, ...string[]];
 
 /** else evaluates where if does not admit the value, which TypeScript cannot say here. */
 export type Undecided = {

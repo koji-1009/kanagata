@@ -9,6 +9,13 @@
         "nullable": true,
         "properties": { "build_type": { "type": "string" }, "source": { "type": "string" } },
         "anyOf": [{ "required": ["source"] }, { "required": ["build_type"] }]
+      },
+      "Keyed": { "required": ["a"] },
+      "RefMember": {
+        "description": "null passes a $ref to such a member; the keywords next to it are ignored.",
+        "type": "object",
+        "nullable": true,
+        "allOf": [{ "$ref": "#/components/schemas/Keyed", "minItems": 1 }]
       }
     }
   }

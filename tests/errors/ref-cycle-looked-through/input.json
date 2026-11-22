@@ -1,0 +1,27 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/upload": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": { "schema": { "type": "object", "properties": { "file": { "$ref": "#/components/schemas/Loop" } } } }
+          }
+        },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Loop": { "$ref": "#/components/schemas/Loop" },
+      "Thing": {
+        "type": "object",
+        "properties": { "kind": { "$ref": "#/components/schemas/Loop" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] }
+      }
+    }
+  }
+}

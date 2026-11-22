@@ -40,12 +40,12 @@
         "not": { "type": ["string", "number", "boolean", "null", "object"] }
       },
       "OneNotOthers": {
-        "description": "One keyword that admits arrays only is enough: a not that leaves arrays alone,",
+        "description": "One keyword that names arrays is enough: a not that leaves arrays alone,",
         "allOf": [{ "$ref": "#/components/schemas/NotOthers" }, { "maxItems": 1 }]
       },
       "CountedEnum": { "enum": [["a"], "none"], "minItems": 1 },
       "OneCountedEnum": {
-        "description": "array keywords next to values of other kinds,",
+        "description": "array keywords next to values of other kinds, which pass them,",
         "allOf": [{ "$ref": "#/components/schemas/CountedEnum" }, { "maxItems": 1 }]
       },
       "TypedPair": { "type": ["array", "string"], "const": ["a", "b"] },
@@ -60,7 +60,7 @@
       },
       "Corners": { "enum": [[0, 0], [1, 1]] },
       "AtCorner": {
-        "description": "Several arrays are no one array type: each is a tuple of its own, which reads its items.",
+        "description": "Several arrays are no one array type: they are put beside it as they are.",
         "allOf": [{ "$ref": "#/components/schemas/Corners" }, { "minItems": 1 }]
       }
     }

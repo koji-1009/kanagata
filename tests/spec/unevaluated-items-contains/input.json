@@ -4,9 +4,106 @@
   "components": {
     "schemas": {
       "Matched": {
-        "description": "contains evaluates the items it matches, so unevaluatedItems is not items here: [\"a\"] is valid.",
+        "description": "contains evaluates the items it matches, and no other item is admitted: every item is a string, and there is one at least.",
         "type": "array",
         "contains": { "type": "string" },
+        "unevaluatedItems": false
+      },
+      "Bounded": {
+        "description": "Every item matches contains, so minContains and maxContains bound the length.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "minContains": 2,
+        "maxContains": 3,
+        "unevaluatedItems": false
+      },
+      "Optional": {
+        "description": "minContains 0 admits no item too.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "minContains": 0,
+        "unevaluatedItems": false
+      },
+      "Impossible": {
+        "description": "More items than maxContains admits are required.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "minContains": 3,
+        "maxContains": 2,
+        "unevaluatedItems": false
+      },
+      "Typed": {
+        "description": "An item contains does not match is of the type unevaluatedItems says; which item is a string no type says.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "unevaluatedItems": { "type": "number" }
+      },
+      "Prefixed": {
+        "description": "Items past prefixItems are those contains matches, and a number never does: a string follows it.",
+        "type": "array",
+        "prefixItems": [{ "type": "number" }],
+        "contains": { "type": "string" },
+        "unevaluatedItems": false
+      },
+      "Everything": {
+        "description": "contains: {} evaluates every item.",
+        "prefixItems": [{ "type": "string" }],
+        "contains": {},
+        "unevaluatedItems": false
+      },
+      "NoneMatch": {
+        "description": "maxContains 0: no item matches contains, so it evaluates none.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "minContains": 0,
+        "maxContains": 0,
+        "unevaluatedItems": false
+      },
+      "NoneMatchUnsaid": {
+        "description": "maxContains 0: the items are of the type unevaluatedItems says; the strings contains does not match no type says.",
+        "type": "array",
+        "contains": { "const": "a" },
+        "minContains": 0,
+        "maxContains": 0,
+        "unevaluatedItems": { "type": "string" }
+      },
+      "InAllOf": {
+        "description": "contains in an allOf member evaluates the items it matches.",
+        "type": "array",
+        "allOf": [{ "contains": { "type": "string" }, "maxContains": 2 }],
+        "unevaluatedItems": false
+      },
+      "HasString": {
+        "type": "array",
+        "contains": { "type": "string" },
+        "maxContains": 2
+      },
+      "ViaRef": {
+        "description": "contains in a $ref target evaluates the items it matches.",
+        "type": "array",
+        "allOf": [{ "$ref": "#/components/schemas/HasString" }],
+        "unevaluatedItems": false
+      },
+      "TwoSources": {
+        "description": "An item matches one contains or the other; which no type says.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "allOf": [{ "contains": { "type": "number" } }],
+        "unevaluatedItems": false
+      },
+      "Either": {
+        "description": "An anyOf member's contains evaluates the items it matches where the member matches, and both may.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" } }, { "contains": { "type": "number" } }],
+        "unevaluatedItems": false
+      },
+      "Undecided": {
+        "description": "else evaluates where if does not admit the value, which TypeScript cannot say here: unevaluatedItems is ignored, and so which items match contains is not typed.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "if": { "uniqueItems": true },
+        "then": {},
+        "else": { "prefixItems": [{ "type": "number" }] },
         "unevaluatedItems": false
       }
     }

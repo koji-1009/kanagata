@@ -117,8 +117,10 @@ export type RequiredName = never;
 /** Other propertyNames have no type. */
 export type PatternNames = Record<string, unknown>;
 
-/** Nor do names listed next to another keyword. */
-export type MixedNames = Record<string, unknown>;
+/** Names not leaves out are no keys. */
+export type MixedNames = {
+  [key: string]: never;
+};
 
 /** minContains 0 asks for no item. */
 export type ContainsNone = string[];

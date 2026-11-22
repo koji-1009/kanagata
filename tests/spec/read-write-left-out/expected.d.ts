@@ -115,6 +115,4 @@ export type OneOfRequired = {
 /** Nor a oneOf member's required. */
 export type OneOfRequiredInput = {
   name?: string;
-} & (Record<string, unknown> | {
-  name: {} | null;
-});
+};

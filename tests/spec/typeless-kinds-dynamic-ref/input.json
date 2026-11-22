@@ -1,0 +1,40 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Keyed": { "required": ["a"] },
+      "Passed": {
+        "description": "The member asks a key of objects only, through $dynamicRef: null passes it.",
+        "type": ["object", "null"],
+        "allOf": [{ "$dynamicRef": "#/components/schemas/Keyed" }]
+      },
+      "Obj": { "type": "object" },
+      "Said": {
+        "description": "The member's $dynamicRef target says the value is an object: minItems asks nothing of it.",
+        "minItems": 1,
+        "allOf": [{ "$dynamicRef": "#/components/schemas/Obj" }]
+      },
+      "Strs": { "type": "array", "items": { "type": "string" } },
+      "Typed": {
+        "description": "A member with $dynamicRef is not typeless: its target says the value is an array.",
+        "required": ["a"],
+        "allOf": [{ "$dynamicRef": "#/components/schemas/Strs", "minItems": 1 }]
+      },
+      "KeyedInner": { "$id": "https://example.com/keyed-inner", "required": ["a"] },
+      "KeyedHolder": { "$id": "https://example.com/keyed-holder", "$ref": "keyed-inner" },
+      "PassedById": {
+        "description": "The same through a $ref that resolves against its target's own $id.",
+        "type": ["object", "null"],
+        "allOf": [{ "$ref": "#/components/schemas/KeyedHolder" }]
+      },
+      "ObjInner": { "$id": "https://example.com/obj-inner", "type": "object" },
+      "ObjHolder": { "$id": "https://example.com/obj-holder", "$ref": "obj-inner" },
+      "SaidById": {
+        "description": "And the kind said through it.",
+        "minItems": 1,
+        "allOf": [{ "$ref": "#/components/schemas/ObjHolder" }]
+      }
+    }
+  }
+}

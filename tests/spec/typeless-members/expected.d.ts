@@ -9,6 +9,28 @@ export interface schemas {
   StringOrObject: StringOrObject;
   ArrayOrNull: ArrayOrNull;
   TaggedOrNull: TaggedOrNull;
+  TaggedOrPrefixed: TaggedOrPrefixed;
+  TaggedOrSmall: TaggedOrSmall;
+  KeyedOrEmpty: KeyedOrEmpty;
+  NestedOrNull: NestedOrNull;
+  NestedOrEmpty: NestedOrEmpty;
+  EitherOrEmpty: EitherOrEmpty;
+  OneOrEmpty: OneOrEmpty;
+  NestedTyped: NestedTyped;
+  NotString: NotString;
+  NotKeyed: NotKeyed;
+  NotListed: NotListed;
+  NotEmpty: NotEmpty;
+  NotUnread: NotUnread;
+  IfInMember: IfInMember;
+  IfElseInMember: IfElseInMember;
+  Keys: Keys;
+  Keyed: Keyed;
+  RefInMember: RefInMember;
+  RefMember: RefMember;
+  RefTyped: RefTyped;
+  TrueInMember: TrueInMember;
+  FalseInMember: FalseInMember;
   PairOrNull: PairOrNull;
   Typed: Typed;
   OnlyObject: OnlyObject;
@@ -27,15 +49,130 @@ export type Pages = ({
 });
 
 /** So do strings. */
-export type StringOrObject = ({
+export type StringOrObject = {
   a?: string;
-} | string) & (string | Record<string, unknown>);
+} | string;
 
 /** Array keywords constrain only the arrays. */
 export type ArrayOrNull = [string, ...string[]] | null;
 
 /** So does contains. */
 export type TaggedOrNull = [string, ...string[]] | null;
+
+/** The strings that pass are those the member's string keywords admit. */
+export type TaggedOrPrefixed = `a${string}` | [unknown, ...unknown[]];
+
+/** So are the integers, by its bounds. */
+export type TaggedOrSmall = 1 | 2 | [unknown, ...unknown[]];
+
+/** Next to object keywords too. */
+export type KeyedOrEmpty = {
+  a: {} | null;
+} | "" | {
+  b: {} | null;
+} | "b";
+
+/** A member whose members too are without type constrains only the objects. */
+export type NestedOrNull = {
+  a: {} | null;
+} | null;
+
+/** The strings that pass are those its members' string keywords admit too. */
+export type NestedOrEmpty = {
+  a: {} | null;
+} | "";
+
+/** Those one of its anyOf members admits. */
+export type EitherOrEmpty = {
+  a: {} | null;
+} | "" | {
+  b: {} | null;
+} | "b";
+
+/** Those one of its oneOf members admits; null passes both, so neither. */
+export type OneOrEmpty = {
+  a: {} | null;
+} | "" | {
+  b: {} | null;
+} | "b";
+
+/** A type in a member's member constrains every value. */
+export type NestedTyped = {
+  a: {} | null;
+};
+
+/** A not in the member rejects the strings it says. */
+export type NotString = {
+  a: {} | null;
+};
+
+/** not: { required } rejects null, which required admits. */
+export type NotKeyed = {
+  b: {} | null;
+  a?: never;
+};
+
+/** not: { const } leaves out the string it lists. */
+export type NotListed = {
+  k: {} | null;
+} | "b";
+
+/** Even the one string the member admits. */
+export type NotEmpty = {
+  k: {} | null;
+};
+
+/** A not TypeScript cannot say is ignored, with a warning, for the other kinds too. */
+export type NotUnread = {
+  a: {} | null;
+} | null;
+
+/** So does the member's if / then / else: if admits every string, so then holds for it. */
+export type IfInMember = {
+  a: {} | null;
+  b: {} | null;
+} | {
+  a: {} | null;
+  b?: never;
+} | "";
+
+/** Every string has the keys if asks of objects only, so no else holds for it. */
+export type IfElseInMember = ({
+  a: {} | null;
+  b: {} | null;
+  c: {} | null;
+} | {
+  a: {} | null;
+  b?: never;
+} | {
+  a: {} | null;
+  c?: never;
+} | string) & (Record<string, unknown> | string);
+
+export type Keys = unknown;
+
+export type Keyed = {
+  a: {} | null;
+};
+
+/** A $ref in the member is read as the schema it reaches. */
+export type RefInMember = Keys & {
+  a: {} | null;
+} | null;
+
+/** So is a $ref member. */
+export type RefMember = (Keyed | null) & (Record<string, unknown> | null);
+
+/** A $ref to a schema with a type constrains every value. */
+export type RefTyped = Cat & (Record<string, unknown> | null);
+
+/** true admits every value. */
+export type TrueInMember = {
+  a: {} | null;
+} | null;
+
+/** false admits none. */
+export type FalseInMember = never;
 
 /** dependentRequired, dependentSchemas and propertyNames constrain only the objects. */
 export type PairOrNull = ({
@@ -46,6 +183,9 @@ export type PairOrNull = ({
   b?: never;
 } | {
   a: {} | null;
+} | null) & ({
+  a?: unknown;
+  b?: unknown;
 } | null) & ({
   a?: string;
   b?: string;

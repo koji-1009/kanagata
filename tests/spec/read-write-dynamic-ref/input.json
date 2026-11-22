@@ -1,0 +1,40 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/things": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Holder" } } }
+        },
+        "responses": { "204": { "description": "done" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Holder": {
+        "description": "id is readOnly through $dynamicRef: it is not sent.",
+        "type": "object",
+        "properties": {
+          "id": { "$dynamicRef": "#/components/schemas/Id" },
+          "member": { "$ref": "#/components/schemas/MemberRequired" },
+          "thing": { "$ref": "#/components/schemas/Thing" }
+        },
+        "required": ["id"]
+      },
+      "Id": { "type": "string", "readOnly": true },
+      "User": { "type": "object", "properties": { "id": { "type": "string", "readOnly": true }, "name": { "type": "string" } } },
+      "MemberRequired": {
+        "description": "required next to allOf does not bring back what a member's $dynamicRef target leaves out.",
+        "allOf": [{ "$dynamicRef": "#/components/schemas/User" }],
+        "required": ["id", "name"]
+      },
+      "Base": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
+      "Thing": {
+        "description": "A property another member leaves out is out of a member's $dynamicRef target too, which is then written out.",
+        "allOf": [{ "$dynamicRef": "#/components/schemas/Base" }, { "properties": { "id": { "readOnly": true } } }]
+      }
+    }
+  }
+}

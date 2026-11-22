@@ -1,0 +1,118 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "ItemsOfObject": {
+        "description": "A type in an allOf member says the kind: minItems constrains only arrays, so every object passes.",
+        "minItems": 1,
+        "allOf": [{ "type": "object" }]
+      },
+      "ItemsOfReference": {
+        "description": "So does the type of an allOf member's $ref target.",
+        "minItems": 1,
+        "allOf": [{ "$ref": "#/components/schemas/Anything" }]
+      },
+      "Anything": { "type": "object" },
+      "ItemsOfOneOf": {
+        "description": "So do the types of all oneOf members together: the kinds of one of them.",
+        "minItems": 1,
+        "oneOf": [{ "type": "object" }, { "type": "string" }]
+      },
+      "ItemsOfAnyOfRefs": {
+        "description": "And of all anyOf members, through $ref too; an array is one of those kinds, so minItems constrains it.",
+        "minItems": 1,
+        "anyOf": [{ "$ref": "#/components/schemas/Anything" }, { "type": "array" }]
+      },
+      "ItemsOfSomeTyped": {
+        "description": "A member without type says nothing, so neither does its group: the keywords say the kind.",
+        "minItems": 1,
+        "anyOf": [{ "type": "object" }, { "maxItems": 3 }]
+      },
+      "ItemsOfEnum": {
+        "description": "const and enum say the kinds of the values they list, as type does: minItems constrains the arrays, and the string passes it.",
+        "enum": [["a"], "none"],
+        "minItems": 1
+      },
+      "ItemsOfEnumKinds": {
+        "description": "Values of every kind say theirs: only the empty array fails minItems.",
+        "enum": [[1], [], { "a": 1 }, 2, true, null],
+        "minItems": 1
+      },
+      "ItemsOfEnumMember": {
+        "description": "So do those of an allOf member.",
+        "minItems": 1,
+        "allOf": [{ "enum": [["a"], [], "none"] }]
+      },
+      "ItemsOfConstOrArray": {
+        "description": "And of every anyOf member together, const among them.",
+        "minItems": 1,
+        "anyOf": [{ "const": "x" }, { "type": "array" }]
+      },
+      "ItemsOfObjectOrNull": {
+        "description": "So do the kinds of nested members, and the other kinds they name pass dependentRequired.",
+        "dependentRequired": { "a": ["b"] },
+        "allOf": [{ "allOf": [{ "type": ["object", "null"] }] }]
+      },
+      "ClosedTypedMember": {
+        "description": "A typed member that requires a key a closed object forbids keeps its arrays too.",
+        "type": ["object", "array"],
+        "additionalProperties": false,
+        "allOf": [{ "type": ["object", "array"], "required": ["x"], "minItems": 1 }]
+      },
+      "RequiredOrAnyItems": {
+        "description": "anyOf members without type count with the schema's own kinds: objects pass them.",
+        "required": ["x"],
+        "anyOf": [{ "minItems": 1 }, { "maxItems": 0 }]
+      },
+      "RequiredOrMemberEmpty": {
+        "description": "String keywords in an allOf member count beside the object keywords, as in the schema itself.",
+        "required": ["a"],
+        "allOf": [{ "maxLength": 0 }]
+      },
+      "IfOfBothKinds": {
+        "description": "An if of both kinds fails for the objects without a, the shorter arrays and the other kinds.",
+        "type": ["object", "array", "null"],
+        "if": { "required": ["a"], "minItems": 1 },
+        "then": { "required": ["b"], "maxItems": 1 }
+      },
+      "IfShort": {
+        "description": "maxItems in if fails for the longer arrays, which pass without then.",
+        "type": "array",
+        "if": { "maxItems": 1 },
+        "then": { "items": { "type": "string" } }
+      },
+      "IfAnyLength": {
+        "description": "minItems: 0 in if admits every array.",
+        "type": "array",
+        "if": { "minItems": 0 },
+        "then": { "items": { "type": "string" } }
+      },
+      "BranchOfOtherKind": {
+        "description": "A member's then of another kind applies to the values its if admits.",
+        "type": ["object", "array"],
+        "allOf": [{ "required": ["a"], "if": { "required": ["b"] }, "then": { "minItems": 1 } }]
+      },
+      "UnknownTypeName": {
+        "description": "A type name JSON Schema does not have admits every value, so every other kind passes dependentRequired.",
+        "type": ["object", "file"],
+        "dependentRequired": { "a": ["b"] }
+      },
+      "UnknownTypeMember": {
+        "description": "And passes a member without type.",
+        "type": ["string", "file"],
+        "allOf": [{ "required": ["a"] }]
+      },
+      "PrototypeTypeName": {
+        "description": "A name objects inherit is no kind either.",
+        "type": ["object", "constructor"],
+        "dependentRequired": { "a": ["b"] }
+      },
+      "TypedIf": {
+        "description": "A typed if in a member is only a condition: strings fail it and pass.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["a"], "if": { "type": "object" }, "then": { "required": ["b"] } }]
+      }
+    }
+  }
+}

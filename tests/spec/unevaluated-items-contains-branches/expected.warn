@@ -1,0 +1,12 @@
+#/components/schemas/Bounded/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Bounded/anyOf/0/maxContains: maxContains cannot be expressed in TypeScript; ignored
+#/components/schemas/Bounded/anyOf/1/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Apart/oneOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Apart/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Nested/anyOf/0/oneOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Conditional/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Conditional/then/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/BesidePrefix/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/PrefixedMember/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/BesideOwn/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/BesideOwn/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

@@ -29,7 +29,7 @@ test("an error anywhere in the document stops generation and names its location"
 		[schemas(`"S":{"anyOf":[${MISSING}]}`), `${s}/anyOf/0`],
 		[
 			schemas(
-				`"S":{"oneOf":[{"type":"string"}],"properties":{"a":${MISSING}}}`,
+				`"S":{"oneOf":[{"type":"object"}],"properties":{"a":${MISSING}}}`,
 			),
 			`${s}/properties/a`,
 		],

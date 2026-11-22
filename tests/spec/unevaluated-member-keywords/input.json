@@ -25,7 +25,7 @@
         "unevaluatedProperties": false
       },
       "ContainsInMember": {
-        "description": "contains in a member evaluates the items it matches, which no type says.",
+        "description": "contains in a member evaluates the items it matches where that member matches: all strings, or a number at most.",
         "type": "array",
         "oneOf": [{ "contains": { "type": "string" } }, { "prefixItems": [{ "type": "number" }] }],
         "unevaluatedItems": false

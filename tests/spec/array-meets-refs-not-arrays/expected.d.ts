@@ -5,37 +5,30 @@ export interface paths {}
 export interface operations {}
 
 export interface schemas {
-  OneNullable: OneNullable;
-  OneMixed: OneMixed;
-  OneEither: OneEither;
+  OneNamed: OneNamed;
   OneRetyped: OneRetyped;
+  OneRetypedOrNull: OneRetypedOrNull;
+  RetypedOrNull: RetypedOrNull;
   Counts: Counts;
-  Nullable: Nullable;
-  Mixed: Mixed;
-  Either: Either;
+  Named: Named;
   Base: Base;
   Retyped: Retyped;
 }
 
-/** A schema that admits other kinds too is not converted for the array it meets: its warning comes where it is. */
-export type OneNullable = Nullable & [unknown?];
-
-/** Nor are values that are not all arrays. */
-export type OneMixed = Mixed & [unknown?];
-
-/** Nor members that are not all arrays. */
-export type OneEither = Either & [unknown?];
+/** A schema that names no arrays is not converted for the array it meets: its warning comes where it is. */
+export type OneNamed = Named & (null | Record<string, unknown>);
 
 /** A $ref beside type: array is an array, read where it is met (its warning comes first), but its type is an intersection with the target's, which leaves no array type to put beside it. */
 export type OneRetyped = Retyped & [unknown?];
 
+/** Nor among the members of a union. */
+export type OneRetypedOrNull = RetypedOrNull & ([unknown?] | null);
+
+export type RetypedOrNull = Retyped | null;
+
 export type Counts = [string, ...string[]];
 
-export type Nullable = [string, ...string[]] | null;
-
-export type Mixed = ["a"] | "none";
-
-export type Either = [string, ...string[]] | string;
+export type Named = Record<string, unknown> | null;
 
 /** Any value. */
 export type Base = unknown;

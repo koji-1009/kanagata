@@ -1,2 +1,10 @@
-#/components/schemas/Matched/unevaluatedItems: unevaluatedItems next to an applicator cannot be expressed in TypeScript; ignored
-#/components/schemas/Matched/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Typed/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/NoneMatchUnsaid/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/NoneMatchUnsaid/maxContains: maxContains cannot be expressed in TypeScript; ignored
+#/components/schemas/HasString/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/HasString/maxContains: maxContains cannot be expressed in TypeScript; ignored
+#/components/schemas/TwoSources/allOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/TwoSources/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Undecided/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/Undecided/unevaluatedItems: unevaluatedItems next to an applicator cannot be expressed in TypeScript; ignored
+#/components/schemas/Undecided/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

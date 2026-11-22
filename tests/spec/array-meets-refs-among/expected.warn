@@ -1,0 +1,3 @@
+#/components/schemas/Mixed/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/Counted/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Later/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

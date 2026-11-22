@@ -18,6 +18,26 @@ export interface Keyed {
 /** Which view of a component schema a reference means: as returned, or as sent. */
 export type View = "read" | "write";
 
+/** Part of a template literal type: one of a finite set of strings, or any text. */
+export type Segment = { set: string[] } | { any: true };
+
+/**
+ * Whether a template literal type's segments admit a string, from segment `i` and its
+ * position `at`: a set by one of its strings there, any text by any run of it.
+ */
+export function inTemplate(seq: Segment[], s: string, i = 0, at = 0): boolean {
+	const x = seq[i];
+	if (x === undefined) return at === s.length;
+	if ("any" in x) {
+		for (let end = at; end <= s.length; end++)
+			if (inTemplate(seq, s, i + 1, end)) return true;
+		return false;
+	}
+	return x.set.some(
+		(e) => s.startsWith(e, at) && inTemplate(seq, s, i + 1, at + e.length),
+	);
+}
+
 export type Ty =
 	| { kind: "unknown" }
 	/** `{}`: any value but `null` and `undefined`. */
@@ -36,10 +56,10 @@ export type Ty =
 	/** Literal in JSON notation: `"admin"` with quotes, `1`, `true`. */
 	| { kind: "lit"; text: string }
 	/**
-	 * A template literal type, as printed: `` `https://${"us" | "eu"}.example.com` ``; the
-	 * `pattern` it is from, if it is, tells which strings it admits.
+	 * A template literal type, as printed: `` `https://${"us" | "eu"}.example.com` ``, and
+	 * its segments, which say which strings it admits (see `inTemplate`).
 	 */
-	| { kind: "template"; text: string; pattern?: string }
+	| { kind: "template"; text: string; seq: Segment[] }
 	/** A component schema, by its key in `components.schemas`; named when emitted. */
 	| { kind: "ref"; schema: string; view: View }
 	/** `operations[id]` */
@@ -135,6 +155,8 @@ export function equal(
 				(a.view === b.view ||
 					(typeof views === "boolean" ? !views : !views.has(a.schema)))
 			);
+		case "opRef":
+			return b.kind === "opRef" && a.id === b.id;
 		case "array":
 			return b.kind === "array" && eq(a.elem, b.elem);
 		case "tuple":
@@ -307,20 +329,183 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
 
 /**
  * Collects distinct members: literals by their text through a Set (enums can have
- * thousands), other types by structure.
+ * thousands), other types by their structure: a few one by one (`same`), past `FEW` by
+ * their keys (`structure`) through a Set (unions of thousands of tuples are built too).
  */
 function distinct(): { out: Ty[]; add: (t: Ty) => void } {
 	const out: Ty[] = [];
-	const texts = new Set<string>();
+	// Made when first needed: most unions and intersections have few members, and no literal.
+	let texts: Set<string> | undefined;
+	let others = 0;
+	let keys: Set<string> | undefined;
 	const add = (t: Ty): void => {
 		if (t.kind === "lit") {
+			texts ??= new Set();
 			if (texts.has(t.text)) return;
 			texts.add(t.text);
-		} else if (out.some((o) => equal(o, t))) return;
+		} else if (keys === undefined) {
+			for (const o of out) if (same(o, t)) return;
+			out.push(t);
+			if (++others >= FEW)
+				keys = new Set(
+					out.flatMap((o) => (o.kind === "lit" ? [] : [structure(o)])),
+				);
+			return;
+		} else {
+			const key = structure(t);
+			if (keys.has(key)) return;
+			keys.add(key);
+		}
 		out.push(t);
 	};
 	return { out, add };
 }
+
+/** How many members other than literals `distinct` compares one by one. */
+const FEW = 16;
+
+/**
+ * A key that is equal for types TypeScript reads as one: equal by structure (references to
+ * the two views of a schema differ), an object type's properties, a map's index signatures
+ * and the members of a union or intersection in any order. Strings in it are JSON, so the
+ * key of a member does not run into the next one's. Remembered: a type is never changed
+ * once built.
+ */
+const structure = (t: Ty): string => {
+	let key = structures.get(t);
+	if (key === undefined) {
+		key = structureOf(t);
+		structures.set(t, key);
+	}
+	return key;
+};
+
+const structures = new WeakMap<Ty, string>();
+
+function structureOf(t: Ty): string {
+	const list = (ts: Ty[]) => ts.map(structure).join(",");
+	const set = (keys: string[]) =>
+		keys.length < 2 ? (keys[0] ?? "") : keys.sort().join(",");
+	const props = (ps: Prop[]) =>
+		set(
+			ps.map(
+				(p) =>
+					`${JSON.stringify(p.key)}${p.optional ? "?" : ""}${p.present ? "!" : ""}${p.doc === undefined ? "" : JSON.stringify(p.doc)}:${structure(p.ty)}`,
+			),
+		);
+	switch (t.kind) {
+		case "lit":
+		case "template":
+			return `${t.kind}${JSON.stringify(t.text)}`;
+		case "ref":
+			return `ref${JSON.stringify(t.schema)}${t.view}`;
+		case "opRef":
+			return `opRef${JSON.stringify(t.id)}`;
+		case "array":
+			return `array(${structure(t.elem)})`;
+		case "tuple":
+			return `tuple${t.min}(${list(t.items)}${t.rest === undefined ? "" : `;${structure(t.rest)}`})`;
+		case "object":
+			return `object(${props(t.props)})`;
+		case "map":
+			return `map(${props(t.props)};${set(signatures(t).map((k) => `${structure(k.key)}:${structure(k.ty)}`))})`;
+		case "union":
+		case "inter":
+			return `${t.kind}(${set(t.items.map(structure))})`;
+		default:
+			return t.kind;
+	}
+}
+
+type MapTy = Extract<Ty, { kind: "map" }>;
+
+/** A map's index signatures; `[key: string]` is the one keyed by `string`. */
+const signatures = (t: MapTy): Keyed[] => [
+	...(t.keyed ?? []),
+	...(t.index === undefined ? [] : [{ key: STRING, ty: t.index }]),
+];
+
+/**
+ * Whether two types have one structure (`structure` gives them one key), compared without
+ * keys: in order where the order is the type's, as sets where TypeScript reads none.
+ */
+function same(a: Ty, b: Ty): boolean {
+	if (a === b) return true;
+	if (a.kind !== b.kind) return false;
+	switch (a.kind) {
+		case "array":
+			return same(a.elem, (b as typeof a).elem);
+		case "tuple": {
+			const c = b as typeof a;
+			return (
+				a.min === c.min &&
+				a.items.length === c.items.length &&
+				a.items.every((t, i) => same(t, c.items[i] as Ty)) &&
+				(a.rest === undefined
+					? c.rest === undefined
+					: c.rest !== undefined && same(a.rest, c.rest))
+			);
+		}
+		case "object":
+			return sameProps(a.props, (b as typeof a).props);
+		case "map": {
+			const c = b as typeof a;
+			return (
+				sameProps(a.props, c.props) &&
+				sameSet(
+					signatures(a),
+					signatures(c),
+					(x, y) => same(x.key, y.key) && same(x.ty, y.ty),
+				)
+			);
+		}
+		case "union":
+		case "inter": {
+			const c = b as typeof a;
+			if (a.items.length !== c.items.length) return false;
+			const i = a.items.findIndex((t, j) => !same(t, c.items[j] as Ty));
+			if (i < 0) return true;
+			// Out of order: a member the other lacks tells them apart without keys.
+			const t = a.items[i] as Ty;
+			if (!c.items.some((u) => same(t, u))) return false;
+			return a.items.length < FEW
+				? sameSet(a.items, c.items, same)
+				: structure(a) === structure(c);
+		}
+		default:
+			return equal(a, b);
+	}
+}
+
+const sameProp = (p: Prop, q: Prop): boolean =>
+	p.key === q.key &&
+	p.optional === q.optional &&
+	p.present === q.present &&
+	p.doc === q.doc &&
+	same(p.ty, q.ty);
+
+/**
+ * Whether two object types have the same properties, in any order: in order first; a key
+ * is an object type's once, so another property at the same key tells them apart, and a
+ * key the other lacks too.
+ */
+function sameProps(x: Prop[], y: Prop[]): boolean {
+	if (x.length !== y.length) return false;
+	const i = x.findIndex((p, j) => !sameProp(p, y[j] as Prop));
+	if (i < 0) return true;
+	const p = x[i] as Prop;
+	if (p.key === (y[i] as Prop).key || !y.some((q) => q.key === p.key))
+		return false;
+	const byKey = new Map(y.map((q) => [q.key, q]));
+	return x.every((p) => {
+		const q = byKey.get(p.key);
+		return q !== undefined && sameProp(p, q);
+	});
+}
+
+/** Whether two lists have the same members, in any order (each list has a member once). */
+const sameSet = <T>(x: T[], y: T[], eq: (a: T, b: T) => boolean): boolean =>
+	x.length === y.length && x.every((a) => y.some((b) => eq(a, b)));
 
 /**
  * Builds a normalized union: flattens, removes duplicates, `never` and literals a
@@ -340,14 +525,20 @@ export function union(items: Ty[]): Ty {
 	const kinds = out.flatMap((t) =>
 		t.kind === "lit" ? [] : (kindsOf(t) ?? []),
 	);
-	// `number` admits every whole number; a primitive admits its literals, `string` its templates.
+	// `number` admits every whole number; a primitive admits its literals, `string` its
+	// templates, `Record<string, unknown>` every object type and `unknown[]` every array.
 	if (kinds.length > 0)
 		out = out.filter((t) =>
 			t.kind === "integer"
 				? !kinds.includes("number")
 				: t.kind === "template"
 					? !kinds.includes("string")
-					: t.kind !== "lit" || !admits(kinds, t),
+					: t.kind === "object" || t.kind === "map"
+						? !kinds.includes("object")
+						: t.kind === "tuple" ||
+								(t.kind === "array" && t.elem.kind !== "unknown")
+							? !kinds.includes("array")
+							: t.kind !== "lit" || !admits(kinds, t),
 		);
 	if (out.length === 0) return NEVER;
 	const [only] = out;
@@ -410,6 +601,8 @@ export function inter(items: Ty[]): Ty {
 	// Narrowing can make members equal (`"a" & ("a" | 1) & string`); normalize again.
 	// Each round drops a member or shrinks a set of values, so this ends.
 	if (narrowed !== out) return inter(narrowed);
+	const byKind = meetByKind(out);
+	if (byKind !== undefined) return byKind;
 	if (out.some((t) => t.kind === "never")) return NEVER;
 	// Members of kinds no value has both of meet nowhere: `null & string[]`.
 	const kinds = out.map(kindSet).filter((k) => k !== undefined);
@@ -423,6 +616,42 @@ export function inter(items: Ty[]): Ty {
 		return NEVER;
 	if (out.length === 0) return UNKNOWN;
 	return { kind: "inter", items: out };
+}
+
+/**
+ * Unions whose members are each of one kind, no two of the same, meet kind by kind:
+ * `({ a: A } | "") & ("" | Record<string, unknown>)` is `{ a: A } | ""`. undefined where
+ * a member is no such union or type of one kind, or none is a union.
+ */
+function meetByKind(items: Ty[]): Ty | undefined {
+	if (!items.some((t) => t.kind === "union")) return undefined;
+	const rows: { kind: ValueKind; ty: Ty }[][] = [];
+	for (const t of items) {
+		const members = t.kind === "union" ? t.items : [t];
+		if (members.length > 7) return undefined;
+		const row: { kind: ValueKind; ty: Ty }[] = [];
+		for (const m of members) {
+			const k = memberKinds(m);
+			if (k?.length !== 1) return undefined;
+			const kind = k[0] as ValueKind;
+			if (row.some((r) => meets(r.kind, kind))) return undefined;
+			row.push({ kind, ty: m });
+		}
+		rows.push(row);
+	}
+	const [first, ...rest] = rows as [
+		{ kind: ValueKind; ty: Ty }[],
+		...{ kind: ValueKind; ty: Ty }[][],
+	];
+	// `prune` has left in each union only the kinds every other one has.
+	return union(
+		first.map(({ kind, ty }) =>
+			inter([
+				ty,
+				...rest.map((row) => row.find((r) => meets(r.kind, kind))?.ty as Ty),
+			]),
+		),
+	);
 }
 
 type ArrayTy = Extract<Ty, { kind: "array" | "tuple" }>;
@@ -595,7 +824,7 @@ function valueKind(t: Ty): ValueKind | undefined {
  * sets of values keep what K allows, and the kind types go; with no values, one
  * type says what K is. So `type` next to `enum` gives `"a"`, not `string & "a"`,
  * and contradictions (`number & string`, `"a" & "b"`) are `never`. A template
- * (from `pattern`) is some strings: it meets kinds as `string` does and stands for them,
+ * is some strings: it meets kinds as `string` does and stands for them,
  * and the values next to it keep the strings it admits.
  * Returns `items` itself when nothing changes.
  */
@@ -669,16 +898,13 @@ function isStrings(t: Ty): boolean {
 	);
 }
 
-/**
- * Whether a type of some strings admits a string literal: a template by its pattern (the
- * templates values meet are from `pattern`), a literal by its text.
- */
+/** Whether a type of some strings admits a string literal: a template by its segments, a literal by its text. */
 function admitsString(t: Ty, m: Ty): boolean {
 	const text = (m as { text: string }).text;
 	const s = JSON.parse(text) as string;
 	return (t.kind === "union" ? t.items : [t]).some((x) =>
 		x.kind === "template"
-			? new RegExp(x.pattern as string, "u").test(s)
+			? inTemplate(x.seq, s)
 			: (x as { text: string }).text === text,
 	);
 }

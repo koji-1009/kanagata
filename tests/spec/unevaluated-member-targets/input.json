@@ -1,0 +1,25 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Lookup": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
+      "ByIdOrName": {
+        "description": "Each member evaluates id and name through Lookup, the second one too: { name } matches it.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/Lookup", "required": ["id"] },
+          { "$ref": "#/components/schemas/Lookup", "required": ["name"] }
+        ],
+        "unevaluatedProperties": false
+      },
+      "DynamicByIdOrName": {
+        "description": "The same through $dynamicRef.",
+        "oneOf": [
+          { "$dynamicRef": "#/components/schemas/Lookup", "required": ["id"] },
+          { "$dynamicRef": "#/components/schemas/Lookup", "required": ["name"] }
+        ],
+        "unevaluatedProperties": false
+      }
+    }
+  }
+}

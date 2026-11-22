@@ -40,25 +40,25 @@ pnpm build      # dist/
 
 ## Map
 
-| Path                                         | Role                                                                                                    |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`                               | `generate`: parse, convert both views, reject cycles TypeScript rejects, name, render                   |
-| `src/json.ts`                                | JSON parser keeping key order and number notation, rejecting repeated keys; JSON Pointer helpers        |
-| `src/yaml.ts`                                | YAML 1.2 → the same values (via `yaml`)                                                                 |
-| `src/pointer.ts`                             | `Ctx`: `$ref` resolution, base URI, read/write view, hoisting, component aliasing, warnings             |
-| `src/schema.ts`                              | JSON Schema → `Ty`                                                                                      |
-| `src/operation.ts`                           | paths, webhooks and operations → `Ty`                                                                   |
-| `src/ty.ts`                                  | the type IR and its algebra (`union`, `inter`, `narrow`)                                                |
-| `src/template.ts`                            | `pattern` → template literal types, where they say its strings exactly                                  |
-| `src/emit.ts`, `src/ident.ts`                | printing TypeScript; names and quoting                                                                  |
-| `src/cli.ts`, `src/node-io.ts`, `src/bin.ts` | CLI over an injected `Io`; the real `Io`; exit codes                                                    |
-| `src/client.ts`                              | the runtime client; the generator imports its media type rules and `METHODS` so types and runtime agree |
-| `tests/spec/<name>/`                         | the specification: hand-written `input.json` / `input.yaml` → `expected.d.ts`, `expected.warn`          |
-| `tests/errors/<name>/`                       | inputs the CLI rejects: `expected.err`, `expected.code`                                                 |
-| `tests/unit/`                                | what spec cases cannot show: `generate`, `ty`, patterns, JSON syntax errors                             |
-| `tests/ts/`                                  | client: `runtime.test.ts`, `types.test.ts` (checked by `tsc -p tests/ts`)                               |
-| `tests/package.test.ts`                      | what is published: build mapping, entry points, files, the client's imports                             |
-| `scripts/`                                   | real-spec checks                                                                                        |
+| Path                                         | Role                                                                                                           |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `src/index.ts`                               | `generate`: parse, convert both views, reject cycles TypeScript rejects, name, render                          |
+| `src/json.ts`                                | JSON parser keeping key order and number notation, rejecting repeated keys; JSON Pointer helpers               |
+| `src/yaml.ts`                                | YAML 1.2 → the same values (via `yaml`)                                                                        |
+| `src/pointer.ts`                             | `Ctx`: `$ref` / `$dynamicRef` resolution, base URI, read/write view, hoisting, component aliasing, warnings    |
+| `src/schema.ts`                              | JSON Schema → `Ty`                                                                                             |
+| `src/operation.ts`                           | paths, webhooks and operations → `Ty`                                                                          |
+| `src/ty.ts`                                  | the type IR and its algebra (`union`, `inter`, `narrow`)                                                       |
+| `src/template.ts`                            | `pattern` → template literal types, where they say its strings exactly; template intersections, regex machines |
+| `src/emit.ts`, `src/ident.ts`                | printing TypeScript; names and quoting                                                                         |
+| `src/cli.ts`, `src/node-io.ts`, `src/bin.ts` | CLI over an injected `Io`; the real `Io`; exit codes                                                           |
+| `src/client.ts`                              | the runtime client; the generator imports its media type rules and `METHODS` so types and runtime agree        |
+| `tests/spec/<name>/`                         | the specification: hand-written `input.json` / `input.yaml` → `expected.d.ts`, `expected.warn`                 |
+| `tests/errors/<name>/`                       | inputs the CLI rejects: `expected.err`, `expected.code`                                                        |
+| `tests/unit/`                                | what spec cases cannot show: `generate`, `ty`, patterns, JSON syntax errors                                    |
+| `tests/ts/`                                  | client: `runtime.test.ts`, `types.test.ts` (checked by `tsc -p tests/ts`)                                      |
+| `tests/package.test.ts`                      | what is published: build mapping, entry points, files, the client's imports                                    |
+| `scripts/`                                   | real-spec checks                                                                                               |
 
 ## Rules
 

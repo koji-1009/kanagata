@@ -1,0 +1,62 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": { "type": "object", "properties": { "a": { "type": "string" } } },
+      "Beside": {
+        "description": "A $dynamicRef that reaches no $dynamicAnchor is a $ref: Base evaluates a.",
+        "$dynamicRef": "#/components/schemas/Base",
+        "required": ["a"],
+        "unevaluatedProperties": false
+      },
+      "Member": {
+        "description": "The same in an allOf member.",
+        "allOf": [{ "$dynamicRef": "#/components/schemas/Base" }],
+        "required": ["a"],
+        "unevaluatedProperties": false
+      },
+      "Around": {
+        "description": "The member names no key Base names; the schema it is a member of names a, through $dynamicRef.",
+        "$dynamicRef": "#/components/schemas/Base",
+        "oneOf": [{ "allOf": [{ "properties": { "b": { "type": "string" } } }], "unevaluatedProperties": false }]
+      },
+      "Tags": { "type": "array", "prefixItems": [{ "type": "string" }] },
+      "AtMostOne": {
+        "description": "Tags' prefixItems evaluate the first item; no others are admitted.",
+        "$dynamicRef": "#/components/schemas/Tags",
+        "unevaluatedItems": false
+      },
+      "ThenNumbers": {
+        "description": "The items after the first are numbers.",
+        "$dynamicRef": "#/components/schemas/Tags",
+        "unevaluatedItems": { "type": "number" }
+      },
+      "Item": {
+        "$id": "https://example.com/item",
+        "$dynamicAnchor": "item",
+        "type": "object",
+        "properties": { "id": { "type": "string" } }
+      },
+      "Box": {
+        "description": "From the document the item anchor is Item's, which does not evaluate label.",
+        "$id": "https://example.com/box",
+        "$dynamicRef": "item#item",
+        "required": ["label"],
+        "unevaluatedProperties": { "type": "number" }
+      },
+      "LabeledBox": {
+        "description": "Reached through this resource, the item anchor is its own, which evaluates label.",
+        "$id": "https://example.com/labeled-box",
+        "$ref": "box",
+        "$defs": {
+          "item": {
+            "$dynamicAnchor": "item",
+            "type": "object",
+            "properties": { "id": { "type": "string" }, "label": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

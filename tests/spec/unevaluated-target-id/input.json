@@ -1,0 +1,38 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Inner": { "$id": "https://example.com/inner", "type": "object", "properties": { "b": { "type": "string" } } },
+      "Base": {
+        "description": "Its $ref resolves against its own $id.",
+        "$id": "https://example.com/base",
+        "$ref": "inner",
+        "properties": { "a": { "type": "string" } }
+      },
+      "Beside": {
+        "description": "Reached by a pointer, Base is still its own resource: it evaluates a, and b through its $ref.",
+        "$ref": "#/components/schemas/Base",
+        "required": ["a", "b"],
+        "unevaluatedProperties": false
+      },
+      "DynamicBeside": {
+        "description": "The same through $dynamicRef.",
+        "$dynamicRef": "#/components/schemas/Base",
+        "required": ["a", "b"],
+        "unevaluatedProperties": false
+      },
+      "Member": {
+        "description": "An allOf member with $id is a resource too: its $ref reaches Inner, which evaluates b.",
+        "allOf": [{ "$id": "https://example.com/member", "$ref": "inner" }],
+        "required": ["b"],
+        "unevaluatedProperties": false
+      },
+      "Around": {
+        "description": "The schema the member is a member of names a, and b through Base's $ref.",
+        "$ref": "#/components/schemas/Base",
+        "oneOf": [{ "allOf": [{ "properties": { "c": { "type": "string" } } }], "unevaluatedProperties": false }]
+      }
+    }
+  }
+}
