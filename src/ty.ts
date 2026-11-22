@@ -307,7 +307,7 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
 
 /**
  * Collects distinct members: literals by their text through a Set (enums can have
- * thousands), other types by their structure: a few one by one (`equal`), past `FEW` by
+ * thousands), other types by their structure: a few one by one (`same`), past `FEW` by
  * their keys (`structure`) through a Set (unions of thousands of tuples are built too).
  */
 function distinct(): { out: Ty[]; add: (t: Ty) => void } {
@@ -320,7 +320,7 @@ function distinct(): { out: Ty[]; add: (t: Ty) => void } {
 			if (texts.has(t.text)) return;
 			texts.add(t.text);
 		} else if (keys === undefined) {
-			if (out.some((o) => equal(o, t))) return;
+			if (out.some((o) => same(o, t))) return;
 			out.push(t);
 			if (++others >= FEW)
 				keys = new Set(
@@ -341,9 +341,11 @@ function distinct(): { out: Ty[]; add: (t: Ty) => void } {
 const FEW = 16;
 
 /**
- * A key that is equal for types `equal` finds equal (references to the two views of a
- * schema differ). Strings in it are JSON, so the key of a member does not run into the
- * next one's. Remembered: a type is never changed once built.
+ * A key that is equal for types TypeScript reads as one: equal by structure (references to
+ * the two views of a schema differ), an object type's properties, a map's index signatures
+ * and the members of a union or intersection in any order. Strings in it are JSON, so the
+ * key of a member does not run into the next one's. Remembered: a type is never changed
+ * once built.
  */
 const structure = (t: Ty): string => {
 	let key = structures.get(t);
@@ -358,13 +360,15 @@ const structures = new WeakMap<Ty, string>();
 
 function structureOf(t: Ty): string {
 	const list = (ts: Ty[]) => ts.map(structure).join(",");
+	const set = (keys: string[]) =>
+		keys.length < 2 ? (keys[0] ?? "") : keys.sort().join(",");
 	const props = (ps: Prop[]) =>
-		ps
-			.map(
+		set(
+			ps.map(
 				(p) =>
 					`${JSON.stringify(p.key)}${p.optional ? "?" : ""}${p.present ? "!" : ""}${p.doc === undefined ? "" : JSON.stringify(p.doc)}:${structure(p.ty)}`,
-			)
-			.join(",");
+			),
+		);
 	switch (t.kind) {
 		case "lit":
 		case "template":
@@ -377,21 +381,105 @@ function structureOf(t: Ty): string {
 			return `tuple${t.min}(${list(t.items)}${t.rest === undefined ? "" : `;${structure(t.rest)}`})`;
 		case "object":
 			return `object(${props(t.props)})`;
-		case "map": {
-			// As `equal` reads them: the index signatures in a row, `[key: string]` last.
-			const keyed = [
-				...(t.keyed ?? []).flatMap((k) => [k.key, k.ty]),
-				...(t.index === undefined ? [] : [STRING, t.index]),
-			];
-			return `map(${props(t.props)};${list(keyed)})`;
-		}
+		case "map":
+			return `map(${props(t.props)};${set(signatures(t).map((k) => `${structure(k.key)}:${structure(k.ty)}`))})`;
 		case "union":
 		case "inter":
-			return `${t.kind}(${list(t.items)})`;
+			return `${t.kind}(${set(t.items.map(structure))})`;
 		default:
 			return t.kind;
 	}
 }
+
+type MapTy = Extract<Ty, { kind: "map" }>;
+
+/** A map's index signatures; `[key: string]` is the one keyed by `string`. */
+const signatures = (t: MapTy): Keyed[] => [
+	...(t.keyed ?? []),
+	...(t.index === undefined ? [] : [{ key: STRING, ty: t.index }]),
+];
+
+/**
+ * Whether two types have one structure (`structure` gives them one key), compared without
+ * keys: in order where the order is the type's, as sets where TypeScript reads none.
+ */
+function same(a: Ty, b: Ty): boolean {
+	if (a === b) return true;
+	if (a.kind !== b.kind) return false;
+	switch (a.kind) {
+		case "array":
+			return same(a.elem, (b as typeof a).elem);
+		case "tuple": {
+			const c = b as typeof a;
+			return (
+				a.min === c.min &&
+				a.items.length === c.items.length &&
+				a.items.every((t, i) => same(t, c.items[i] as Ty)) &&
+				(a.rest === undefined
+					? c.rest === undefined
+					: c.rest !== undefined && same(a.rest, c.rest))
+			);
+		}
+		case "object":
+			return sameProps(a.props, (b as typeof a).props);
+		case "map": {
+			const c = b as typeof a;
+			return (
+				sameProps(a.props, c.props) &&
+				sameSet(
+					signatures(a),
+					signatures(c),
+					(x, y) => same(x.key, y.key) && same(x.ty, y.ty),
+				)
+			);
+		}
+		case "union":
+		case "inter": {
+			const c = b as typeof a;
+			if (a.items.length !== c.items.length) return false;
+			const i = a.items.findIndex((t, j) => !same(t, c.items[j] as Ty));
+			if (i < 0) return true;
+			// Out of order: a member the other lacks tells them apart without keys.
+			const t = a.items[i] as Ty;
+			if (!c.items.some((u) => same(t, u))) return false;
+			return a.items.length < FEW
+				? sameSet(a.items, c.items, same)
+				: structure(a) === structure(c);
+		}
+		default:
+			return equal(a, b);
+	}
+}
+
+const sameProp = (p: Prop, q: Prop): boolean =>
+	p.key === q.key &&
+	p.optional === q.optional &&
+	p.present === q.present &&
+	p.doc === q.doc &&
+	same(p.ty, q.ty);
+
+/**
+ * Whether two object types have the same properties, in any order: in order first; a key
+ * is an object type's once, so another property at the same key tells them apart, and a
+ * key the other lacks too.
+ */
+function sameProps(x: Prop[], y: Prop[]): boolean {
+	if (x.length !== y.length) return false;
+	const i = x.findIndex((p, j) => !sameProp(p, y[j] as Prop));
+	if (i < 0) return true;
+	const p = x[i] as Prop;
+	if (p.key === (y[i] as Prop).key || !y.some((q) => q.key === p.key))
+		return false;
+	const byKey = new Map(y.map((q) => [q.key, q]));
+	return x.every((p) => {
+		const q = byKey.get(p.key);
+		return q !== undefined && sameProp(p, q);
+	});
+}
+
+/** Whether two lists have the same members, in any order (each list has a member once). */
+const sameSet = <T>(x: T[], y: T[], eq: (a: T, b: T) => boolean): boolean =>
+	x.length === y.length && x.every((a) => y.some((b) => eq(a, b)));
 
 /**
  * Builds a normalized union: flattens, removes duplicates, `never` and literals a

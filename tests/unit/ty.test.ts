@@ -279,7 +279,7 @@ test("union keeps members that differ in structure and removes equal ones", () =
 	assert.deepEqual(union([...many, ...again]), { kind: "union", items: many });
 });
 
-test("many members are told apart by their keys, every kind", () => {
+test("many members are told apart by their keys as one by one, every kind", () => {
 	const id = prop("id", STRING);
 	const name = prop("name", STRING);
 	const x: Ty = { kind: "template", text: "`x-a`" };
@@ -291,7 +291,6 @@ test("many members are told apart by their keys, every kind", () => {
 		NULL,
 		UNDEFINED,
 		object([id, name]),
-		object([name, id]),
 		object([id]),
 		object([]),
 		object([
@@ -311,9 +310,82 @@ test("many members are told apart by their keys, every kind", () => {
 		tuple([union([lit('"x"'), lit('"y"')])]),
 		lit("1"),
 	];
-	const copies = distinctOnes.map((t) => ({ ...t }));
-	assert.deepEqual(union([...distinctOnes, ...copies]), {
+	const equalOnes: Ty[] = [
+		object([name, id]),
+		{
+			kind: "map",
+			props: [name, id],
+			index: STRING,
+			keyed: [{ key: x, ty: NUMBER }],
+		},
+		{ kind: "inter", items: [object([id]), schemaRef("B")] },
+		tuple([{ kind: "union", items: [lit('"y"'), lit('"x"')] }]),
+		...distinctOnes.map((t) => ({ ...t })),
+	];
+	assert.deepEqual(union([...distinctOnes, ...equalOnes]), {
 		kind: "union",
 		items: distinctOnes,
 	});
+});
+
+test("an object type's properties, a map's signatures and the members of a union or intersection are sets: the first order stays", () => {
+	const ab = object([prop("id", STRING), prop("name", STRING)]);
+	const ba = object([prop("name", STRING), prop("id", STRING)]);
+	assert.equal(union([ab, ba]), ab);
+	const lookup = schemaRef("Lookup");
+	const first: Ty = { kind: "inter", items: [lookup, ab] };
+	assert.equal(union([first, { kind: "inter", items: [ba, lookup] }]), first);
+	const x: Ty = { kind: "template", text: "`x-a`" };
+	const y: Ty = { kind: "template", text: "`y-a`" };
+	const map: Ty = {
+		kind: "map",
+		props: [prop("id", STRING), prop("name", STRING)],
+		keyed: [
+			{ key: x, ty: STRING },
+			{ key: y, ty: NUMBER },
+		],
+	};
+	const reordered: Ty = {
+		kind: "map",
+		props: [prop("name", STRING), prop("id", STRING)],
+		keyed: [
+			{ key: y, ty: NUMBER },
+			{ key: x, ty: STRING },
+		],
+	};
+	assert.equal(union([map, reordered]), map);
+	const xy = object([prop("a", union([lit('"x"'), lit('"y"')]))]);
+	const yx = object([prop("a", union([lit('"y"'), lit('"x"')]))]);
+	assert.equal(union([xy, yx]), xy);
+});
+
+test("members compared one by one read properties and members in any order", () => {
+	const p = (key: string, ty: Ty = STRING) => prop(key, ty);
+	const two = (a: Ty, b: Ty) => union([a, b]);
+	const isOne = (a: Ty, b: Ty) => assert.equal(two(a, b), a);
+	const areTwo = (a: Ty, b: Ty) =>
+		assert.deepEqual(two(a, b), { kind: "union", items: [a, b] });
+	// Another property at a key, a key the other lacks, a key one lacks past others out of order.
+	areTwo(object([p("a"), p("b")]), object([p("a", NUMBER), p("b")]));
+	areTwo(object([p("a"), p("b")]), object([p("c"), p("b")]));
+	areTwo(object([p("a"), p("b"), p("c")]), object([p("b"), p("a"), p("d")]));
+	areTwo(object([p("a"), p("b")]), object([p("b", NUMBER), p("a")]));
+	isOne(object([p("a"), p("b"), p("c")]), object([p("c"), p("b"), p("a")]));
+	// Unions inside, few members and many, in another order or with another member.
+	const lits = (n: number, from = 0) =>
+		Array.from({ length: n }, (_, i) => lit(String(i + from)));
+	const many = union(lits(20));
+	isOne(tuple([many]), tuple([{ kind: "union", items: lits(20).reverse() }]));
+	areTwo(tuple([many]), tuple([union(lits(20, 1))]));
+	const swapped = [lit("1"), lit("0"), ...lits(17, 2), lit("99")];
+	areTwo(tuple([many]), tuple([{ kind: "union", items: swapped }]));
+	const few = union(lits(3));
+	isOne(tuple([few]), tuple([{ kind: "union", items: lits(3).reverse() }]));
+	areTwo(tuple([few]), tuple([union(lits(3, 1))]));
+	areTwo(tuple([few]), tuple([union(lits(4))]));
+	const fewSwapped: Ty = {
+		kind: "union",
+		items: [lit("1"), lit("0"), lit("5")],
+	};
+	areTwo(tuple([few]), tuple([fewSwapped]));
 });

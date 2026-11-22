@@ -36,9 +36,6 @@ export type ByIdOrName = (Lookup & {
   name: {} | null;
 } | Lookup & {
   name: {} | null;
-  id: {} | null;
-} | Lookup & {
-  name: {} | null;
 });
 
 /** The same through $dynamicRef. */
@@ -60,9 +57,6 @@ export type DynamicByIdOrName = (Lookup & {
 } | Lookup & {
   id: {} | null;
   name: {} | null;
-} | Lookup & {
-  name: {} | null;
-  id: {} | null;
 } | Lookup & {
   name: {} | null;
 });
