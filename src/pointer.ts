@@ -368,10 +368,9 @@ export class Ctx {
 	/** Converts `s` knowing the schemas with `contains` whose matching items its type says. */
 	withSaid<T>(
 		s: JsonObject,
-		holders: (() => ReadonlySet<JsonObject>) | undefined,
+		holders: () => ReadonlySet<JsonObject>,
 		f: () => T,
 	): T {
-		if (holders === undefined) return f();
 		this.#said.set(s, holders);
 		try {
 			return f();
@@ -443,6 +442,8 @@ export class Ctx {
 		const saved = this.scope;
 		if (base !== (this.scope[this.scope.length - 1] ?? this.documentBase))
 			this.scope = [...this.scope, base];
+		// Read where it is already (nearly every schema of a document without `$id`), nothing changes.
+		else if (base === this.base) return f();
 		try {
 			return this.withBase(base, f);
 		} finally {
@@ -534,8 +535,11 @@ export class Ctx {
 	 * conversion reports one that is not.
 	 */
 	reached(s: Value): readonly Located[] {
-		if (!(s instanceof JsonObject)) return NONE;
-		const r = s.str("$ref");
+		return s instanceof JsonObject ? this.reachedBy(s, s.str("$ref")) : NONE;
+	}
+
+	/** `reached` for a reader that has read the schema's `$ref` (`r`, where it is a string) already. */
+	reachedBy(s: JsonObject, r: string | undefined): readonly Located[] {
 		// Without a $dynamicRef in the documents, only the $ref counts.
 		if (!this.#ids().dynamicRefs) {
 			const target = r === undefined ? undefined : this.tryLocate(r);

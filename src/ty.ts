@@ -334,15 +334,17 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
  */
 function distinct(): { out: Ty[]; add: (t: Ty) => void } {
 	const out: Ty[] = [];
-	const texts = new Set<string>();
+	// Made when first needed: most unions and intersections have few members, and no literal.
+	let texts: Set<string> | undefined;
 	let others = 0;
 	let keys: Set<string> | undefined;
 	const add = (t: Ty): void => {
 		if (t.kind === "lit") {
+			texts ??= new Set();
 			if (texts.has(t.text)) return;
 			texts.add(t.text);
 		} else if (keys === undefined) {
-			if (out.some((o) => same(o, t))) return;
+			for (const o of out) if (same(o, t)) return;
 			out.push(t);
 			if (++others >= FEW)
 				keys = new Set(

@@ -207,7 +207,10 @@ const REFS = new Set(["$ref", "$dynamicRef"]);
 
 function convert(cx: Ctx, v: JsonObject, at: string): Ty {
 	// The schemas in it with `contains` read what its `unevaluatedItems` says of their items.
-	return cx.withSaid(v, saying(cx, v, at), () => parts(cx, v, at));
+	const said = saying(cx, v, at);
+	return said === undefined
+		? parts(cx, v, at)
+		: cx.withSaid(v, said, () => parts(cx, v, at));
 }
 
 /**
@@ -394,8 +397,8 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	// The schema's own keywords drop the literals (from const, enum, members) they reject,
 	// and `not: { enum }` those it lists.
 	const t = inter(out);
-	const not = excluded(v) ?? [];
-	const out$ = not.map((x) => x.ty);
+	const not = excluded(v) ?? NOTHING_EXCLUDED;
+	const out$ = not === NOTHING_EXCLUDED ? NO_TYS : not.map((x) => x.ty);
 	const members = booleansListed(t.kind === "union" ? t.items : [t], out$);
 	const listed = (m: Ty) =>
 		out$.some(
@@ -425,6 +428,14 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 			);
 	return loose ? union([kept, NULL]) : kept;
 }
+
+/**
+ * What most schemas, which have no `not`, exclude: one list for all of them. A list made
+ * anew for each can be of another kind of array than those `parts` was compiled for, and
+ * the engine then compiles `parts` again.
+ */
+const NOTHING_EXCLUDED: readonly { ty: Ty; at: string }[] = [];
+const NO_TYS: readonly Ty[] = [];
 
 /**
  * The keys a closed object admits (`additionalProperties: false`, no
@@ -565,6 +576,8 @@ type Arrays = { ty: Ty; rest: Ty[] };
  * its arrays alone are put beside it.
  */
 function arrayTargets(cx: Ctx, out: Ty[], at: string): Ty[] {
+	// Each part is an array or a reference at most: one part is never two of them.
+	if (out.length < 2) return [];
 	const isArray = (t: Ty) => t.kind === "array" || t.kind === "tuple";
 	const arrays = out.filter(
 		(t) => isArray(t) || (t.kind === "union" && t.items.some(isArray)),
@@ -2059,10 +2072,15 @@ function madeKinds(
 	m: Value,
 	seen: ReadonlySet<string> = new Set(),
 ): { made: Set<string>; all: Set<string> } | undefined {
+	if (
+		m instanceof JsonObject &&
+		(m.get("type") !== undefined ||
+			m.get("const") !== undefined ||
+			m.get("enum") !== undefined)
+	)
+		return undefined;
 	const kinds = { made: new Set<string>(), all: new Set<string>() };
 	if (!(m instanceof JsonObject)) return kinds;
-	if (["type", "const", "enum"].some((k) => m.get(k) !== undefined))
-		return undefined;
 	const uri = cx.ownResource(m);
 	return uri === undefined
 		? ownMadeKinds(cx, m, seen, kinds)
@@ -2386,7 +2404,7 @@ function shared(tys: Ty[]): Ty[] {
 }
 
 /** `members`, `boolean` among them as `true` and `false` where `values` has one of them: TypeScript can leave either out. */
-function booleansListed(members: Ty[], values: Ty[]): Ty[] {
+function booleansListed(members: Ty[], values: readonly Ty[]): Ty[] {
 	const isBoolean = (t: Ty) =>
 		t.kind === "lit" && (t.text === "true" || t.text === "false");
 	if (!values.some(isBoolean)) return members;
@@ -2551,21 +2569,8 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 	// it, except for a member whose other kinds the schemas around it pass (`passing`,
 	// `typelessKinds`): it is of its object and array kinds.
 	const keyed = keywordKinds(v);
-	const passes = cx.around.length > 0 && typelessKinds(cx, v).length > 0;
-	const said = keyed.length === 0 ? undefined : saidKinds(cx, v, !passes);
-	const context = contextKinds(cx, v);
-	const several = keyed.filter(
-		(k) => k === "object" || k === "array" || (!passes && context.includes(k)),
-	);
-	const of =
-		said !== undefined
-			? [
-					...keyed.filter((k) => said.includes(k)),
-					...said.filter((k) => !keyed.includes(k)),
-				]
-			: several.length > 1
-				? several
-				: undefined;
+	// Keywords of no kind say none (most schemas without `type`: references, compositions).
+	const of = keyed.length === 0 ? undefined : keywordsOf(cx, v, keyed);
 	if (of !== undefined)
 		return union(
 			of.map((k) =>
@@ -2598,6 +2603,29 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 						: (KIND[k] as Ty),
 		),
 	);
+}
+
+/**
+ * The kinds a schema without `type` is of, its keywords being of the kinds `keyed`
+ * (`own`); undefined where its keywords say one kind, as `own` reads them then.
+ */
+function keywordsOf(
+	cx: Ctx,
+	v: JsonObject,
+	keyed: string[],
+): string[] | undefined {
+	const passes = cx.around.length > 0 && typelessKinds(cx, v).length > 0;
+	const said = saidKinds(cx, v, !passes);
+	if (said !== undefined)
+		return [
+			...keyed.filter((k) => said.includes(k)),
+			...said.filter((k) => !keyed.includes(k)),
+		];
+	const context = contextKinds(cx, v);
+	const several = keyed.filter(
+		(k) => k === "object" || k === "array" || (!passes && context.includes(k)),
+	);
+	return several.length > 1 ? several : undefined;
 }
 
 /** Keywords that only apply to arrays and that the type reads; their presence implies `type: array`. */
@@ -3091,13 +3119,17 @@ function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
 
 function leftOutHere(cx: Ctx, s: JsonObject, seen: Set<string>): boolean {
 	// In 3.0 the keywords next to $ref are ignored; only the target counts.
-	const siblings = s.get("$ref") === undefined || cx.refSiblings;
+	const ref = s.get("$ref");
+	const siblings = ref === undefined || cx.refSiblings;
 	if (
 		siblings &&
 		s.get(cx.mode === "write" ? "readOnly" : "writeOnly") === true
 	)
 		return true;
-	for (const target of cx.reached(s)) {
+	for (const target of cx.reachedBy(
+		s,
+		typeof ref === "string" ? ref : undefined,
+	)) {
 		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
 		if (cx.inTarget(target, () => isLeftOut(cx, target.value, seen)))
@@ -3137,7 +3169,8 @@ function leftOutKeysHere(
 	const keys = new Set<string>();
 	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
 	// are one schema.
-	if (get(v, "$ref") === undefined || cx.refSiblings) {
+	const ref = get(v, "$ref");
+	if (ref === undefined || cx.refSiblings) {
 		const props = get(v, "properties");
 		if (props instanceof JsonObject)
 			for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
@@ -3145,8 +3178,12 @@ function leftOutKeysHere(
 		for (const m of Array.isArray(allOf) ? allOf : [])
 			for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
 	}
-	if (!throughRef) return keys;
-	for (const target of cx.reached(v)) {
+	// Only an object has a reference.
+	if (!throughRef || !(v instanceof JsonObject)) return keys;
+	for (const target of cx.reachedBy(
+		v,
+		typeof ref === "string" ? ref : undefined,
+	)) {
 		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
 		for (const k of cx.inTarget(target, () =>
