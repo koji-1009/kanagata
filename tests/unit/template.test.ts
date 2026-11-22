@@ -72,6 +72,7 @@ test("quantifiers: finite ones are written out, any text is ${string} beside oth
 		"string admits the other alternatives",
 	);
 	assert.equal(printed("^[\\s\\S]+$"), undefined, "at least one character");
+	assert.equal(printed("^a[\\s\\S]{0,}$"), undefined, "{0,}, not *");
 	assert.equal(printed("^[\\s\\S]?$"), undefined);
 	assert.equal(printed("^[\\s\\S]{2}$"), undefined);
 	assert.equal(printed("^a[\\s\\S]b$"), undefined, "one character");

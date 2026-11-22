@@ -80,13 +80,81 @@ const WORD = [...range(0x41, 0x5a), ...range(0x61, 0x7a), ...DIGIT, "_"];
 /** What a class escape matches; for `\D`, `\S`, `\W`, the escape it negates. */
 const CLASS_ESCAPES: Record<string, string[]> = { d: DIGIT, s: SPACE, w: WORD };
 
-/** What an atom matches: some strings, or any one character (`[\s\S]`), which only `*` makes a type of. */
-interface Atom {
-	lang: Lang;
-	anyChar: boolean;
+/** Characters: code point ranges, from and to, in order and apart. */
+type Chars = [number, number][];
+
+const LAST = 0x10ffff;
+const ALL: Chars = [[0, LAST]];
+
+function charsOf(cs: string[]): Chars {
+	return either(
+		cs.map((c) => [c.codePointAt(0) as number, c.codePointAt(0) as number]),
+	);
 }
 
-/** A parser over a pattern's code points (the `u` flag: JSON Schema patterns are Unicode). */
+function either(ranges: Chars): Chars {
+	const out: Chars = [];
+	for (const [from, to] of [...ranges].sort((x, y) => x[0] - y[0])) {
+		const last = out[out.length - 1];
+		if (last !== undefined && from <= last[1] + 1)
+			last[1] = Math.max(last[1], to);
+		else out.push([from, to]);
+	}
+	return out;
+}
+
+function other(set: Chars): Chars {
+	const out: Chars = [];
+	let next = 0;
+	for (const [from, to] of set) {
+		if (from > next) out.push([next, from - 1]);
+		next = to + 1;
+	}
+	if (next <= LAST) out.push([next, LAST]);
+	return out;
+}
+
+const has = (set: Chars, c: number) => set.some(([f, t]) => f <= c && c <= t);
+
+/** What `.` matches: every character but a line terminator (LF, CR, LS, PS). */
+const DOT = other(charsOf(chars([0x0a, 0x0d, 0x2028, 0x2029])));
+
+/** What a class escape matches: `\d`, `\s`, `\w`, or everything but one (`\D`). */
+function escaped(cls: string): Chars {
+	const set = charsOf(CLASS_ESCAPES[cls.toLowerCase()] as string[]);
+	return cls === cls.toLowerCase() ? set : other(set);
+}
+
+/**
+ * Characters a pattern matches at one place, and how a template reads them: the
+ * characters in the order the pattern lists them, any character (`[\s\S]`, `[^]`), or
+ * none it can write (`.`, `\D`, `[^a]`, a range too wide for a union).
+ */
+interface Letters {
+	chars: Chars;
+	text: string[] | "any" | undefined;
+}
+
+/** A pattern read: characters, a sequence, alternatives, a repetition. */
+type Re =
+	| Letters
+	| { seq: Re[] }
+	| { alt: Re[] }
+	| { rep: Re; min: number; max: number; star?: true };
+
+const ANY_TEXT: Re = {
+	rep: { chars: ALL, text: "any" },
+	min: 0,
+	max: Infinity,
+	star: true,
+};
+
+/**
+ * A parser over a pattern's code points (the `u` flag: JSON Schema patterns are Unicode),
+ * the one place that reads a pattern; templates (`lang`) and machines (`Machine`) are
+ * built from what it reads. Lookarounds, word boundaries, back references and property
+ * escapes, which neither says, throw `NoType`.
+ */
 class Parser {
 	readonly cs: string[];
 	i = 0;
@@ -109,21 +177,21 @@ class Parser {
 	}
 
 	/** alternation := sequence ('|' sequence)* */
-	alternation(top: boolean): Lang {
-		const alts = [this.sequence(top)];
+	alternatives(top: boolean): Re {
+		const alts = [this.items(top)];
 		while (this.peek() === "|") {
 			this.i++;
-			alts.push(this.sequence(top));
+			alts.push(this.items(top));
 		}
-		return bounded(alts.flat());
+		return { alt: alts };
 	}
 
-	/** A sequence of terms; at the top, `^` and `$` anchor it, and it is unanchored without them. */
-	sequence(top: boolean): Lang {
-		let lang = EMPTY;
+	/** A sequence of terms; at the top, `^` and `$` anchor it, and any text is around it without them. */
+	items(top: boolean): Re {
+		const items: Re[] = [];
 		const start = top && this.peek() === "^";
 		if (start) this.i++;
-		else if (top) lang = [[ANY]];
+		else if (top) items.push(ANY_TEXT);
 		let end = false;
 		while (!this.done && this.peek() !== "|" && this.peek() !== ")") {
 			if (top && this.peek() === "$") {
@@ -131,52 +199,37 @@ class Parser {
 				end = true;
 				break;
 			}
-			lang = concat(lang, this.term());
+			items.push(this.term());
 		}
-		if (top && !end) lang = concat(lang, [[ANY]]);
-		// A `$` before the sequence ends anchors nothing a template says.
+		// A `$` before the sequence ends anchors what neither a template nor a machine says.
 		if (end && !this.done && this.peek() !== "|") throw new NoType();
-		return lang;
+		if (top && !end) items.push(ANY_TEXT);
+		return { seq: items };
 	}
 
 	/** term := atom quantifier? */
-	term(): Lang {
+	term(): Re {
 		const atom = this.atom();
 		const c = this.peek();
-		if (c === "?") {
-			this.i++;
-			this.lazy();
-			if (atom.anyChar) throw new NoType();
-			return [...EMPTY, ...atom.lang];
-		}
-		if (c === "*" || c === "+") {
-			this.i++;
-			this.lazy();
-			// Any number of any character is any text; anything else repeated is no template.
-			if (c === "*" && atom.anyChar) return [[ANY]];
-			throw new NoType();
-		}
-		if (c === "{") {
+		let min = 0;
+		let max = Infinity;
+		if (c === "?") max = 1;
+		else if (c === "+") min = 1;
+		else if (c === "{") {
 			// With the `u` flag a `{` here begins a quantifier.
 			const m = /^\{(\d+)(,(\d*))?\}/.exec(
 				this.cs.slice(this.i).join(""),
 			) as RegExpExecArray;
-			this.i += m[0].length;
-			this.lazy();
-			const min = Number(m[1]);
-			const max =
-				m[2] === undefined ? min : m[3] === "" ? Infinity : Number(m[3]);
-			if (max === Infinity || atom.anyChar) throw new NoType();
-			let out: Lang = [];
-			let power = EMPTY;
-			for (let k = 0; k <= max; k++) {
-				if (k >= min) out = bounded([...out, ...power]);
-				if (k < max) power = concat(power, atom.lang);
-			}
-			return out;
-		}
-		if (atom.anyChar) throw new NoType();
-		return atom.lang;
+			this.i += m[0].length - 1;
+			min = Number(m[1]);
+			max = m[2] === undefined ? min : m[3] === "" ? Infinity : Number(m[3]);
+		} else if (c !== "*") return atom;
+		this.i++;
+		this.lazy();
+		// A template reads `*` of any character only, not `{0,}`.
+		return c === "*"
+			? { rep: atom, min, max, star: true }
+			: { rep: atom, min, max };
 	}
 
 	/** A `?` after a quantifier makes it lazy, which changes nothing a type says. */
@@ -184,34 +237,32 @@ class Parser {
 		if (this.peek() === "?") this.i++;
 	}
 
-	atom(): Atom {
+	atom(): Re {
 		const c = this.next();
 		if (c === "(") {
 			if (this.peek() === "?") {
 				this.i++;
 				const kind = this.next();
-				// (?:…) and (?<name>…) group; lookarounds say what no type does.
+				// (?:…) and (?<name>…) group; lookarounds say what neither does.
 				if (kind === "<" && this.peek() !== "=" && this.peek() !== "!") {
 					while (this.next() !== ">");
 				} else if (kind !== ":") throw new NoType();
 			}
-			const lang = this.alternation(false);
+			const re = this.alternatives(false);
 			this.next(); // ")"
-			return { lang, anyChar: false };
+			return re;
 		}
 		if (c === "[") return this.cls();
 		if (c === "\\") {
 			const e = this.escape(false);
-			if (typeof e === "string")
-				return { lang: [[{ set: [e] }]], anyChar: false };
+			if (typeof e === "string") return { chars: charsOf([e]), text: [e] };
 			// \d, \s and \w are sets; \D, \S and \W, everything but one.
-			const set = CLASS_ESCAPES[e.cls];
-			if (set === undefined) throw new NoType();
-			return { lang: [[{ set }]], anyChar: false };
+			return { chars: escaped(e.cls), text: CLASS_ESCAPES[e.cls] };
 		}
-		// `.` leaves out line breaks; `^` and `$` here anchor what no template says.
-		if (c === "." || c === "^" || c === "$") throw new NoType();
-		return { lang: [[{ set: [c] }]], anyChar: false };
+		// `^` and `$` here anchor what neither says; `.` leaves out line breaks.
+		if (c === "^" || c === "$") throw new NoType();
+		if (c === ".") return { chars: DOT, text: undefined };
+		return { chars: charsOf([c]), text: [c] };
 	}
 
 	/**
@@ -253,12 +304,13 @@ class Parser {
 		return String.fromCodePoint(Number.parseInt(digits, 16));
 	}
 
-	/** `[…]`: a finite set of characters, or any character (`[\s\S]`, `[^]`). */
-	cls(): Atom {
+	/** `[…]`: for a template, a finite set of characters or any character (`[\s\S]`, `[^]`). */
+	cls(): Letters {
 		const negated = this.peek() === "^";
 		if (negated) this.i++;
 		const set = new Set<string>();
 		const escapes = new Set<string>();
+		const ranges: Chars = [];
 		// A range of more characters than a union holds is not written out: it is no finite
 		// set, unless the class is any character anyway.
 		let wide = false;
@@ -270,36 +322,78 @@ class Parser {
 			const a = one();
 			if (typeof a !== "string") {
 				escapes.add(a.cls);
+				ranges.push(...escaped(a.cls));
 				continue;
 			}
+			const from = a.codePointAt(0) as number;
 			if (this.peek() === "-" && this.cs[this.i + 1] !== "]") {
 				this.i++;
 				// With the `u` flag a range ends at a character, not a class escape.
-				const b = one() as string;
-				const from = a.codePointAt(0) as number;
-				const to = b.codePointAt(0) as number;
+				const to = (one() as string).codePointAt(0) as number;
+				ranges.push([from, to]);
 				if (to - from >= MAX_UNION) wide = true;
 				else for (const x of range(from, to)) set.add(x);
-			} else set.add(a);
+			} else {
+				ranges.push([from, from]);
+				set.add(a);
+			}
 		}
 		this.i++;
 		let any = false;
+		let none = false;
 		for (const e of escapes) {
 			const lower = e.toLowerCase();
 			if (e === lower)
 				for (const x of CLASS_ESCAPES[lower] as string[]) set.add(x);
 			else if (escapes.has(lower)) any = true;
-			else throw new NoType();
+			else none = true;
 		}
-		if (negated) {
-			// [^] is any character; any other negated class is no finite set.
-			if (wide || set.size > 0 || escapes.size > 0) throw new NoType();
-			any = true;
-		}
-		if (any) return { lang: [], anyChar: true };
-		if (wide || set.size > MAX_UNION) throw new NoType();
-		return { lang: [[{ set: [...set] }]], anyChar: false };
+		const chars = either(ranges);
+		// [^] is any character; any other negated class is no finite set.
+		if (negated)
+			return {
+				chars: other(chars),
+				text:
+					none || wide || set.size > 0 || escapes.size > 0 ? undefined : "any",
+			};
+		return {
+			chars,
+			text:
+				none || (!any && (wide || set.size > MAX_UNION))
+					? undefined
+					: any
+						? "any"
+						: [...set],
+		};
 	}
+}
+
+/**
+ * The strings an expression matches, as templates: what `Parser` read, where templates
+ * say exactly those strings; `NoType` where they do not.
+ */
+function lang(re: Re): Lang {
+	if ("chars" in re) {
+		// Any one character, which only `*` makes a template of, and characters none writes.
+		if (!Array.isArray(re.text)) throw new NoType();
+		return [[{ set: re.text }]];
+	}
+	if ("seq" in re) return re.seq.reduce((l, r) => concat(l, lang(r)), EMPTY);
+	if ("alt" in re) return bounded(re.alt.flatMap(lang));
+	// Any number of any character is any text; anything else repeated without end is no template.
+	if ("chars" in re.rep && re.rep.text === "any") {
+		if (re.star) return [[ANY]];
+		throw new NoType();
+	}
+	if (re.max === Infinity) throw new NoType();
+	const atom = lang(re.rep);
+	let out: Lang = [];
+	let power = EMPTY;
+	for (let k = 0; k <= re.max; k++) {
+		if (k >= re.min) out = bounded([...out, ...power]);
+		if (k < re.max) power = concat(power, atom);
+	}
+	return out;
 }
 
 /** Characters a template literal would read as more than themselves. */
@@ -384,7 +478,7 @@ const written = (seq: Seq): Template => ({ seq, key: render(seq) });
 
 /** The templates of a pattern `patternType` reads, one for each of its alternatives. */
 export function templates(pattern: string): Template[] {
-	return new Parser(pattern).alternation(true).map(written);
+	return lang(new Parser(pattern).alternatives(true)).map(written);
 }
 
 /** Whether template `outer` admits every string template `inner` does. */
@@ -489,169 +583,6 @@ export function meet(a: Template, b: Template): Template[] | undefined {
 	return kept;
 }
 
-/** Characters: code point ranges, from and to, in order and apart. */
-type Chars = [number, number][];
-
-const LAST = 0x10ffff;
-const ALL: Chars = [[0, LAST]];
-
-function charsOf(cs: string[]): Chars {
-	const points = cs
-		.map((c) => c.codePointAt(0) as number)
-		.sort((x, y) => x - y);
-	const out: Chars = [];
-	for (const p of points) {
-		const last = out[out.length - 1];
-		if (last !== undefined && p <= last[1] + 1) last[1] = Math.max(last[1], p);
-		else out.push([p, p]);
-	}
-	return out;
-}
-
-function either(sets: Chars[]): Chars {
-	const ranges = sets.flat().sort((x, y) => x[0] - y[0]);
-	const out: Chars = [];
-	for (const [from, to] of ranges) {
-		const last = out[out.length - 1];
-		if (last !== undefined && from <= last[1] + 1)
-			last[1] = Math.max(last[1], to);
-		else out.push([from, to]);
-	}
-	return out;
-}
-
-function other(set: Chars): Chars {
-	const out: Chars = [];
-	let next = 0;
-	for (const [from, to] of set) {
-		if (from > next) out.push([next, from - 1]);
-		next = to + 1;
-	}
-	if (next <= LAST) out.push([next, LAST]);
-	return out;
-}
-
-const has = (set: Chars, c: number) => set.some(([f, t]) => f <= c && c <= t);
-
-/** What `.` matches: every character but a line terminator. */
-const DOT = other(charsOf(["\n", "\r", " ", " "]));
-
-/** A pattern read as a regular expression: characters, a sequence, alternatives, a repetition. */
-type Re =
-	| { chars: Chars }
-	| { seq: Re[] }
-	| { alt: Re[] }
-	| { rep: Re; min: number; max: number };
-
-const ANY_TEXT: Re = { rep: { chars: ALL }, min: 0, max: Infinity };
-
-/**
- * A parser of the patterns that are regular expressions: all but lookarounds, word
- * boundaries, back references and property escapes, which throw `NoType`.
- */
-class Expression extends Parser {
-	alternatives(top: boolean): Re {
-		const alts = [this.items(top)];
-		while (this.peek() === "|") {
-			this.i++;
-			alts.push(this.items(top));
-		}
-		return { alt: alts };
-	}
-
-	/** A sequence; at the top, `^` and `$` anchor it, and any text is around it without them. */
-	items(top: boolean): Re {
-		const items: Re[] = [];
-		const start = top && this.peek() === "^";
-		if (start) this.i++;
-		else if (top) items.push(ANY_TEXT);
-		let end = false;
-		while (!this.done && this.peek() !== "|" && this.peek() !== ")") {
-			if (top && this.peek() === "$") {
-				this.i++;
-				end = true;
-				break;
-			}
-			items.push(this.repeated());
-		}
-		if (end && !this.done && this.peek() !== "|") throw new NoType();
-		if (top && !end) items.push(ANY_TEXT);
-		return { seq: items };
-	}
-
-	repeated(): Re {
-		const unit = this.unit();
-		const c = this.peek();
-		let min = 0;
-		let max = Infinity;
-		if (c === "?") max = 1;
-		else if (c === "+") min = 1;
-		else if (c === "{") {
-			const m = /^\{(\d+)(,(\d*))?\}/.exec(
-				this.cs.slice(this.i).join(""),
-			) as RegExpExecArray;
-			this.i += m[0].length - 1;
-			min = Number(m[1]);
-			max = m[2] === undefined ? min : m[3] === "" ? Infinity : Number(m[3]);
-		} else if (c !== "*") return unit;
-		this.i++;
-		this.lazy();
-		return { rep: unit, min, max };
-	}
-
-	unit(): Re {
-		const c = this.next();
-		if (c === "(") {
-			if (this.peek() === "?") {
-				this.i++;
-				const kind = this.next();
-				if (kind === "<" && this.peek() !== "=" && this.peek() !== "!") {
-					while (this.next() !== ">");
-				} else if (kind !== ":") throw new NoType();
-			}
-			const re = this.alternatives(false);
-			this.next(); // ")"
-			return re;
-		}
-		if (c === "[") return { chars: this.chars() };
-		if (c === "\\") {
-			const e = this.escape(false);
-			return { chars: typeof e === "string" ? charsOf([e]) : escaped(e.cls) };
-		}
-		if (c === "^" || c === "$") throw new NoType();
-		return { chars: c === "." ? DOT : charsOf([c]) };
-	}
-
-	/** `[…]`, negated or not. */
-	chars(): Chars {
-		const negated = this.peek() === "^";
-		if (negated) this.i++;
-		const sets: Chars[] = [];
-		const one = (): string | { cls: string } => {
-			const c = this.next();
-			return c === "\\" ? this.escape(true) : c;
-		};
-		while (this.peek() !== "]") {
-			const a = one();
-			if (typeof a !== "string") sets.push(escaped(a.cls));
-			else if (this.peek() === "-" && this.cs[this.i + 1] !== "]") {
-				this.i++;
-				const b = one() as string;
-				sets.push([[a.codePointAt(0) as number, b.codePointAt(0) as number]]);
-			} else sets.push(charsOf([a]));
-		}
-		this.i++;
-		const set = either(sets);
-		return negated ? other(set) : set;
-	}
-}
-
-/** What a class escape matches: `\d`, `\s`, `\w`, or everything but one (`\D`). */
-function escaped(cls: string): Chars {
-	const set = charsOf(CLASS_ESCAPES[cls.toLowerCase()] as string[]);
-	return cls === cls.toLowerCase() ? set : other(set);
-}
-
 /** The most states a machine has before a reading gives up. */
 const MAX_STATES = 5_000;
 
@@ -745,7 +676,7 @@ function machine(pattern: string): Read | null {
 			new RegExp(pattern, "u");
 			const m = new Machine();
 			const start = m.state();
-			const accept = m.build(new Expression(pattern).alternatives(true), start);
+			const accept = m.build(new Parser(pattern).alternatives(true), start);
 			read = { m, start, accept };
 		} catch {
 			// A pattern JavaScript cannot read, `NoType`, or more states than read.
@@ -775,7 +706,7 @@ export function matching(
 	const tAccept = tm.build(
 		{
 			seq: t.seq.map((s) =>
-				"any" in s ? ANY_TEXT : { chars: charsOf(s.set) },
+				"any" in s ? ANY_TEXT : { chars: charsOf(s.set), text: s.set },
 			),
 		},
 		tStart,
@@ -833,16 +764,16 @@ function typeOf(pattern: string): Ty | undefined {
 	} catch {
 		return undefined;
 	}
-	let lang: Lang;
+	let read: Lang;
 	try {
-		lang = new Parser(pattern).alternation(true);
+		read = lang(new Parser(pattern).alternatives(true));
 	} catch {
 		// NoType: the parser throws nothing else on a pattern RegExp reads.
 		return undefined;
 	}
 	// A template keeps the pattern, so that the values next to it can be read against it.
 	return union(
-		lang
+		read
 			.map(render)
 			.map((t) => (t.kind === "template" ? { ...t, pattern } : t)),
 	);
