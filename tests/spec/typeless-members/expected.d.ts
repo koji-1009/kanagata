@@ -184,6 +184,9 @@ export type PairOrNull = ({
 } | {
   a: {} | null;
 } | null) & ({
+  a?: unknown;
+  b?: unknown;
+} | null) & ({
   a?: string;
   b?: string;
 } | null);

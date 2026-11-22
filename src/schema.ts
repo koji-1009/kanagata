@@ -446,13 +446,25 @@ function namedKeys(cx: Ctx, s: Value, seen = new Set<string>()): string[] {
 	return keysOf(cx, s, seen, true);
 }
 
+/**
+ * The keys the schemas that apply to the value a schema is name, as properties or as
+ * required: there, through `$ref`, and in its members, `if` / `then` / `else` and dependent
+ * schemas, wherever they match.
+ */
+function valueKeys(cx: Ctx, s: Value): string[] {
+	return keysOf(cx, s, new Set(), true, true);
+}
+
 function keysOf(
 	cx: Ctx,
 	s: Value,
 	seen: Set<string>,
 	properties: boolean,
+	everywhere = false,
 ): string[] {
-	return cx.inOwnResource(s, () => ownKeysOf(cx, s, seen, properties));
+	return cx.inOwnResource(s, () =>
+		ownKeysOf(cx, s, seen, properties, everywhere),
+	);
 }
 
 function ownKeysOf(
@@ -460,6 +472,7 @@ function ownKeysOf(
 	s: Value,
 	seen: Set<string>,
 	properties: boolean,
+	everywhere: boolean,
 ): string[] {
 	const req = get(s, "required");
 	const keys = Array.isArray(req)
@@ -469,16 +482,35 @@ function ownKeysOf(
 	if (properties && props instanceof JsonObject)
 		keys.push(...props.entries.map(([k]) => k));
 	const allOf = get(s, "allOf");
-	for (const m of Array.isArray(allOf) ? allOf : [])
-		keys.push(...keysOf(cx, m, seen, properties));
+	const members = everywhere ? applied(s) : Array.isArray(allOf) ? allOf : [];
+	for (const m of members)
+		keys.push(...keysOf(cx, m, seen, properties, everywhere));
 	for (const target of cx.reached(s)) {
 		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
 		keys.push(
-			...cx.inTarget(target, () => keysOf(cx, target.value, seen, properties)),
+			...cx.inTarget(target, () =>
+				keysOf(cx, target.value, seen, properties, everywhere),
+			),
 		);
 	}
 	return keys;
+}
+
+/** The schemas that apply to the same value as a schema where they match: its members, `if` / `then` / `else` and dependent schemas. */
+function applied(s: Value): Value[] {
+	const out: Value[] = [];
+	for (const key of ["allOf", "oneOf", "anyOf"]) {
+		const members = get(s, key);
+		if (Array.isArray(members)) out.push(...members);
+	}
+	for (const key of ["if", "then", "else"]) {
+		const branch = get(s, key);
+		if (branch !== undefined) out.push(branch);
+	}
+	const ds = get(s, "dependentSchemas");
+	if (ds instanceof JsonObject) out.push(...ds.entries.map(([, d]) => d));
+	return out;
 }
 
 /**
@@ -2376,8 +2408,9 @@ function admitsAnyValue(cx: Ctx, s: Value): boolean {
 		);
 }
 
-/** Keywords that only apply to objects; their presence implies `type: object`. */
+/** Keywords that only apply to objects and that the object type reads; their presence implies `type: object`. */
 function hasObjectKeywords(v: JsonObject): boolean {
+	const names = v.get("propertyNames");
 	return (
 		[
 			"properties",
@@ -2387,7 +2420,9 @@ function hasObjectKeywords(v: JsonObject): boolean {
 		].some((k) => v.get(k) !== undefined) ||
 		unevaluated(v, "unevaluatedProperties") !== undefined ||
 		// maxProperties 0 says what keys an object has (none); other counts admit every object.
-		count(v, "maxProperties") === 0
+		count(v, "maxProperties") === 0 ||
+		keyNames(names) !== undefined ||
+		keyPattern(names) !== undefined
 	);
 }
 
@@ -3077,6 +3112,19 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		props.push({ ...prop(name, ty), present: true });
 	}
 
+	// The keys the schemas that apply to the same value name, through it and the schemas it
+	// is a member of, are keys of the same object, which its propertyNames asks of too:
+	// those it does not admit cannot be there.
+	const outside = (admits: (key: string) => boolean): string[] =>
+		[...new Set([v, ...cx.around].flatMap((s) => valueKeys(cx, s)))].filter(
+			(k) => !left.has(k) && !admits(k) && !props.some((p) => p.key === k),
+		);
+	// A closed object of these properties without them; one without properties already admits no key.
+	const closedOver = (admits: (key: string) => boolean, kept: Prop[]): Ty => {
+		const t = counted(v, kept);
+		return t.kind === "map" ? t : forbid(t, outside(admits));
+	};
+
 	// propertyNames that lists the keys closes the object over them: a declared property
 	// it does not list cannot be there, and one it lists but nothing declares has the
 	// value the patterns or additionalProperties give it.
@@ -3084,15 +3132,13 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (allowed !== undefined) {
 		if (props.some((p) => !p.optional && !allowed.includes(p.key)))
 			return NEVER;
-		const kept = props.map((p) =>
-			allowed.includes(p.key) ? p : { ...p, ty: NEVER },
-		);
+		for (const p of props) if (!allowed.includes(p.key)) p.ty = NEVER;
 		for (const name of allowed) {
-			if (left.has(name) || kept.some((p) => p.key === name)) continue;
+			if (left.has(name) || props.some((p) => p.key === name)) continue;
 			const ty = keyValue(name);
-			if (ty.kind !== "never") kept.push({ key: name, ty, optional: true });
+			if (ty.kind !== "never") props.push({ key: name, ty, optional: true });
 		}
-		return counted(v, kept);
+		return closedOver((k) => allowed.includes(k), props);
 	}
 
 	// Keys a pattern matches have its type whatever additionalProperties says. A pattern
@@ -3182,16 +3228,18 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		const pattern = (v.get("propertyNames") as JsonObject).str(
 			"pattern",
 		) as string;
-		if (props.some((p) => !p.optional && !matches(pattern, p.key)))
-			return NEVER;
-		for (const p of props) if (!matches(pattern, p.key)) p.ty = NEVER;
+		const admits = (key: string) => matches(pattern, key);
+		if (props.some((p) => !p.optional && !admits(p.key))) return NEVER;
+		for (const p of props) if (!admits(p.key)) p.ty = NEVER;
 		const own = templates(pattern).filter((t) => {
 			if (strings(t) === undefined) return true;
 			name(t);
 			return false;
 		});
+		// The object without the keys it names that no value is admitted for (see `shut`).
+		const kept = () => props.filter((p) => !absent.has(p.key));
 		// Where it names every key, those are the properties: no other key is admitted.
-		if (own.length === 0) return shut();
+		if (own.length === 0) return closedOver(admits, kept());
 		// A pattern's signature is by the keys propertyNames admits too: all of its own
 		// where they are, else the keys each template of propertyNames shares with it,
 		// written as templates (see `meet`). Where those are too many to read, it stays.
@@ -3227,8 +3275,13 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 				all.length > 0 ? inter(all) : union([additional ?? UNKNOWN, ...others]);
 			signature(out, t.key, admitting(ty, within(t)));
 		}
-		if (out.length === 0) return shut();
-		return { kind: "map", props, keyed: out };
+		if (out.length === 0) return closedOver(admits, kept());
+		const forbidden = outside(admits).map((key) => ({
+			key,
+			ty: NEVER,
+			optional: true,
+		}));
+		return { kind: "map", props: [...props, ...forbidden], keyed: out };
 	}
 
 	const byPattern = keyedSignatures();
