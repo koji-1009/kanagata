@@ -275,8 +275,8 @@ export type DeepItems = [] | [string?] | [never?, ...number[]] | [never?] | numb
 /** items in a member evaluates every item. */
 export type AllItems = string[];
 
-/** contains evaluates the items that match it, which no type says. */
-export type Contains = [unknown, ...unknown[]];
+/** contains evaluates the items that match it, and no other item is admitted: every item is a string. */
+export type Contains = [string, ...string[]];
 
 /** else evaluates where if does not admit the value, which TypeScript cannot say here. */
 export type Undecided = {

@@ -6,7 +6,62 @@ export interface operations {}
 
 export interface schemas {
   Matched: Matched;
+  Bounded: Bounded;
+  Optional: Optional;
+  Impossible: Impossible;
+  Typed: Typed;
+  Prefixed: Prefixed;
+  Everything: Everything;
+  NoneMatch: NoneMatch;
+  NoneMatchUnsaid: NoneMatchUnsaid;
+  InAllOf: InAllOf;
+  HasString: HasString;
+  ViaRef: ViaRef;
+  TwoSources: TwoSources;
+  Either: Either;
+  Undecided: Undecided;
 }
 
-/** contains evaluates the items it matches, so unevaluatedItems is not items here: ["a"] is valid. */
-export type Matched = [unknown, ...unknown[]];
+/** contains evaluates the items it matches, and no other item is admitted: every item is a string, and there is one at least. */
+export type Matched = [string, ...string[]];
+
+/** Every item matches contains, so minContains and maxContains bound the length. */
+export type Bounded = [string, string, string?];
+
+/** minContains 0 admits no item too. */
+export type Optional = string[];
+
+/** More items than maxContains admits are required. */
+export type Impossible = never;
+
+/** An item contains does not match is of the type unevaluatedItems says; which item is a string no type says. */
+export type Typed = [string | number, ...(string | number)[]];
+
+/** Items past prefixItems are those contains matches; whether a prefix item matches it no type says. */
+export type Prefixed = [number, ...string[]];
+
+/** contains: {} evaluates every item. */
+export type Everything = [string, ...unknown[]];
+
+/** maxContains 0: no item matches contains, so it evaluates none. */
+export type NoneMatch = [];
+
+/** maxContains 0: the items are of the type unevaluatedItems says; the strings contains does not match no type says. */
+export type NoneMatchUnsaid = string[];
+
+/** contains in an allOf member evaluates the items it matches. */
+export type InAllOf = [string, string?];
+
+export type HasString = [unknown, ...unknown[]];
+
+/** contains in a $ref target evaluates the items it matches. */
+export type ViaRef = HasString & [string, string?];
+
+/** An item matches one contains or the other; which no type says. */
+export type TwoSources = [string | number, ...(string | number)[]];
+
+/** An anyOf member's contains evaluates the items it matches where the member matches, and both may. */
+export type Either = [string, ...string[]] | [number, ...number[]] | [string | number, ...(string | number)[]];
+
+/** else evaluates where if does not admit the value, which TypeScript cannot say here: unevaluatedItems is ignored, and so which items match contains is not typed. */
+export type Undecided = [unknown, ...unknown[]];

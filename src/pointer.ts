@@ -123,6 +123,12 @@ export interface Located {
 	where: string;
 }
 
+/** Where a schema is read: the base URI its `$ref`s resolve against, and the dynamic scope. */
+export interface Place {
+	base: string;
+	scope: readonly string[];
+}
+
 const NO_KEYS: ReadonlySet<string> = new Set();
 
 /** Schema keywords a component may have next to `$ref` and still be another name for its target. */
@@ -314,6 +320,30 @@ export class Ctx {
 		}
 	}
 
+	/**
+	 * The schemas with `contains` whose every item the schema being converted makes match it
+	 * (by its `unevaluatedItems: false`), by that schema.
+	 */
+	readonly #matched = new Map<JsonObject, ReadonlySet<JsonObject>>();
+
+	/** Whether the schema being converted or one around it makes every item match `holder`'s `contains`. */
+	allMatch(holder: JsonObject): boolean {
+		return [holder, ...this.around].some(
+			(s) => this.#matched.get(s)?.has(holder) === true,
+		);
+	}
+
+	/** Converts `s` knowing the schemas with `contains` whose every item it makes match. */
+	withMatched<T>(s: JsonObject, holders: readonly JsonObject[], f: () => T): T {
+		if (holders.length === 0) return f();
+		this.#matched.set(s, new Set(holders));
+		try {
+			return f();
+		} finally {
+			this.#matched.delete(s);
+		}
+	}
+
 	/** Converts in the given view, then restores the previous one. */
 	inMode<T>(mode: View, f: () => T): T {
 		const saved = this.mode;
@@ -379,6 +409,22 @@ export class Ctx {
 			this.scope = [...this.scope, base];
 		try {
 			return this.withBase(base, f);
+		} finally {
+			this.scope = saved;
+		}
+	}
+
+	/** Where a schema is read now: the base URI and the dynamic scope, to read another there later. */
+	get place(): Place {
+		return { base: this.base, scope: this.scope };
+	}
+
+	/** Reads where `place` says (see `place`), then restores where it was. */
+	inPlace<T>(place: Place, f: () => T): T {
+		const saved = this.scope;
+		this.scope = place.scope;
+		try {
+			return this.withBase(place.base, f);
 		} finally {
 			this.scope = saved;
 		}
