@@ -26,6 +26,21 @@
         "items": { "type": "string" },
         "allOf": [{ "contains": {} }]
       },
+      "TaggedOrPrefixed": {
+        "description": "The strings that pass are those the member's string keywords admit.",
+        "type": ["array", "string"],
+        "allOf": [{ "contains": {}, "pattern": "^a" }]
+      },
+      "TaggedOrSmall": {
+        "description": "So are the integers, by its bounds.",
+        "type": ["array", "integer"],
+        "allOf": [{ "contains": {}, "minimum": 1, "maximum": 2 }]
+      },
+      "KeyedOrEmpty": {
+        "description": "Next to object keywords too.",
+        "type": ["object", "string"],
+        "oneOf": [{ "required": ["a"], "maxLength": 0 }, { "required": ["b"], "pattern": "^b$" }]
+      },
       "PairOrNull": {
         "description": "dependentRequired, dependentSchemas and propertyNames constrain only the objects.",
         "type": ["object", "null"],

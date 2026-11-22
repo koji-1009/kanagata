@@ -9,6 +9,9 @@ export interface schemas {
   StringOrObject: StringOrObject;
   ArrayOrNull: ArrayOrNull;
   TaggedOrNull: TaggedOrNull;
+  TaggedOrPrefixed: TaggedOrPrefixed;
+  TaggedOrSmall: TaggedOrSmall;
+  KeyedOrEmpty: KeyedOrEmpty;
   PairOrNull: PairOrNull;
   Typed: Typed;
   OnlyObject: OnlyObject;
@@ -36,6 +39,19 @@ export type ArrayOrNull = [string, ...string[]] | null;
 
 /** So does contains. */
 export type TaggedOrNull = [string, ...string[]] | null;
+
+/** The strings that pass are those the member's string keywords admit. */
+export type TaggedOrPrefixed = [unknown, ...unknown[]] | `a${string}`;
+
+/** So are the integers, by its bounds. */
+export type TaggedOrSmall = [unknown, ...unknown[]] | 1 | 2;
+
+/** Next to object keywords too. */
+export type KeyedOrEmpty = {
+  a: {} | null;
+} | "" | {
+  b: {} | null;
+} | "b";
 
 /** dependentRequired, dependentSchemas and propertyNames constrain only the objects. */
 export type PairOrNull = ({

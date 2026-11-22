@@ -9,6 +9,7 @@ export interface schemas {
   ByKind: ByKind;
   ByKey: ByKey;
   ByKeyOrString: ByKeyOrString;
+  ByKeyOrEmpty: ByKeyOrEmpty;
   InAllOf: InAllOf;
   ByType: ByType;
   Nothing: Nothing;
@@ -48,6 +49,18 @@ export type ByKeyOrString = ({
 } | {
   b: {} | null;
 } | string) | {
+  a?: never;
+});
+
+/** The strings that pass then are those its string keywords admit. */
+export type ByKeyOrEmpty = ({
+  a?: string;
+  b?: string;
+} | string) & (({
+  a: {} | null;
+} | string) & ({
+  b: {} | null;
+} | "") | {
   a?: never;
 });
 
