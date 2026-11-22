@@ -508,12 +508,14 @@ function arrayOf(cx: Ctx, name: string, at: string): Ty | undefined {
 }
 
 /**
- * Whether a schema says it admits arrays only: `type` naming `array` alone, array keywords
- * without `type`, `const` / `enum` arrays, a `$ref` to such a schema, an `allOf` member
- * that is one, or `oneOf` / `anyOf` members that all are.
+ * Whether a schema says it admits arrays only, by any of: `type` naming `array` alone,
+ * `const` / `enum` arrays, array keywords without `type`, a `not` that leaves arrays or
+ * nothing, a `$ref` to such a schema, an `allOf` member that is one, or `oneOf` / `anyOf`
+ * members that all are; `false` admits nothing, so arrays only.
  */
 function arraysOnly(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
-	if (!(v instanceof JsonObject)) return false;
+	// false admits no value, so none but arrays.
+	if (!(v instanceof JsonObject)) return v === false;
 	const r = v.str("$ref");
 	const target = r === undefined ? undefined : cx.tryLocate(r);
 	const viaRef =
@@ -524,16 +526,21 @@ function arraysOnly(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
 		);
 	// In 3.0 the keywords next to $ref are ignored.
 	if (viaRef || (r !== undefined && !cx.refSiblings)) return viaRef;
+	// A value meets every keyword, so one that admits arrays only is enough.
 	const type = v.get("type");
-	if (type !== undefined)
-		return (
-			type === "array" ||
-			(Array.isArray(type) && type.every((t) => t === "array"))
-		);
+	if (
+		type === "array" ||
+		(Array.isArray(type) && type.every((t) => t === "array"))
+	)
+		return true;
 	const c = v.get("const");
 	const values = c === undefined ? v.get("enum") : [c];
-	if (Array.isArray(values)) return values.every((x) => Array.isArray(x));
-	if (hasArrayKeywords(v)) return true;
+	if (Array.isArray(values) && values.every((x) => Array.isArray(x)))
+		return true;
+	if (type === undefined && hasArrayKeywords(v)) return true;
+	const n = v.get("not");
+	const left = n === undefined ? undefined : negation(n);
+	if (left === NEVER || left?.kind === "array") return true;
 	const allOf = v.get("allOf");
 	if (Array.isArray(allOf) && allOf.some((m) => arraysOnly(cx, m, seen)))
 		return true;

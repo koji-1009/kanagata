@@ -16,6 +16,14 @@ export interface schemas {
   OneWrapped: OneWrapped;
   Titled: Titled;
   OneTitled: OneTitled;
+  Maybe: Maybe;
+  OneMaybe: OneMaybe;
+  NotOthers: NotOthers;
+  OneNotOthers: OneNotOthers;
+  CountedEnum: CountedEnum;
+  OneCountedEnum: OneCountedEnum;
+  TypedPair: TypedPair;
+  OneTypedPair: OneTypedPair;
   Origin: Origin;
   AtOrigin: AtOrigin;
   Corners: Corners;
@@ -49,6 +57,26 @@ export type Titled = Tags;
 
 /** Its other members need not be arrays. */
 export type OneTitled = Titled & [string?];
+
+export type Maybe = string[];
+
+/** A member that admits nothing (false, not: {}) leaves the others, arrays all. */
+export type OneMaybe = Maybe & [string?];
+
+export type NotOthers = string[];
+
+/** One keyword that admits arrays only is enough: a not that leaves arrays alone, */
+export type OneNotOthers = NotOthers & [string?];
+
+export type CountedEnum = ["a"];
+
+/** array keywords next to values of other kinds, */
+export type OneCountedEnum = CountedEnum & ["a"];
+
+export type TypedPair = ["a", "b"];
+
+/** or array values next to a type that names other kinds. */
+export type OneTypedPair = TypedPair & ["a", "b"];
 
 export type Origin = [0, 0];
 

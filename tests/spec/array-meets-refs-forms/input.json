@@ -29,6 +29,30 @@
         "description": "Its other members need not be arrays.",
         "allOf": [{ "$ref": "#/components/schemas/Titled" }, { "maxItems": 1 }]
       },
+      "Maybe": { "anyOf": [{ "type": "array", "items": { "type": "string" } }, false, { "not": {} }] },
+      "OneMaybe": {
+        "description": "A member that admits nothing (false, not: {}) leaves the others, arrays all.",
+        "allOf": [{ "$ref": "#/components/schemas/Maybe" }, { "maxItems": 1 }]
+      },
+      "NotOthers": {
+        "type": ["array", "string"],
+        "items": { "type": "string" },
+        "not": { "type": ["string", "number", "boolean", "null", "object"] }
+      },
+      "OneNotOthers": {
+        "description": "One keyword that admits arrays only is enough: a not that leaves arrays alone,",
+        "allOf": [{ "$ref": "#/components/schemas/NotOthers" }, { "maxItems": 1 }]
+      },
+      "CountedEnum": { "enum": [["a"], "none"], "minItems": 1 },
+      "OneCountedEnum": {
+        "description": "array keywords next to values of other kinds,",
+        "allOf": [{ "$ref": "#/components/schemas/CountedEnum" }, { "maxItems": 1 }]
+      },
+      "TypedPair": { "type": ["array", "string"], "const": ["a", "b"] },
+      "OneTypedPair": {
+        "description": "or array values next to a type that names other kinds.",
+        "allOf": [{ "$ref": "#/components/schemas/TypedPair" }, { "minItems": 1 }]
+      },
       "Origin": { "const": [0, 0] },
       "AtOrigin": {
         "description": "A const array is a tuple.",
