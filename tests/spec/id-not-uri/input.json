@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Name": { "description": "An $id that is not a URI names no resource: the schema is read where it is.", "$id": "http://[", "type": "string" }
+    }
+  }
+}

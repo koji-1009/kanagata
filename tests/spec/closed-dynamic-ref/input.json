@@ -1,0 +1,40 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": { "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } } },
+      "Closed": {
+        "description": "A closed object admits no key its $dynamicRef target names that it does not declare.",
+        "$dynamicRef": "#/components/schemas/Base",
+        "properties": { "a": true },
+        "additionalProperties": false
+      },
+      "BaseInner": {
+        "$id": "https://example.com/base-inner",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } }
+      },
+      "BaseHolder": { "$id": "https://example.com/base-holder", "$ref": "base-inner" },
+      "ClosedById": {
+        "description": "Nor one its target names through a $ref that resolves against the target's own $id.",
+        "$ref": "#/components/schemas/BaseHolder",
+        "properties": { "a": true },
+        "additionalProperties": false
+      },
+      "NeedsC": { "type": "object", "required": ["c"] },
+      "Unsatisfiable": {
+        "description": "Its $dynamicRef target requires a key it does not admit: no value.",
+        "$dynamicRef": "#/components/schemas/NeedsC",
+        "properties": { "a": true },
+        "additionalProperties": false
+      },
+      "OnlyA": { "type": "object", "properties": { "a": { "type": "string" } }, "additionalProperties": false },
+      "AlsoB": { "type": "object", "properties": { "b": { "type": "string" } } },
+      "Choice": {
+        "description": "A member that is only a $dynamicRef to a closed object admits no key another member names.",
+        "oneOf": [{ "$dynamicRef": "#/components/schemas/OnlyA" }, { "$ref": "#/components/schemas/AlsoB" }]
+      }
+    }
+  }
+}

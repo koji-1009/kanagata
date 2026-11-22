@@ -1,0 +1,60 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Kind": { "type": "object", "properties": { "kind": { "enum": ["a", "b"] } }, "required": ["kind"] },
+      "Declared": {
+        "description": "kind is declared through $dynamicRef: else is where it is b.",
+        "$dynamicRef": "#/components/schemas/Kind",
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "KindValue": { "enum": ["a", "b"] },
+      "Listed": {
+        "description": "kind's values are listed through $dynamicRef.",
+        "type": "object",
+        "required": ["kind"],
+        "properties": { "kind": { "$dynamicRef": "#/components/schemas/KindValue" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "KindInner": {
+        "$id": "https://example.com/kind-inner",
+        "type": "object",
+        "properties": { "kind": { "enum": ["a", "b"] } },
+        "required": ["kind"]
+      },
+      "KindHolder": { "$id": "https://example.com/kind-holder", "$ref": "kind-inner" },
+      "DeclaredById": {
+        "description": "Declared through the target's $ref, which resolves against its own $id.",
+        "$ref": "#/components/schemas/KindHolder",
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "KindValueInner": { "$id": "https://example.com/kind-value", "enum": ["a", "b"] },
+      "KindValueHolder": { "$id": "https://example.com/kind-value-holder", "$ref": "kind-value" },
+      "ListedById": {
+        "description": "Listed through the property's target's $ref, which resolves against its own $id.",
+        "type": "object",
+        "required": ["kind"],
+        "properties": { "kind": { "$ref": "#/components/schemas/KindValueHolder" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "Letter": { "enum": ["a", "b", "c"] },
+      "NoA": {
+        "description": "The items are listed through $dynamicRef: those contains rejects.",
+        "type": "array",
+        "items": { "$dynamicRef": "#/components/schemas/Letter" },
+        "contains": { "const": "a" },
+        "minContains": 0,
+        "maxContains": 0
+      }
+    }
+  }
+}

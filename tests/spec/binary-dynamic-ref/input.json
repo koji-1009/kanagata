@@ -1,0 +1,36 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/upload": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "alias": { "$ref": "#/components/schemas/Alias" },
+                  "held": { "$ref": "#/components/schemas/UploadHolder" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Upload": { "type": "string", "format": "binary" },
+      "Alias": { "description": "Its $dynamicRef reaches bytes: a part with it is bytes.", "$dynamicRef": "#/components/schemas/Upload" },
+      "UploadInner": { "$id": "https://example.com/upload-inner", "type": "string", "format": "binary" },
+      "UploadHolder": {
+        "description": "Its $ref resolves against its own $id and reaches bytes.",
+        "$id": "https://example.com/upload-holder",
+        "$ref": "upload-inner"
+      }
+    }
+  }
+}

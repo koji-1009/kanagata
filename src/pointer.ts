@@ -62,6 +62,8 @@ interface Index {
 	anchors: Map<string, Value>;
 	/** The `$dynamicAnchor`s, by resource and name (`https://example.com/tree#node`). */
 	dynamic: Set<string>;
+	/** The absolute URI of each schema with an `$id`, resolved against the schemas around it. */
+	resources: Map<Value, string>;
 }
 
 /**
@@ -82,6 +84,7 @@ function indexIds(index: Index, doc: Value, base: string): void {
 		if (id !== undefined && URL.canParse(id, base)) {
 			here = withoutFragment(new URL(id, base));
 			if (!index.ids.has(here)) index.ids.set(here, v);
+			if (!index.resources.has(v)) index.resources.set(v, here);
 		}
 		// A $dynamicAnchor is a plain-name fragment too (JSON Schema 2020-12, 8.2.2).
 		for (const key of ["$anchor", "$dynamicAnchor"]) {
@@ -113,7 +116,7 @@ export interface Location {
 }
 
 /** What a `$ref` reaches: the value, the base URI it lives under, and where it is, for messages. */
-interface Located {
+export interface Located {
 	value: Value;
 	base: string;
 	uri: string;
@@ -123,7 +126,7 @@ interface Located {
 const NO_KEYS: ReadonlySet<string> = new Set();
 
 /** Schema keywords a component may have next to `$ref` and still be another name for its target. */
-const ALIAS_KEYS = new Set(["$ref", "description", "title"]);
+const ALIAS_KEYS = new Set(["$ref", "$dynamicRef", "description", "title"]);
 
 /** Where bytes are bytes: a raw body, a multipart body (whose properties are its parts), a part. */
 export type RawPosition = "body" | "parts" | "part";
@@ -402,9 +405,61 @@ export class Ctx {
 		return this.#ids().dynamic.has(uri);
 	}
 
-	/** The base URI inside a schema with `$id`, resolved against the current one. */
-	baseOf(id: string): string {
-		return withoutFragment(new URL(id, this.base));
+	/**
+	 * The base URI inside a schema with `$id`: its `$id` resolved against the schemas
+	 * around it, wherever the schema is reached from. undefined for a schema without
+	 * one, or whose `$id` is not a URI.
+	 */
+	resourceOf(v: Value): string | undefined {
+		return this.#ids().resources.get(v);
+	}
+
+	// How a schema is looked through to the schemas it applies to the same value. Every
+	// reader of a schema goes through these, so that they all reach the same schemas.
+
+	/**
+	 * Reads a schema in its own resource: one with `$id` (3.1, 3.2) is one, and `$ref`s
+	 * inside it resolve against its URI. Reading it inside it already changes nothing.
+	 */
+	inOwnResource<T>(v: Value, f: () => T): T {
+		const uri = this.refSiblings ? this.resourceOf(v) : undefined;
+		return uri === undefined ? f() : this.inResource(uri, f);
+	}
+
+	/**
+	 * What a `$dynamicRef` reaches from its target where that is a `$dynamicAnchor`: the
+	 * one of that name in the outermost resource the value was reached through. undefined
+	 * where it reaches its target, as a `$ref` does.
+	 */
+	dynamicAnchorOf(target: Located): string | undefined {
+		return this.isDynamicAnchor(target.uri)
+			? this.dynamicTarget(new URL(target.uri).hash.slice(1))
+			: undefined;
+	}
+
+	/**
+	 * The schemas a schema's `$ref` and `$dynamicRef` reach, where they are found: the
+	 * conversion reports one that is not.
+	 */
+	reached(s: Value): Located[] {
+		const targets: Located[] = [];
+		const r = str(s, "$ref");
+		const target = r === undefined ? undefined : this.tryLocate(r);
+		if (target !== undefined) targets.push(target);
+		const dr = str(s, "$dynamicRef");
+		const found = dr === undefined ? undefined : this.tryLocate(dr);
+		if (found !== undefined) {
+			const outer = this.dynamicAnchorOf(found);
+			targets.push(outer === undefined ? found : this.locate(outer, ""));
+		}
+		return targets;
+	}
+
+	/** Reads a schema a reference reaches where it is: in the resource it is in, and its own. */
+	inTarget<T>(target: Located, f: () => T): T {
+		return this.inResource(target.base, () =>
+			this.inOwnResource(target.value, f),
+		);
 	}
 
 	/**
@@ -529,6 +584,7 @@ export class Ctx {
 			ids: new Map(),
 			anchors: new Map(),
 			dynamic: new Set(),
+			resources: new Map(),
 		};
 		indexIds(index, this.root, this.documentBase);
 		this.#index = index;
@@ -540,9 +596,9 @@ export class Ctx {
 
 	/**
 	 * The key in `components.schemas` of a schema object, so references to it stay
-	 * named: the component itself, or the target of a component that is only a `$ref`
-	 * (with at most `title` and `description`; a schema kept in another file,
-	 * `User: { $ref: schemas/User.yaml }`). Schemas are
+	 * named: the component itself, or the target of a component that is only a `$ref` or a
+	 * `$dynamicRef`, as read from the document (with at most `title` and `description`; a
+	 * schema kept in another file, `User: { $ref: schemas/User.yaml }`). Schemas are
 	 * matched by identity.
 	 */
 	componentKey(v: Value): string | undefined {
@@ -558,20 +614,25 @@ export class Ctx {
 		if (this.#aliases === undefined) {
 			const aliases = new Map<Value, string>();
 			this.#aliases = aliases;
-			for (const [s, key] of this.#own) {
-				const r = str(s, "$ref");
-				if (
-					r === undefined ||
-					!(s as JsonObject).entries.every(([k]) => ALIAS_KEYS.has(k))
-				)
-					continue;
-				// A target that does not resolve is reported where the component is converted.
-				const target = this.withBase(
-					this.documentBase,
-					() => this.tryLocate(r)?.value,
-				);
-				if (target !== undefined && !aliases.has(target))
-					aliases.set(target, key);
+			const saved = this.scope;
+			this.scope = [];
+			try {
+				for (const [s, key] of this.#own) {
+					if (
+						!(s instanceof JsonObject) ||
+						!s.entries.every(([k]) => ALIAS_KEYS.has(k))
+					)
+						continue;
+					// A target that does not resolve is reported where the component is converted.
+					const targets = this.withBase(this.documentBase, () =>
+						this.reached(s),
+					);
+					if (targets.length !== 1) continue;
+					const { value } = targets[0] as Located;
+					if (!aliases.has(value)) aliases.set(value, key);
+				}
+			} finally {
+				this.scope = saved;
 			}
 		}
 		return this.#aliases.get(v);

@@ -12,12 +12,17 @@ import {
 	get,
 	JsonNumber,
 	JsonObject,
-	str,
 	toJson,
 	unescapeToken,
 	type Value,
 } from "./json.ts";
-import { type Ctx, child, DiagError, type RawPosition } from "./pointer.ts";
+import {
+	type Ctx,
+	child,
+	DiagError,
+	type Located,
+	type RawPosition,
+} from "./pointer.ts";
 import { MAX_UNION, patternType } from "./template.ts";
 import {
 	array as arrayTy,
@@ -109,7 +114,7 @@ export function schema(cx: Ctx, v: Value, at: string): Ty {
 	try {
 		return cx.inSchema(() =>
 			cx.withRaw(undefined, () =>
-				inOwnResource(cx, v, () => convert(cx, v, at)),
+				cx.inOwnResource(v, () => convert(cx, v, at)),
 			),
 		);
 	} finally {
@@ -128,11 +133,19 @@ function binaryAt(
 	seen = new Set<string>(),
 ): boolean {
 	if (!(v instanceof JsonObject)) return false;
-	const r = v.str("$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined && !seen.has(target.uri)) {
+	return cx.inOwnResource(v, () => bytesIn(cx, v, pos, seen));
+}
+
+function bytesIn(
+	cx: Ctx,
+	v: JsonObject,
+	pos: RawPosition,
+	seen: Set<string>,
+): boolean {
+	for (const target of cx.reached(v)) {
+		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
-		if (cx.withBase(target.base, () => binaryAt(cx, target.value, pos, seen)))
+		if (cx.inTarget(target, () => binaryAt(cx, target.value, pos, seen)))
 			return true;
 	}
 	const inPlace = ["allOf", "oneOf", "anyOf"].flatMap((k) => {
@@ -162,27 +175,8 @@ function binaryAt(
 	);
 }
 
-/** Reads a schema in its own resource: one with `$id` (3.1, 3.2) is one, and `$ref`s inside it resolve against its URI. */
-function inOwnResource<T>(cx: Ctx, v: Value, f: () => T): T {
-	const id = str(v, "$id");
-	return id !== undefined && cx.refSiblings
-		? cx.inResource(cx.baseOf(id), f)
-		: f();
-}
-
-/**
- * What a `$dynamicRef` reaches from its target where that is a `$dynamicAnchor`: the
- * one of that name in the outermost resource the value was reached through. undefined
- * where it reaches its target, as a `$ref` does.
- */
-function dynamicAnchorOf(
-	cx: Ctx,
-	target: ReturnType<Ctx["locate"]>,
-): string | undefined {
-	return cx.isDynamicAnchor(target.uri)
-		? cx.dynamicTarget(new URL(target.uri).hash.slice(1))
-		: undefined;
-}
+/** The keywords that reach another schema for the same value (see `Ctx.reached`). */
+const REFS = new Set(["$ref", "$dynamicRef"]);
 
 function convert(cx: Ctx, v: JsonObject, at: string): Ty {
 	return parts(cx, v, at);
@@ -244,27 +238,30 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 							: NEVER
 						: t,
 				);
-	const r = v.str("$ref");
-	if (r !== undefined) {
+	// The target is the same value, this schema's keywords around it.
+	const target = (ref: string) => {
 		// The keys left out beside the target: those it leaves out itself it is written without anyway.
 		const beside = leftOutKeys(cx, v, new Set(), false);
 		for (const k of cx.leftOutIn(v)) beside.add(k);
-		// The target is the same value, this schema's keywords around it.
-		const target = cx.withAround(
+		return cx.withAround(
 			v,
-			() => leftOutTarget(cx, r, at, beside) ?? reference(cx, r, at),
+			() => leftOutTarget(cx, ref, at, beside) ?? reference(cx, ref, at),
 		);
+	};
+	const r = v.str("$ref");
+	if (r !== undefined) {
+		const t = target(r);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
 		// are ignored, nullable among them unless loose.
-		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
-		out.push(...admitted([v], [target]));
+		if (!cx.refSiblings) return loose ? union([t, NULL]) : t;
+		out.push(...admitted([v], [t]));
 	}
 	// $dynamicRef is $ref, except where it reaches a $dynamicAnchor: then it reaches the
 	// one of that name in the outermost resource the value was reached through.
 	const dr = v.str("$dynamicRef");
 	if (dr !== undefined) {
-		const outer = dynamicAnchorOf(cx, cx.locate(dr, at));
-		out.push(cx.withAround(v, () => reference(cx, outer ?? dr, at)));
+		const outer = cx.dynamicAnchorOf(cx.locate(dr, at));
+		out.push(...admitted([v], [target(outer ?? dr)]));
 	}
 	const c = v.get("const");
 	if (c !== undefined) out.push(literal(c));
@@ -303,11 +300,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 			),
 		);
 		out.push(
-			union(
-				key === "oneOf"
-					? shared(exclusive(cx, members, tys, child(at, key), group))
-					: tys,
-			),
+			union(key === "oneOf" ? shared(exclusive(cx, members, tys, group)) : tys),
 		);
 	}
 	// A key present asks what its dependent schema asks: without the key, or that schema.
@@ -420,19 +413,28 @@ function closedKeys(v: JsonObject): Set<string> | undefined {
 }
 
 /**
- * The keys a schema requires: its own `required`, and those of the schema its `$ref`
- * reaches and of its `allOf` members.
+ * The keys a schema requires: its own `required`, and those of the schemas its `$ref`
+ * and `$dynamicRef` reach and of its `allOf` members.
  */
 function requiredKeys(cx: Ctx, s: Value, seen = new Set<string>()): string[] {
 	return keysOf(cx, s, seen, false);
 }
 
-/** The keys a schema names, as properties or as required, there or through `$ref` and `allOf`. */
+/** The keys a schema names, as properties or as required, there or through `$ref`, `$dynamicRef` and `allOf`. */
 function namedKeys(cx: Ctx, s: Value, seen = new Set<string>()): string[] {
 	return keysOf(cx, s, seen, true);
 }
 
 function keysOf(
+	cx: Ctx,
+	s: Value,
+	seen: Set<string>,
+	properties: boolean,
+): string[] {
+	return cx.inOwnResource(s, () => ownKeysOf(cx, s, seen, properties));
+}
+
+function ownKeysOf(
 	cx: Ctx,
 	s: Value,
 	seen: Set<string>,
@@ -447,50 +449,25 @@ function keysOf(
 		keys.push(...props.entries.map(([k]) => k));
 	const allOf = get(s, "allOf");
 	for (const m of Array.isArray(allOf) ? allOf : [])
-		keys.push(...inOwnResource(cx, m, () => keysOf(cx, m, seen, properties)));
-	for (const target of reachedTargets(cx, s)) {
+		keys.push(...keysOf(cx, m, seen, properties));
+	for (const target of cx.reached(s)) {
 		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
-		// The target's own $refs resolve against the resource it is in.
 		keys.push(
-			...cx.inResource(target.base, () =>
-				inOwnResource(cx, target.value, () =>
-					keysOf(cx, target.value, seen, properties),
-				),
-			),
+			...cx.inTarget(target, () => keysOf(cx, target.value, seen, properties)),
 		);
 	}
 	return keys;
 }
 
 /**
- * The schemas a schema's `$ref` and `$dynamicRef` reach (see `parts`), where they are
- * found: the conversion reports one that is not.
- */
-function reachedTargets(cx: Ctx, s: Value): ReturnType<Ctx["locate"]>[] {
-	const targets: ReturnType<Ctx["locate"]>[] = [];
-	const r = str(s, "$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined) targets.push(target);
-	const dr = str(s, "$dynamicRef");
-	const found = dr === undefined ? undefined : cx.tryLocate(dr);
-	if (found !== undefined) {
-		const outer = dynamicAnchorOf(cx, found);
-		targets.push(outer === undefined ? found : cx.locate(outer, ""));
-	}
-	return targets;
-}
-
-/**
- * The keys a closed object's `$ref` target (3.1, 3.2) and members name that it does not
- * declare: it admits none of them.
+ * The keys a closed object's `$ref` and `$dynamicRef` targets (3.1, 3.2) and members
+ * name that it does not declare: it admits none of them.
  */
 function outsideKeys(cx: Ctx, v: JsonObject, closed: Set<string>): string[] {
 	const named: string[] = [];
-	const r = v.str("$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined)
-		named.push(...cx.withBase(target.base, () => namedKeys(cx, target.value)));
+	for (const target of cx.reached(v))
+		named.push(...cx.inTarget(target, () => namedKeys(cx, target.value)));
 	for (const key of ["allOf", "oneOf", "anyOf"]) {
 		const members = v.get(key);
 		for (const m of Array.isArray(members) ? members : [])
@@ -499,18 +476,25 @@ function outsideKeys(cx: Ctx, v: JsonObject, closed: Set<string>): string[] {
 	return [...new Set(named)].filter((k) => !closed.has(k));
 }
 
-/** The keys a closed member admits: its own, or those of the closed schema its `$ref` alone reaches. */
+/** The keys a closed member admits: its own, or those of the closed schema its `$ref` or `$dynamicRef` alone reaches. */
 function closedMember(cx: Ctx, s: Value): Set<string> | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const r = s.str("$ref");
-	if (
-		r === undefined ||
-		!s.entries.every(([k]) => k === "$ref" || isAnnotation(k))
-	)
-		return closedKeys(s);
-	const target = cx.tryLocate(r);
-	return target?.value instanceof JsonObject
+	const target = onlyTarget(cx, s);
+	if (target === undefined) return closedKeys(s);
+	return target.value instanceof JsonObject
 		? closedKeys(target.value)
+		: undefined;
+}
+
+/**
+ * What a schema that is only a reference reaches: one `$ref` or `$dynamicRef`, with
+ * annotations at most. undefined for any other schema.
+ */
+function onlyTarget(cx: Ctx, s: JsonObject): Located | undefined {
+	const targets = cx.reached(s);
+	return targets.length === 1 &&
+		s.entries.every(([k]) => REFS.has(k) || isAnnotation(k))
+		? targets[0]
 		: undefined;
 }
 
@@ -1080,38 +1064,42 @@ function declared(
 				? values
 				: out.filter((x) => values.some((y) => sameValue(x, y)));
 	};
-	for (const s of schemas) {
-		meet(listed(cx, get(get(s, "properties"), key), new Set()));
-		const allOf = get(s, "allOf");
-		if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
-		const r = str(s, "$ref");
-		const target = r === undefined ? undefined : cx.tryLocate(r);
-		if (target !== undefined && !seen.has(target.uri)) {
-			seen.add(target.uri);
-			meet(
-				cx.withBase(target.base, () => declared(cx, [target.value], key, seen)),
-			);
-		}
-	}
+	for (const s of schemas)
+		cx.inOwnResource(s, () => {
+			meet(listed(cx, get(get(s, "properties"), key), new Set()));
+			const allOf = get(s, "allOf");
+			if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
+			for (const target of cx.reached(s)) {
+				if (seen.has(target.uri)) continue;
+				seen.add(target.uri);
+				meet(
+					cx.inTarget(target, () => declared(cx, [target.value], key, seen)),
+				);
+			}
+		});
 	return out;
 }
 
-/** The values a schema lists (`enum`, `const`, `type: boolean` or `null`), through its `$ref`. */
+/** The values a schema lists (`enum`, `const`, `type: boolean` or `null`), through its `$ref` and `$dynamicRef`. */
 function listed(
 	cx: Ctx,
 	s: Value | undefined,
 	seen: Set<string>,
 ): Value[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const r = s.str("$ref");
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined && !seen.has(target.uri)) {
-		seen.add(target.uri);
-		const values = cx.withBase(target.base, () =>
-			listed(cx, target.value, seen),
-		);
-		if (values !== undefined) return values;
-	}
+	return cx.inOwnResource(s, () => {
+		for (const target of cx.reached(s)) {
+			if (seen.has(target.uri)) continue;
+			seen.add(target.uri);
+			const values = cx.inTarget(target, () => listed(cx, target.value, seen));
+			if (values !== undefined) return values;
+		}
+		return ownValues(s);
+	});
+}
+
+/** The values a schema itself lists. */
+function ownValues(s: JsonObject): Value[] | undefined {
 	const c = s.get("const");
 	if (c !== undefined) return [c];
 	const e = s.get("enum");
@@ -1284,31 +1272,20 @@ function evaluates(
 	if (!(s instanceof JsonObject)) return ev;
 	// What a schema in its own resource evaluates, a member or the target of a reference.
 	const inner = (m: Value, where: string) =>
-		inOwnResource(cx, m, () => evaluates(cx, m, where, false, seen));
+		cx.inOwnResource(m, () => evaluates(cx, m, where, false, seen));
 	// A schema reached again inside itself evaluates nothing more; reached again
 	// elsewhere, in another member, it evaluates there too.
-	const follow = (target: ReturnType<Ctx["locate"]>) => {
-		if (seen.has(target.uri)) return;
+	for (const target of cx.reached(s)) {
+		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
 		evaluateBoth(
 			ev,
-			cx.inResource(target.base, () => inner(target.value, target.where)),
+			cx.inTarget(target, () => inner(target.value, target.where)),
 		);
 		seen.delete(target.uri);
-	};
-	const r = s.str("$ref");
-	if (r !== undefined) {
-		follow(cx.locate(r, at));
-		// In 3.0 the keywords next to $ref are ignored.
-		if (!cx.refSiblings) return ev;
 	}
-	// $dynamicRef reaches what it does in `parts`.
-	const dr = s.str("$dynamicRef");
-	if (dr !== undefined) {
-		const found = cx.locate(dr, at);
-		const outer = dynamicAnchorOf(cx, found);
-		follow(outer === undefined ? found : cx.locate(outer, at));
-	}
+	// In 3.0 the keywords next to $ref are ignored.
+	if (s.get("$ref") !== undefined && !cx.refSiblings) return ev;
 	const props = s.get("properties");
 	for (const [k] of props instanceof JsonObject ? props.entries : []) {
 		ev.names.add(k);
@@ -1817,9 +1794,9 @@ function membersIn(
 }
 
 /**
- * A `$ref`'s target written out without the keys the group leaves out of this view, where
- * it names one that it does not leave out itself: the reference's own view would have it.
- * Undefined where the reference stays.
+ * A `$ref`'s or `$dynamicRef`'s target written out without the keys the group leaves out
+ * of this view, where it names one that it does not leave out itself: the reference's own
+ * view would have it. Undefined where the reference stays.
  */
 function leftOutTarget(
 	cx: Ctx,
@@ -1828,13 +1805,14 @@ function leftOutTarget(
 	group: ReadonlySet<string>,
 ): Ty | undefined {
 	if (group.size === 0) return undefined;
-	const { value, base, uri, where } = cx.locate(r, at);
-	const named = cx.withBase(base, () => namedKeys(cx, value));
-	const own = cx.withBase(base, () => leftOutKeys(cx, value));
+	const target = cx.locate(r, at);
+	const { value, uri, where } = target;
+	const named = cx.inTarget(target, () => namedKeys(cx, value));
+	const own = cx.inTarget(target, () => leftOutKeys(cx, value));
 	if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
 		return undefined;
 	try {
-		return cx.withBase(base, () =>
+		return cx.inTarget(target, () =>
 			cx.withLeftOut([value], group, () => schema(cx, value, where)),
 		);
 	} finally {
@@ -1941,13 +1919,10 @@ function exclusive(
 	cx: Ctx,
 	members: Value[],
 	tys: Ty[],
-	at: string,
 	left: ReadonlySet<string>,
 ): Ty[] {
 	// A key left out of this view is required on the other side only.
-	const keys = members.map((m, i) =>
-		keysOnly(cx, m, child(at, String(i)))?.filter((k) => !left.has(k)),
-	);
+	const keys = members.map((m) => keysOnly(cx, m)?.filter((k) => !left.has(k)));
 	const without = (key: string, ty: Ty): Prop => ({ key, ty, optional: true });
 	return tys.map((t, i) => {
 		const own = keys[i];
@@ -1995,16 +1970,13 @@ const isAnnotation = (k: string): boolean =>
 /**
  * The keys a schema requires, when that is all it asks of an object: a non-empty
  * `required`, with at most `type: object`, properties that admit any value and
- * annotations; or a `$ref`, with annotations at most, to such a schema.
+ * annotations; or a `$ref` or `$dynamicRef`, with annotations at most, to such a schema.
  */
-function keysOnly(cx: Ctx, s: Value, at: string): string[] | undefined {
+function keysOnly(cx: Ctx, s: Value): string[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const r = s.str("$ref");
-	if (r !== undefined)
-		return s.entries.every(([k]) => k === "$ref" || isAnnotation(k))
-			? follow(cx, r, at, (t, where) => keysOnly(cx, t, where))
-			: undefined;
-	const props = child(at, "properties");
+	const target = onlyTarget(cx, s);
+	if (target !== undefined)
+		return cx.inTarget(target, () => keysOnly(cx, target.value));
 	const allowed = s.entries.every(
 		([k, x]) =>
 			k === "required" ||
@@ -2012,7 +1984,7 @@ function keysOnly(cx: Ctx, s: Value, at: string): string[] | undefined {
 			(k === "type" && x === "object") ||
 			(k === "properties" &&
 				x instanceof JsonObject &&
-				x.entries.every(([p, ps]) => admitsAnyValue(cx, ps, child(props, p)))),
+				x.entries.every(([, ps]) => admitsAnyValue(cx, ps))),
 	);
 	const req = s.get("required");
 	return allowed && Array.isArray(req) && req.length > 0
@@ -2020,27 +1992,19 @@ function keysOnly(cx: Ctx, s: Value, at: string): string[] | undefined {
 		: undefined;
 }
 
-/** Whether a schema admits every value: `true`, annotations alone, or a `$ref` to such a schema next to them. */
-function admitsAnyValue(cx: Ctx, s: Value, at: string): boolean {
+/**
+ * Whether a schema admits every value: `true`, annotations alone, or a `$ref` or
+ * `$dynamicRef` to such a schema next to them.
+ */
+function admitsAnyValue(cx: Ctx, s: Value): boolean {
 	if (s === true) return true;
 	if (!(s instanceof JsonObject)) return false;
-	if (!s.entries.every(([k]) => k === "$ref" || isAnnotation(k))) return false;
-	const r = s.str("$ref");
-	return (
-		r === undefined ||
-		follow(cx, r, at, (t, where) => admitsAnyValue(cx, t, where))
-	);
-}
-
-/** `f` on the schema a `$ref` reaches, with the base URI of the document it is in. */
-function follow<T>(
-	cx: Ctx,
-	r: string,
-	at: string,
-	f: (target: Value, where: string) => T,
-): T {
-	const { value, base, where } = cx.locate(r, at);
-	return cx.withBase(base, () => f(value, where));
+	if (!s.entries.every(([k]) => REFS.has(k) || isAnnotation(k))) return false;
+	return cx
+		.reached(s)
+		.every((target) =>
+			cx.inTarget(target, () => admitsAnyValue(cx, target.value)),
+		);
 }
 
 /** Keywords that only apply to objects; their presence implies `type: object`. */
@@ -2157,7 +2121,7 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 	const here = cx.here;
 	if (here !== undefined) {
 		const located = cx.locate(r, at);
-		if (cx.withBase(located.base, () => binaryAt(cx, located.value, here)))
+		if (cx.inTarget(located, () => binaryAt(cx, located.value, here)))
 			return expand(cx, located, cx.componentKey(located.value));
 	}
 	if (r.startsWith(SCHEMA_PREFIX) && cx.inDocument && !cx.dynamicScope) {
@@ -2214,9 +2178,7 @@ function dynamicNames(
 			return;
 		}
 		if (!(x instanceof JsonObject)) return;
-		const id = x.str("$id");
-		const here =
-			id === undefined ? base : cx.withBase(base, () => cx.baseOf(id));
+		const here = cx.resourceOf(x) ?? base;
 		for (const key of ["$ref", "$dynamicRef"]) {
 			const r = x.str(key);
 			const target =
@@ -2595,37 +2557,37 @@ function count(v: JsonObject, key: string): number | undefined {
 /**
  * A readOnly property is not sent and a writeOnly one is not returned, even when
  * required. The keyword counts on the property schema, or on a schema it reaches
- * through `$ref` or an `allOf` member (`{ allOf: [{ $ref }], description }`).
+ * through `$ref`, `$dynamicRef` or an `allOf` member (`{ allOf: [{ $ref }], description }`).
  */
 function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
 	if (!(s instanceof JsonObject)) return false;
-	const r = s.str("$ref");
-	// In 3.0 the keywords next to $ref are ignored; only the target counts.
-	const siblings = r === undefined || cx.refSiblings;
-	if (
-		siblings &&
-		s.get(cx.mode === "write" ? "readOnly" : "writeOnly") === true
-	)
-		return true;
-	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target !== undefined && !seen.has(target.uri)) {
-		seen.add(target.uri);
-		// The target's own $refs resolve against the document it is in.
-		if (cx.withBase(target.base, () => isLeftOut(cx, target.value, seen)))
+	return cx.inOwnResource(s, () => {
+		// In 3.0 the keywords next to $ref are ignored; only the target counts.
+		const siblings = s.get("$ref") === undefined || cx.refSiblings;
+		if (
+			siblings &&
+			s.get(cx.mode === "write" ? "readOnly" : "writeOnly") === true
+		)
 			return true;
-	}
-	const allOf = s.get("allOf");
-	return (
-		siblings &&
-		Array.isArray(allOf) &&
-		allOf.some((m) => isLeftOut(cx, m, seen))
-	);
+		for (const target of cx.reached(s)) {
+			if (seen.has(target.uri)) continue;
+			seen.add(target.uri);
+			if (cx.inTarget(target, () => isLeftOut(cx, target.value, seen)))
+				return true;
+		}
+		const allOf = s.get("allOf");
+		return (
+			siblings &&
+			Array.isArray(allOf) &&
+			allOf.some((m) => isLeftOut(cx, m, seen))
+		);
+	});
 }
 
 /**
  * The properties left out of this view: the schema's own, and those of its `allOf`
  * members, so that `required` next to `allOf` does not bring one back, and of its `$ref`
- * target unless `throughRef` is false.
+ * and `$dynamicRef` targets unless `throughRef` is false.
  */
 function leftOutKeys(
 	cx: Ctx,
@@ -2633,27 +2595,28 @@ function leftOutKeys(
 	seen = new Set<string>(),
 	throughRef = true,
 ): Set<string> {
-	const keys = new Set<string>();
-	const r = str(v, "$ref");
-	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
-	// are one schema.
-	if (r === undefined || cx.refSiblings) {
-		const props = get(v, "properties");
-		if (props instanceof JsonObject)
-			for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
-		const allOf = get(v, "allOf");
-		for (const m of Array.isArray(allOf) ? allOf : [])
-			for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
-	}
-	const target = r === undefined || !throughRef ? undefined : cx.tryLocate(r);
-	if (target === undefined || seen.has(target.uri)) return keys;
-	seen.add(target.uri);
-	// The target's own $refs resolve against the document it is in.
-	for (const k of cx.withBase(target.base, () =>
-		leftOutKeys(cx, target.value, seen),
-	))
-		keys.add(k);
-	return keys;
+	return cx.inOwnResource(v, () => {
+		const keys = new Set<string>();
+		// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
+		// are one schema.
+		if (get(v, "$ref") === undefined || cx.refSiblings) {
+			const props = get(v, "properties");
+			if (props instanceof JsonObject)
+				for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
+			const allOf = get(v, "allOf");
+			for (const m of Array.isArray(allOf) ? allOf : [])
+				for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
+		}
+		for (const target of throughRef ? cx.reached(v) : []) {
+			if (seen.has(target.uri)) continue;
+			seen.add(target.uri);
+			for (const k of cx.inTarget(target, () =>
+				leftOutKeys(cx, target.value, seen),
+			))
+				keys.add(k);
+		}
+		return keys;
+	});
 }
 
 function object(cx: Ctx, v: JsonObject, at: string): Ty {
