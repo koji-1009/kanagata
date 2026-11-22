@@ -87,6 +87,16 @@ test("classes", () => {
 	assert.equal(printed("^[^a]$"), undefined, "a negated class");
 	assert.equal(printed("^[^\\d]$"), undefined);
 	assert.equal(printed("^[^/]*$"), undefined, "any number of a negated class");
+	assert.equal(
+		printed("^ab[\\s\\S\\u{10000}-\\u{286A0}]*$"),
+		"`ab${string}`",
+		"any character, a range of more characters than a union holds beside it",
+	);
+	assert.equal(
+		printed("^[^\\u{0}-\\u{1869F}]$"),
+		undefined,
+		"a negated class with such a range",
+	);
 });
 
 test("templates write text a template would read as a string", () => {
