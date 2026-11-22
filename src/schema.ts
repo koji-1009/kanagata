@@ -482,25 +482,67 @@ function arrayTargets(cx: Ctx, out: Ty[], at: string): Ty[] {
 	if (refs.length + arrays < 2) return [];
 	const targets: Ty[] = [];
 	for (const t of refs) {
-		const { value, base, uri, where } = cx.withBase(cx.documentBase, () =>
-			cx.locate(SCHEMA_PREFIX + escapeToken(t.schema), at),
-		);
-		// Only an array schema has an array type.
-		const type = get(value, "type");
-		const array =
-			type === "array" ||
-			(type === undefined &&
-				value instanceof JsonObject &&
-				hasArrayKeywords(value));
-		if (!array || !cx.enter(uri)) continue;
-		try {
-			const target = cx.withBase(base, () => schema(cx, value, where));
-			if (isArray(target)) targets.push(target);
-		} finally {
-			cx.leave();
-		}
+		const target = arrayOf(cx, t.schema, at);
+		if (target !== undefined) targets.push(target);
 	}
 	return targets.length > 0 && targets.length + arrays > 1 ? targets : [];
+}
+
+/** The array type of a component that admits arrays only, through the components it is a `$ref` to. */
+function arrayOf(cx: Ctx, name: string, at: string): Ty | undefined {
+	const { value, base, uri, where } = cx.withBase(cx.documentBase, () =>
+		cx.locate(SCHEMA_PREFIX + escapeToken(name), at),
+	);
+	// Only an array schema has an array type; others are not converted for it.
+	if (!cx.withBase(base, () => arraysOnly(cx, value)) || !cx.enter(uri))
+		return undefined;
+	try {
+		const target = cx.withBase(base, () => schema(cx, value, where));
+		if (target.kind === "array" || target.kind === "tuple") return target;
+		return target.kind === "ref" && cx.schemas.has(target.schema)
+			? arrayOf(cx, target.schema, at)
+			: undefined;
+	} finally {
+		cx.leave();
+	}
+}
+
+/**
+ * Whether a schema says it admits arrays only: `type` naming `array` alone, array keywords
+ * without `type`, `const` / `enum` arrays, a `$ref` to such a schema, an `allOf` member
+ * that is one, or `oneOf` / `anyOf` members that all are.
+ */
+function arraysOnly(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
+	if (!(v instanceof JsonObject)) return false;
+	const r = v.str("$ref");
+	const target = r === undefined ? undefined : cx.tryLocate(r);
+	const viaRef =
+		target !== undefined &&
+		!seen.has(target.uri) &&
+		cx.withBase(target.base, () =>
+			arraysOnly(cx, target.value, new Set([...seen, target.uri])),
+		);
+	// In 3.0 the keywords next to $ref are ignored.
+	if (viaRef || (r !== undefined && !cx.refSiblings)) return viaRef;
+	const type = v.get("type");
+	if (type !== undefined)
+		return (
+			type === "array" ||
+			(Array.isArray(type) && type.every((t) => t === "array"))
+		);
+	const c = v.get("const");
+	const values = c === undefined ? v.get("enum") : [c];
+	if (Array.isArray(values)) return values.every((x) => Array.isArray(x));
+	if (hasArrayKeywords(v)) return true;
+	const allOf = v.get("allOf");
+	if (Array.isArray(allOf) && allOf.some((m) => arraysOnly(cx, m, seen)))
+		return true;
+	return ["oneOf", "anyOf"].some((k) => {
+		const members = v.get(k);
+		return (
+			Array.isArray(members) && members.every((m) => arraysOnly(cx, m, seen))
+		);
+	});
 }
 
 /** The type of each value kind `type` names. */
