@@ -20,6 +20,16 @@ export interface schemas {
   PatternShort: PatternShort;
   PatternLong: PatternLong;
   PatternNamed: PatternNamed;
+  NotAll: NotAll;
+  PatternMinimum: PatternMinimum;
+  EmptyKey: EmptyKey;
+  InAllOf: InAllOf;
+  FalseDeclared: FalseDeclared;
+  KeyName: KeyName;
+  ByReference: ByReference;
+  InFile: InFile;
+  TwoPatterns: TwoPatterns;
+  NotUnread: NotUnread;
   Unread: Unread;
 }
 
@@ -85,6 +95,52 @@ export type PatternLong = {
 export type PatternNamed = {
   a?: unknown;
 };
+
+/** The keys are the strings propertyNames admits: not: {} admits none. */
+export type NotAll = {
+  [key: string]: never;
+};
+
+/** Keywords for numbers say nothing of the keys. */
+export type PatternMinimum = {
+  [key: `x-${string}`]: string;
+};
+
+/** maxLength: 0 admits the empty key alone. */
+export type EmptyKey = {
+  ""?: unknown;
+};
+
+/** Members of propertyNames say which strings it admits too. */
+export type InAllOf = {
+  "x-a"?: string;
+  b?: never;
+  [key: `x-${string}`]: unknown;
+};
+
+/** false admits no key, a declared property among them. */
+export type FalseDeclared = {
+  [key: string]: never;
+};
+
+export type KeyName = "a";
+
+/** A reference says the strings its target admits. */
+export type ByReference = {
+  a?: unknown;
+};
+
+/** One to another file too, which names no type of its own for it. */
+export type InFile = {
+  a?: unknown;
+  b?: unknown;
+};
+
+/** Strings TypeScript says only as an intersection are no keys it can list: ignored, with a warning. */
+export type TwoPatterns = Record<string, unknown>;
+
+/** A not TypeScript cannot say is ignored, with a warning. */
+export type NotUnread = Record<string, unknown>;
 
 /** Lengths without a list of keys are ignored, with a warning. */
 export type Unread = Record<string, unknown>;

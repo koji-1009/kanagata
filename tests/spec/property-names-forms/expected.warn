@@ -1,3 +1,5 @@
 #/components/schemas/PatternShort/propertyNames/maxLength: maxLength cannot be expressed in TypeScript; ignored
 #/components/schemas/PatternLong/propertyNames/minLength: minLength cannot be expressed in TypeScript; ignored
+#/components/schemas/TwoPatterns/propertyNames: propertyNames cannot be expressed in TypeScript; ignored
+#/components/schemas/NotUnread/propertyNames/not: not cannot be expressed in TypeScript; ignored
 #/components/schemas/Unread/propertyNames: propertyNames cannot be expressed in TypeScript; ignored

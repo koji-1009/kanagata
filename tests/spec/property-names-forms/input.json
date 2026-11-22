@@ -81,6 +81,55 @@
         "type": "object",
         "propertyNames": { "pattern": "^(a|bb)$", "maxLength": 1 }
       },
+      "NotAll": {
+        "description": "The keys are the strings propertyNames admits: not: {} admits none.",
+        "type": "object",
+        "propertyNames": { "not": {} }
+      },
+      "PatternMinimum": {
+        "description": "Keywords for numbers say nothing of the keys.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-", "minimum": 1 },
+        "additionalProperties": { "type": "string" }
+      },
+      "EmptyKey": {
+        "description": "maxLength: 0 admits the empty key alone.",
+        "type": "object",
+        "propertyNames": { "maxLength": 0 }
+      },
+      "InAllOf": {
+        "description": "Members of propertyNames say which strings it admits too.",
+        "type": "object",
+        "properties": { "x-a": { "type": "string" }, "b": { "type": "string" } },
+        "propertyNames": { "allOf": [{ "pattern": "^x-" }] }
+      },
+      "FalseDeclared": {
+        "description": "false admits no key, a declared property among them.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "propertyNames": false
+      },
+      "KeyName": { "type": "string", "enum": ["a"] },
+      "ByReference": {
+        "description": "A reference says the strings its target admits.",
+        "type": "object",
+        "propertyNames": { "$ref": "#/components/schemas/KeyName" }
+      },
+      "InFile": {
+        "description": "One to another file too, which names no type of its own for it.",
+        "type": "object",
+        "propertyNames": { "$ref": "keys.json" }
+      },
+      "TwoPatterns": {
+        "description": "Strings TypeScript says only as an intersection are no keys it can list: ignored, with a warning.",
+        "type": "object",
+        "propertyNames": { "allOf": [{ "pattern": "^x-" }, { "pattern": "-y$" }] }
+      },
+      "NotUnread": {
+        "description": "A not TypeScript cannot say is ignored, with a warning.",
+        "type": "object",
+        "propertyNames": { "not": { "minLength": 2 } }
+      },
       "Unread": {
         "description": "Lengths without a list of keys are ignored, with a warning.",
         "type": "object",
