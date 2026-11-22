@@ -31,6 +31,9 @@ export interface schemas {
   SelfKeys: SelfKeys;
   SelfKeysShort: SelfKeysShort;
   TwoPatterns: TwoPatterns;
+  InTwoPatterns: InTwoPatterns;
+  InAllOfNames: InAllOfNames;
+  TooManyWays: TooManyWays;
   NotUnread: NotUnread;
   Unread: Unread;
 }
@@ -148,8 +151,28 @@ export type SelfKeysShort = {
   [key: string]: never;
 };
 
-/** Strings TypeScript says only as an intersection are no keys it can list: ignored, with a warning. */
-export type TwoPatterns = Record<string, unknown>;
+/** The keys two patterns admit are the strings their templates share: a key they name, and templates. */
+export type TwoPatterns = {
+  "x-y"?: unknown;
+  [key: `x-${string}-y`]: unknown;
+};
+
+/** A declared property they do not both admit is never. */
+export type InTwoPatterns = {
+  "x-a-y"?: string;
+  "x-a"?: never;
+  "x-y"?: unknown;
+  [key: `x-${string}-y`]: unknown;
+};
+
+/** So is one a member's list leaves out. */
+export type InAllOfNames = {
+  a?: string;
+  b?: never;
+};
+
+/** Patterns whose templates line up in too many ways to read are ignored, with a warning. */
+export type TooManyWays = Record<string, unknown>;
 
 /** A not TypeScript cannot say is ignored, with a warning. */
 export type NotUnread = Record<string, unknown>;

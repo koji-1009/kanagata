@@ -1954,12 +1954,38 @@ function propertyKeys(cx: Ctx, v: JsonObject, at: string): Ty | undefined {
 	const values = cx.withKeysRead(names, () =>
 		cx.withRaw(undefined, () => schema(cx, names, child(at, "propertyNames"))),
 	);
-	const keys = inter([STRING, values]);
-	return keyTerms(keys).every((k) =>
-		["string", "lit", "template"].includes(k.kind),
-	)
-		? keys
-		: undefined;
+	return meetKeys(inter([STRING, values]));
+}
+
+/** The templates `meet` gives, by the type of keys each is, read again by `templateOf`. */
+const metTemplates = new WeakMap<Ty, Template>();
+
+/**
+ * A type of keys: where TypeScript keeps the strings as an intersection, of the templates of
+ * patterns (`allOf: [{ pattern: "^x-" }, { pattern: "-y$" }]`), the strings all of them
+ * admit, as templates (see `meet`): `"x-y" | `x-${string}-y``. undefined where those are
+ * too many to read.
+ */
+function meetKeys(keys: Ty): Ty | undefined {
+	if (keys.kind !== "inter") return keys;
+	const [first, ...rest] = keys.items.map((item) =>
+		keyTerms(item).map((t) =>
+			templateOf(t as Extract<Ty, { kind: "template" }>),
+		),
+	);
+	let met = first as Template[];
+	for (const terms of rest) {
+		const next: Template[] = [];
+		for (const a of met)
+			for (const b of terms) {
+				const both = meet(a, b);
+				if (both === undefined) return undefined;
+				next.push(...both);
+			}
+		met = next;
+	}
+	for (const t of met) metTemplates.set(t.key, t);
+	return union(met.map((t) => t.key));
 }
 
 /** The members of a type of keys: none for `never`. */
@@ -1980,22 +2006,30 @@ function keyLiterals(keys: Ty | undefined): string[] {
 
 /**
  * Whether a `propertyNames` admits a key: as its keywords decide for the string, or, where
- * they say what that cannot decide, as the type of its keys says.
+ * they say what that cannot decide, as the type of its keys says (a literal by its text, a
+ * template as `admits` reads it).
  */
 function keyAdmits(cx: Ctx, names: Value, keys: Ty): (key: string) => boolean {
 	return (key) =>
 		(names instanceof JsonObject ? accepts(cx, names, key) : undefined) ??
-		inter([lit(JSON.stringify(key)), keys]).kind !== "never";
+		keyTerms(keys).some((k) =>
+			k.kind === "lit"
+				? k.text === JSON.stringify(key)
+				: admits(templateOf(k as Extract<Ty, { kind: "template" }>), key),
+		);
 }
 
 /**
- * The template of its pattern a template literal type of keys is: the keys' templates are
- * a pattern's (see `patternType`), read again as the templates `object` compares.
+ * The template a template literal type of keys is: one `meet` gave, or one of the pattern
+ * it is from (see `patternType`), read again as the templates `object` compares.
  */
 function templateOf(t: Extract<Ty, { kind: "template" }>): Template {
-	return templates(t.pattern as string).find(
-		(o) => (o.key as { text: string }).text === t.text,
-	) as Template;
+	return (
+		metTemplates.get(t) ??
+		(templates(t.pattern as string).find(
+			(o) => (o.key as { text: string }).text === t.text,
+		) as Template)
+	);
 }
 
 /**

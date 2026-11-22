@@ -131,9 +131,31 @@
         "propertyNames": { "$ref": "#/components/schemas/SelfKeysShort", "maxLength": 3 }
       },
       "TwoPatterns": {
-        "description": "Strings TypeScript says only as an intersection are no keys it can list: ignored, with a warning.",
+        "description": "The keys two patterns admit are the strings their templates share: a key they name, and templates.",
         "type": "object",
         "propertyNames": { "allOf": [{ "pattern": "^x-" }, { "pattern": "-y$" }] }
+      },
+      "InTwoPatterns": {
+        "description": "A declared property they do not both admit is never.",
+        "type": "object",
+        "properties": { "x-a-y": { "type": "string" }, "x-a": { "type": "string" } },
+        "propertyNames": { "allOf": [{ "pattern": "^x-" }, { "pattern": "-y$" }] }
+      },
+      "InAllOfNames": {
+        "description": "So is one a member's list leaves out.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "propertyNames": { "allOf": [{ "enum": ["a"] }] }
+      },
+      "TooManyWays": {
+        "description": "Patterns whose templates line up in too many ways to read are ignored, with a warning.",
+        "type": "object",
+        "propertyNames": {
+          "allOf": [
+            { "pattern": "a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a[\\s\\S]*a" },
+            { "pattern": "b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b[\\s\\S]*b" }
+          ]
+        }
       },
       "NotUnread": {
         "description": "A not TypeScript cannot say is ignored, with a warning.",
