@@ -977,15 +977,16 @@ function evaluates(
 	}
 	const pp = s.get("patternProperties");
 	if (pp instanceof JsonObject) ev.patterns.push(...pp.entries.map(([k]) => k));
-	ev.all =
+	// Added to what the $ref target evaluates.
+	ev.all ||=
 		s.get("additionalProperties") !== undefined ||
 		(!top && s.get("unevaluatedProperties") !== undefined);
 	const prefix = s.get("prefixItems");
-	ev.length = Array.isArray(prefix) ? prefix.length : 0;
-	ev.rest =
+	ev.length = Math.max(ev.length, Array.isArray(prefix) ? prefix.length : 0);
+	ev.rest ||=
 		s.get("items") !== undefined ||
 		(!top && s.get("unevaluatedItems") !== undefined);
-	ev.contains = s.get("contains") !== undefined;
+	ev.contains ||= s.get("contains") !== undefined;
 	for (const k of requiredKeys(cx, s)) ev.keys.add(k);
 	for (const [k, names] of dependencies(s)) {
 		ev.keys.add(k);
