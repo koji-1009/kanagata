@@ -66,6 +66,68 @@
         "type": ["object", "null"],
         "allOf": [{ "required": ["a"], "allOf": [{ "type": "object" }] }]
       },
+      "NotString": {
+        "description": "A not in the member rejects the strings it says.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["a"], "not": { "type": "string" } }]
+      },
+      "NotKeyed": {
+        "description": "not: { required } rejects null, which required admits.",
+        "type": ["object", "null"],
+        "allOf": [{ "required": ["b"], "not": { "required": ["a"] } }]
+      },
+      "NotListed": {
+        "description": "not: { const } leaves out the string it lists.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["k"], "pattern": "^(a|b)$", "not": { "const": "a" } }]
+      },
+      "NotEmpty": {
+        "description": "Even the one string the member admits.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["k"], "maxLength": 0, "not": { "const": "" } }]
+      },
+      "NotUnread": {
+        "description": "A not TypeScript cannot say is ignored, with a warning, for the other kinds too.",
+        "type": ["object", "null"],
+        "allOf": [{ "required": ["a"], "not": { "minProperties": 3 } }]
+      },
+      "IfInMember": {
+        "description": "So does the member's if / then / else: if admits every string, so then holds for it.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["a"], "if": { "required": ["b"] }, "then": { "maxLength": 0 } }]
+      },
+      "IfElseInMember": {
+        "description": "Every string has the keys if asks of objects only, so no else holds for it.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["a"], "if": { "required": ["b", "c"] }, "else": { "maxLength": 0 } }]
+      },
+      "Keys": { "minProperties": 1 },
+      "Keyed": { "required": ["a"] },
+      "RefInMember": {
+        "description": "A $ref in the member is read as the schema it reaches.",
+        "type": ["object", "null"],
+        "allOf": [{ "required": ["a"], "allOf": [{ "$ref": "#/components/schemas/Keys" }] }]
+      },
+      "RefMember": {
+        "description": "So is a $ref member.",
+        "type": ["object", "null"],
+        "allOf": [{ "$ref": "#/components/schemas/Keyed" }]
+      },
+      "RefTyped": {
+        "description": "A $ref to a schema with a type constrains every value.",
+        "type": ["object", "null"],
+        "allOf": [{ "$ref": "#/components/schemas/Cat" }]
+      },
+      "TrueInMember": {
+        "description": "true admits every value.",
+        "type": ["object", "null"],
+        "allOf": [{ "required": ["a"], "allOf": [true] }]
+      },
+      "FalseInMember": {
+        "description": "false admits none.",
+        "type": ["object", "null"],
+        "allOf": [{ "required": ["a"], "allOf": [false] }]
+      },
       "PairOrNull": {
         "description": "dependentRequired, dependentSchemas and propertyNames constrain only the objects.",
         "type": ["object", "null"],

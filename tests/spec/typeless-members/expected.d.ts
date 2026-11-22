@@ -17,6 +17,20 @@ export interface schemas {
   EitherOrEmpty: EitherOrEmpty;
   OneOrEmpty: OneOrEmpty;
   NestedTyped: NestedTyped;
+  NotString: NotString;
+  NotKeyed: NotKeyed;
+  NotListed: NotListed;
+  NotEmpty: NotEmpty;
+  NotUnread: NotUnread;
+  IfInMember: IfInMember;
+  IfElseInMember: IfElseInMember;
+  Keys: Keys;
+  Keyed: Keyed;
+  RefInMember: RefInMember;
+  RefMember: RefMember;
+  RefTyped: RefTyped;
+  TrueInMember: TrueInMember;
+  FalseInMember: FalseInMember;
   PairOrNull: PairOrNull;
   Typed: Typed;
   OnlyObject: OnlyObject;
@@ -86,6 +100,79 @@ export type OneOrEmpty = {
 export type NestedTyped = {
   a: {} | null;
 };
+
+/** A not in the member rejects the strings it says. */
+export type NotString = {
+  a: {} | null;
+};
+
+/** not: { required } rejects null, which required admits. */
+export type NotKeyed = {
+  b: {} | null;
+  a?: never;
+};
+
+/** not: { const } leaves out the string it lists. */
+export type NotListed = {
+  k: {} | null;
+} | "b";
+
+/** Even the one string the member admits. */
+export type NotEmpty = {
+  k: {} | null;
+};
+
+/** A not TypeScript cannot say is ignored, with a warning, for the other kinds too. */
+export type NotUnread = {
+  a: {} | null;
+} | null;
+
+/** So does the member's if / then / else: if admits every string, so then holds for it. */
+export type IfInMember = ({
+  a: {} | null;
+} & (({
+  b: {} | null;
+} | string) & ("" | Record<string, unknown>) | {
+  b?: never;
+}) | "") & (Record<string, unknown> | string);
+
+/** Every string has the keys if asks of objects only, so no else holds for it. */
+export type IfElseInMember = ({
+  a: {} | null;
+  b: {} | null;
+  c: {} | null;
+} | {
+  a: {} | null;
+  b?: never;
+} | {
+  a: {} | null;
+  c?: never;
+} | string) & (Record<string, unknown> | string);
+
+export type Keys = unknown;
+
+export type Keyed = {
+  a: {} | null;
+};
+
+/** A $ref in the member is read as the schema it reaches. */
+export type RefInMember = (Keys & {
+  a: {} | null;
+} | null) & (Record<string, unknown> | null);
+
+/** So is a $ref member. */
+export type RefMember = (Keyed | null) & (Record<string, unknown> | null);
+
+/** A $ref to a schema with a type constrains every value. */
+export type RefTyped = Cat & (Record<string, unknown> | null);
+
+/** true admits every value. */
+export type TrueInMember = {
+  a: {} | null;
+} | null;
+
+/** false admits none. */
+export type FalseInMember = never;
 
 /** dependentRequired, dependentSchemas and propertyNames constrain only the objects. */
 export type PairOrNull = ({
