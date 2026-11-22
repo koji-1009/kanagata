@@ -28,7 +28,7 @@
         "additionalProperties": { "type": "integer" }
       },
       "KeysAndTemplate": {
-        "description": "The index signature by any string admits the other's type, as TypeScript requires.",
+        "description": "An x- key has both patterns' types.",
         "type": "object",
         "patternProperties": { "^x-": { "type": "number" }, "^[\\s\\S]*$": { "type": "string" } },
         "additionalProperties": false

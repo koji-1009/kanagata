@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the strings are TypeScript template literal types as printed, not JavaScript templates.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { patternType } from "../../src/template.ts";
+import { patternType, within } from "../../src/template.ts";
 import type { Ty } from "../../src/ty.ts";
 
 /** The type a pattern is, as printed: `string`, string literals and templates joined by ` | `. */
@@ -39,7 +39,7 @@ test("alternatives have their own anchors; groups and their kinds", () => {
 	assert.equal(printed("^(a$)"), undefined, "$ in a group");
 });
 
-test("quantifiers: finite ones are written out, any text is ${string}", () => {
+test("quantifiers: finite ones are written out, any text is ${string} beside other text and string alone", () => {
 	assert.equal(printed("^ab?$"), '"a" | "ab"');
 	assert.equal(printed("^ab??$"), '"a" | "ab"', "lazy");
 	assert.equal(printed("^a{2}$"), '"aa"');
@@ -154,6 +154,27 @@ test("a pattern JavaScript cannot read is no type", () => {
 	assert.equal(patternType("^(a"), undefined);
 	assert.equal(patternType("^a{"), undefined);
 	assert.equal(patternType("^\\-$"), undefined, "\\- outside a class");
+});
+
+test("the templates of a pattern whose strings another pattern all matches", () => {
+	assert.deepEqual(within("^x-a", "^x-"), ["`x-a${string}`"]);
+	assert.deepEqual(
+		within("^x-[\\s\\S]*", "^x-"),
+		["`x-${string}`"],
+		"the same",
+	);
+	assert.deepEqual(within("^x-[ab]", "^x-[a-c]"), [
+		'`x-${"a" | "b"}${string}`',
+	]);
+	assert.deepEqual(within("^x-", "^x-a"), [], "any text is not a");
+	assert.deepEqual(within("^x-b", "^x-a"), []);
+	assert.deepEqual(within("^x-", "-y$"), [], "some strings of both");
+	assert.deepEqual(within("^x-", "^x-[\\s\\S]*z"), [], "z after any text");
+	assert.deepEqual(
+		within("^b$|^x-", "^[bx]"),
+		["`x-${string}`"],
+		"templates only, not the keys a pattern names",
+	);
 });
 
 test("templates keep the pattern they are from", () => {

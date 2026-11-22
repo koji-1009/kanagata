@@ -35,10 +35,10 @@ export type KeysOthers = {
   [key: string]: string;
 };
 
-/** The index signature by any string admits the other's type, as TypeScript requires. */
+/** An x- key has both patterns' types. */
 export type KeysAndTemplate = {
-  [key: `x-${string}`]: number;
-  [key: string]: string | number;
+  [key: `x-${string}`]: never;
+  [key: string]: string;
 };
 
 export type KeysAndProperty = {

@@ -339,6 +339,38 @@ function render(seq: Seq): Ty {
 }
 
 /**
+ * Whether the template `b` admits every string the template `a` does, from segment `j` of
+ * `b` and `i` of `a`: any text in `b` takes any number of `a`'s segments, and a set in `b`
+ * one set of `a` within it.
+ */
+function contains(b: Seq, a: Seq, i: number, j: number): boolean {
+	const y = b[j];
+	if (y === undefined) return i === a.length;
+	if ("any" in y)
+		return (
+			contains(b, a, i, j + 1) || (i < a.length && contains(b, a, i + 1, j))
+		);
+	const x = a[i];
+	if (x === undefined || !("set" in x)) return false;
+	const set = new Set(y.set);
+	return x.set.every((c) => set.has(c)) && contains(b, a, i + 1, j + 1);
+}
+
+/**
+ * The templates of the strings the pattern `inner` matches (see `patternType`), as
+ * written, whose strings the pattern `outer` all matches. Both are patterns
+ * `patternType` reads.
+ */
+export function within(inner: string, outer: string): string[] {
+	const outers = new Parser(outer).alternation(true);
+	return new Parser(inner)
+		.alternation(true)
+		.filter((seq) => outers.some((o) => contains(o, seq, 0, 0)))
+		.map(render)
+		.flatMap((t) => (t.kind === "template" ? [t.text] : []));
+}
+
+/**
  * The strings an ECMA-262 pattern matches (anywhere in the string, as JSON Schema reads
  * it), as template literal types; undefined where no type says exactly those, where
  * TypeScript would not build their union, or where JavaScript cannot read the pattern.

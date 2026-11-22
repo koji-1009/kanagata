@@ -24,7 +24,7 @@ import {
 	type Place,
 	type RawPosition,
 } from "./pointer.ts";
-import { MAX_UNION, patternType } from "./template.ts";
+import { MAX_UNION, patternType, within } from "./template.ts";
 import {
 	array as arrayTy,
 	BLOB,
@@ -3088,7 +3088,8 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	// Keys a pattern matches have its type whatever additionalProperties says. A pattern
 	// whose keys template literal types say keys index signatures by them, and a key it
 	// names is a property; another pattern's type joins the index signature by any string.
-	const keyed: { pattern: string; key: Ty; ty: Ty }[] = [];
+	// Patterns of the same template are one index signature of both types.
+	const keyed: { pattern: string; key: Ty; text: string; tys: Ty[] }[] = [];
 	const unwritten: Ty[] = [];
 	const named = (name: string, ty: Ty) => {
 		if (left.has(name) || props.some((p) => p.key === name)) return;
@@ -3103,9 +3104,22 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		else
 			for (const key of keys.kind === "union" ? keys.items : [keys])
 				if (key.kind === "lit") named(JSON.parse(key.text) as string, ty);
-				else keyed.push({ pattern, key, ty });
+				else {
+					const text = (key as { text: string }).text;
+					const same = keyed.find((k) => k.text === text);
+					if (same === undefined) keyed.push({ pattern, key, text, tys: [ty] });
+					else same.tys.push(ty);
+				}
 	}
 	if (everyKey.length > 0) additional = inter(everyKey);
+	// The patterns whose keys include all of a template's: each of its keys has their types.
+	const including = (pattern: string, text: string | undefined) =>
+		keyed.filter((k) => within(pattern, k.pattern).includes(text as string));
+	// A key has the type of every signature that applies to it, as TypeScript reads them, and
+	// a narrower one's type is within a wider one's, as TypeScript requires.
+	const exact = keyed.map((k) =>
+		inter([...including(k.pattern, k.text).flatMap((h) => h.tys), ...everyKey]),
+	);
 	// An index signature admits each property it applies to, `undefined` too for an optional one.
 	const admitting = (ty: Ty, applies: (key: string) => boolean): Ty => {
 		const own = props.filter((p) => applies(p.key));
@@ -3117,13 +3131,13 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	};
 	// Read once the properties are all there.
 	const keyedSignatures = (): Keyed[] =>
-		keyed.map((k) => ({
+		keyed.map((k, i) => ({
 			key: k.key,
-			ty: admitting(k.ty, (key) => matches(k.pattern, key)),
+			ty: admitting(exact[i] as Ty, (key) => matches(k.pattern, key)),
 		}));
 	const allTypes = (): Ty[] => [
 		...unwritten,
-		...keyed.map((k) => k.ty),
+		...exact,
 		...props.map((p) => p.ty),
 	];
 
@@ -3147,16 +3161,23 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		const templates = keys.filter((k) => k.kind !== "lit");
 		// Where it names every key, those are the properties: no other key is admitted.
 		if (templates.length === 0) return counted(v, props);
+		// A template whose keys a pattern's include has that pattern's signature.
 		const rest: Keyed[] =
 			additional?.kind === "never"
 				? []
-				: templates.map((key) => ({
-						key,
-						ty: admitting(
-							union([additional ?? UNKNOWN, ...allTypes()]),
-							() => true,
-						),
-					}));
+				: templates
+						.filter(
+							(key) =>
+								including(pattern, (key as { text?: string }).text).length ===
+								0,
+						)
+						.map((key) => ({
+							key,
+							ty: admitting(
+								union([additional ?? UNKNOWN, ...allTypes()]),
+								() => true,
+							),
+						}));
 		const byPattern = keyedSignatures();
 		if (byPattern.length === 0 && rest.length === 0) return counted(v, props);
 		return { kind: "map", props, keyed: [...byPattern, ...rest] };
