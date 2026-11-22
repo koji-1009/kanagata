@@ -1,0 +1,26 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "X": {
+        "description": "References to components expand nothing here, so the schemas below are named in the order of their components.",
+        "allOf": [{ "$ref": "#/components/schemas/B" }, { "$ref": "#/components/schemas/A" }]
+      },
+      "A": {
+        "description": "The first component to expand a schema that refers to itself gives it the name.",
+        "properties": { "n": { "$ref": "#/components/schemas/A/$defs/node" } },
+        "$defs": {
+          "node": { "properties": { "a": { "type": "string" }, "next": { "$ref": "#/components/schemas/A/$defs/node" } } }
+        }
+      },
+      "B": {
+        "description": "A later one with the same name gets it numbered.",
+        "properties": { "n": { "$ref": "#/components/schemas/B/$defs/node" } },
+        "$defs": {
+          "node": { "properties": { "b": { "type": "number" }, "next": { "$ref": "#/components/schemas/B/$defs/node" } } }
+        }
+      }
+    }
+  }
+}

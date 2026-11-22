@@ -1,0 +1,27 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/items": {
+      "post": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Tagged" } } } },
+        "responses": { "204": { "description": "Created" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Item": {
+        "$id": "https://example.com/v2/item",
+        "type": "object",
+        "properties": { "name": { "type": "string" } }
+      },
+      "Tagged": {
+        "description": "A $ref resolves against the $id beside it, in the write view too, where the readOnly key is left out.",
+        "allOf": [
+          { "$id": "https://example.com/v2/", "$ref": "item" },
+          { "properties": { "id": { "type": "integer", "readOnly": true } } }
+        ]
+      }
+    }
+  }
+}
