@@ -299,6 +299,32 @@ export class Ctx {
 		}
 	}
 
+	/**
+	 * The `propertyNames` schemas being read for the strings they admit, which are an
+	 * object's keys: their references are written out rather than named.
+	 */
+	readonly #keysRead = new Set<Value>();
+
+	/** Whether a `propertyNames` is being read for its keys. */
+	get readingKeys(): boolean {
+		return this.#keysRead.size > 0;
+	}
+
+	/** Whether this `propertyNames` is being read already: its reading reached itself. */
+	readsKeysOf(names: Value): boolean {
+		return this.#keysRead.has(names);
+	}
+
+	/** Reads a `propertyNames` for its keys, then restores. */
+	withKeysRead<T>(names: Value, f: () => T): T {
+		this.#keysRead.add(names);
+		try {
+			return f();
+		} finally {
+			this.#keysRead.delete(names);
+		}
+	}
+
 	/** Properties left out of the current view by the other members of the `allOf` a schema is in. */
 	readonly #leftOut = new Map<Value, ReadonlySet<string>>();
 

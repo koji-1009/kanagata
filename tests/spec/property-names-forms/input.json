@@ -120,6 +120,16 @@
         "type": "object",
         "propertyNames": { "$ref": "keys.json" }
       },
+      "SelfKeys": {
+        "description": "Keys this schema admits, an object, are no string: no key, read once.",
+        "type": "object",
+        "propertyNames": { "$ref": "#/components/schemas/SelfKeys" }
+      },
+      "SelfKeysShort": {
+        "description": "Nor do lengths next to it ask more of it there.",
+        "type": "object",
+        "propertyNames": { "$ref": "#/components/schemas/SelfKeysShort", "maxLength": 3 }
+      },
       "TwoPatterns": {
         "description": "Strings TypeScript says only as an intersection are no keys it can list: ignored, with a warning.",
         "type": "object",

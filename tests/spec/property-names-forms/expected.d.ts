@@ -28,6 +28,8 @@ export interface schemas {
   KeyName: KeyName;
   ByReference: ByReference;
   InFile: InFile;
+  SelfKeys: SelfKeys;
+  SelfKeysShort: SelfKeysShort;
   TwoPatterns: TwoPatterns;
   NotUnread: NotUnread;
   Unread: Unread;
@@ -134,6 +136,16 @@ export type ByReference = {
 export type InFile = {
   a?: unknown;
   b?: unknown;
+};
+
+/** Keys this schema admits, an object, are no string: no key, read once. */
+export type SelfKeys = {
+  [key: string]: never;
+};
+
+/** Nor do lengths next to it ask more of it there. */
+export type SelfKeysShort = {
+  [key: string]: never;
 };
 
 /** Strings TypeScript says only as an intersection are no keys it can list: ignored, with a warning. */

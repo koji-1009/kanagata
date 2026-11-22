@@ -870,7 +870,9 @@ function keywordParts(
 		parts.push(
 			widen(cx, v, ["object"], { kind: "map", props: [], index: NEVER }),
 		);
-	else if (names !== undefined) {
+	// Reached again while it is read, it asks nothing more there (see `propertyKeys`): the
+	// outer reading warns of what it cannot say.
+	else if (names !== undefined && !cx.readsKeysOf(names)) {
 		// The keys are the strings it admits; a type of strings says the lengths only by
 		// the keys it names (and `""`), not by templates or `string`, nor a pattern no
 		// template says (one every string matches is `string`, and asks nothing).
@@ -1935,9 +1937,6 @@ function notOnly(s: Value | undefined): Value | undefined {
 	return keys.length === 1 && keys[0] === "not" ? s.get("not") : undefined;
 }
 
-/** Whether a `propertyNames` is being read for its strings, which writes its references out. */
-let readingKeys = false;
-
 /**
  * The keys an object's `propertyNames` admits: every key is a string it must admit, so
  * they are the strings its schema admits, as the schema reads for strings (`string` for
@@ -1948,17 +1947,13 @@ let readingKeys = false;
 function propertyKeys(cx: Ctx, v: JsonObject, at: string): Ty | undefined {
 	const names = v.get("propertyNames");
 	if (names === undefined) return undefined;
+	// Reached again while it is read, it keys an object inside the value read, whose
+	// strings that reading says; here it asks nothing more.
+	if (cx.readsKeysOf(names)) return STRING;
 	// Its references are written out: a key is one of the strings their targets admit.
-	const saved = readingKeys;
-	readingKeys = true;
-	let values: Ty;
-	try {
-		values = cx.withRaw(undefined, () =>
-			schema(cx, names, child(at, "propertyNames")),
-		);
-	} finally {
-		readingKeys = saved;
-	}
+	const values = cx.withKeysRead(names, () =>
+		cx.withRaw(undefined, () => schema(cx, names, child(at, "propertyNames"))),
+	);
 	const keys = inter([STRING, values]);
 	return keyTerms(keys).every((k) =>
 		["string", "lit", "template"].includes(k.kind),
@@ -2592,7 +2587,7 @@ function literal(v: Value): Ty {
  */
 function reference(cx: Ctx, r: string, at: string): Ty {
 	// Strings read for keys are what the target admits, not a named type (see `propertyKeys`).
-	if (readingKeys) {
+	if (cx.readingKeys) {
 		const located = cx.locate(r, at);
 		return expand(cx, located, cx.componentKey(located.value));
 	}
