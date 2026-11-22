@@ -1372,8 +1372,9 @@ function forbid(t: Ty, keys: string[]): Ty {
 
 /**
  * oneOf admits a value only one member admits, so a literal or `null` two members
- * admit is in neither. TypeScript can leave it out only where no member admits it by
- * its kind (`string` for `"a"`); other members, refs among them, are not counted.
+ * admit is in neither. It is left out of the members that list it; one that admits it
+ * by its kind (`string` for `"a"`) keeps it in their union, as TypeScript cannot leave
+ * it out of that. Other members, refs among them, are not counted.
  */
 function shared(tys: Ty[]): Ty[] {
 	const listed = (t: Ty): Ty[] => (t.kind === "union" ? t.items : [t]);
@@ -1385,7 +1386,6 @@ function shared(tys: Ty[]): Ty[] {
 		.filter((m) => m.kind === "lit" || m.kind === "null");
 	const out = new Set<Ty>();
 	for (const value of values) {
-		if (tys.some((t) => listed(t).some((m) => byKind(m, value)))) continue;
 		if (tys.filter((t) => listed(t).some((m) => same(m, value))).length > 1)
 			out.add(value);
 	}
@@ -1409,7 +1409,6 @@ function mayAdmit(m: Ty, x: Ty): boolean {
 
 /** Whether a member admits a literal by its kind, not by listing it. */
 function byKind(m: Ty, value: Ty): boolean {
-	if (m.kind === "unknown") return true;
 	if (value.kind !== "lit") return false;
 	const text = value.text;
 	if (text.startsWith('"')) return m.kind === "string";
