@@ -321,26 +321,30 @@ export class Ctx {
 	}
 
 	/**
-	 * The schemas with `contains` whose every item the schema being converted makes match it
-	 * (by its `unevaluatedItems: false`), by that schema.
+	 * The schemas with `contains` whose matching items the type of a schema being converted
+	 * says (by its `unevaluatedItems: false`), by that schema; read when first asked for.
 	 */
-	readonly #matched = new Map<JsonObject, ReadonlySet<JsonObject>>();
+	readonly #said = new Map<JsonObject, () => ReadonlySet<JsonObject>>();
 
-	/** Whether the schema being converted or one around it makes every item match `holder`'s `contains`. */
-	allMatch(holder: JsonObject): boolean {
+	/** Whether the type of the schema being converted or of one around it says which items match `holder`'s `contains`. */
+	containsSaid(holder: JsonObject): boolean {
 		return [holder, ...this.around].some(
-			(s) => this.#matched.get(s)?.has(holder) === true,
+			(s) => this.#said.get(s)?.().has(holder) === true,
 		);
 	}
 
-	/** Converts `s` knowing the schemas with `contains` whose every item it makes match. */
-	withMatched<T>(s: JsonObject, holders: readonly JsonObject[], f: () => T): T {
-		if (holders.length === 0) return f();
-		this.#matched.set(s, new Set(holders));
+	/** Converts `s` knowing the schemas with `contains` whose matching items its type says. */
+	withSaid<T>(
+		s: JsonObject,
+		holders: (() => ReadonlySet<JsonObject>) | undefined,
+		f: () => T,
+	): T {
+		if (holders === undefined) return f();
+		this.#said.set(s, holders);
 		try {
 			return f();
 		} finally {
-			this.#matched.delete(s);
+			this.#said.delete(s);
 		}
 	}
 

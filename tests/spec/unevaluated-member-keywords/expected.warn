@@ -1,2 +1,1 @@
-#/components/schemas/ContainsInMember/oneOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/ThenWithoutElse/if: if / then / else cannot be expressed in TypeScript; ignored

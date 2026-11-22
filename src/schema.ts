@@ -29,6 +29,7 @@ import {
 	array as arrayTy,
 	BLOB,
 	BOOLEAN,
+	equal,
 	equalValues,
 	INTEGER,
 	inter,
@@ -76,6 +77,14 @@ function unevaluated(v: JsonObject, key: string): Value | undefined {
 
 /** The keywords next to `unevaluatedItems` that evaluate for it: `contains` evaluates the items it matches. */
 const ITEM_APPLICATORS = [...APPLICATORS, "contains"];
+
+/**
+ * The most cases of what evaluates the items (`itemCases`) read where branches have
+ * `contains`: each set of them is one, so they double with each such branch, and their
+ * union is normalized by comparing its members pair by pair. 1,024 take about 0.15 s;
+ * each doubling about four times as long.
+ */
+const MAX_CASES = 1024;
 
 /**
  * Accepts a `$schema` or `jsonSchemaDialect` that names the dialect kanagata reads: JSON
@@ -181,7 +190,7 @@ const REFS = new Set(["$ref", "$dynamicRef"]);
 
 function convert(cx: Ctx, v: JsonObject, at: string): Ty {
 	// The schemas in it with `contains` read what its `unevaluatedItems` says of their items.
-	return cx.withMatched(v, matchedHolders(cx, v, at), () => parts(cx, v, at));
+	return cx.withSaid(v, saying(cx, v, at), () => parts(cx, v, at));
 }
 
 /**
@@ -836,9 +845,9 @@ function keywordParts(
 			"propertyNames cannot be expressed in TypeScript; ignored",
 		);
 	// contains requires from minContains (1 if not given) to maxContains items that match
-	// it; TypeScript can say how many, and which where every item matches (contains admits
-	// every value, or an `unevaluatedItems: false` admits no other item) or, for none,
-	// where it can say the values contains does not admit.
+	// it; TypeScript can say how many, and which where every item matches or, for none,
+	// where it can say the values contains does not admit. An `unevaluatedItems: false`
+	// beside it may say which, and then how many (see `saidHolders`).
 	const contains = v.get("contains");
 	if (contains !== undefined) {
 		const min = count(v, "minContains") ?? 1;
@@ -847,7 +856,7 @@ function keywordParts(
 		const items = (n: number): Ty[] => Array.from({ length: n }, () => UNKNOWN);
 		if (max !== undefined && min > max)
 			parts.push(widen(cx, v, ["array"], NEVER));
-		else if (negation(contains) === NEVER || cx.allMatch(v)) {
+		else if (negation(contains) === NEVER) {
 			// Every item matches: the length is from min to max.
 			if (max !== undefined)
 				parts.push(
@@ -873,15 +882,18 @@ function keywordParts(
 						rest: UNKNOWN,
 					}),
 				);
-			cx.warn(
-				child(at, "contains"),
-				"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
-			);
-			if (max !== undefined)
+			// The type of the schema with the unevaluatedItems that says which says how many.
+			if (!cx.containsSaid(v)) {
 				cx.warn(
-					child(at, "maxContains"),
-					"maxContains cannot be expressed in TypeScript; ignored",
+					child(at, "contains"),
+					"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
 				);
+				if (max !== undefined)
+					cx.warn(
+						child(at, "maxContains"),
+						"maxContains cannot be expressed in TypeScript; ignored",
+					);
+			}
 		}
 	}
 	const n = v.get("not");
@@ -1231,8 +1243,8 @@ function contextKinds(cx: Ctx, v: JsonObject): string[] {
  * What a schema evaluates for `unevaluatedProperties` / `unevaluatedItems` wherever it
  * matches: property names, `patternProperties`, every key (`all`), the first `length`
  * items or every item (`rest`), the items the `contains` of the schemas in `contained`
- * match; and what its `oneOf` / `anyOf` members, `if` / `then` / `else` and dependent
- * schemas evaluate where they match, `cond` (`branches`). `keys` are the keys it names,
+ * match; and what its `oneOf` / `anyOf` members (of `group`), `if` / `then` / `else` and
+ * dependent schemas evaluate where they match, `cond` (`branches`). `keys` are the keys it names,
  * which a type can leave out. An `else` where TypeScript cannot say which values `if`
  * does not admit evaluates where no type says (`undecided`).
  */
@@ -1245,7 +1257,7 @@ interface Evaluated {
 	contained: Holder[];
 	undecided: boolean;
 	keys: Set<string>;
-	branches: { cond: () => Ty; ev: Evaluated }[];
+	branches: { cond: () => Ty; ev: Evaluated; group: Value[] | undefined }[];
 }
 
 /** A schema with `contains`, where it is and where it is read (see `Ctx.place`). */
@@ -1353,10 +1365,10 @@ function evaluates(
 	for (const [i, m] of (Array.isArray(allOf) ? allOf : []).entries())
 		evaluateBoth(ev, member(m, child(child(at, "allOf"), String(i))));
 	// A member, if or dependent schema evaluates where it matches.
-	const branch = (cond: () => Ty, e: Evaluated): void => {
+	const branch = (cond: () => Ty, e: Evaluated, group?: Value[]): void => {
 		for (const k of e.keys) ev.keys.add(k);
 		ev.undecided ||= e.undecided;
-		ev.branches.push({ cond, ev: e });
+		ev.branches.push({ cond, ev: e, group });
 	};
 	for (const key of ["oneOf", "anyOf"]) {
 		const members = s.get(key);
@@ -1365,7 +1377,11 @@ function evaluates(
 			membersIn(cx, s, members, group, child(at, key)),
 		);
 		for (const [i, m] of members.entries())
-			branch(() => tys()[i] as Ty, member(m, child(child(at, key), String(i))));
+			branch(
+				() => tys()[i] as Ty,
+				member(m, child(child(at, key), String(i))),
+				members,
+			);
 	}
 	const cond = s.get("if");
 	if (cond !== undefined) {
@@ -1424,21 +1440,39 @@ interface ItemsEvaluated {
 	contained: Holder[];
 }
 
+/**
+ * A branch and what evaluates the items where it matches: whether it is one of the
+ * schema's own (`top`, not a member's), and the `oneOf` / `anyOf` members the top branch
+ * it is in is one of (`group`; undefined for `if` / `then` / `else` and dependent schemas).
+ */
+interface BranchItems extends ItemsEvaluated {
+	top: boolean;
+	group: Value[] | undefined;
+}
+
+/** A case of what evaluates the items: the branches that match in it (`parts`). */
+interface ItemsCase extends ItemsEvaluated {
+	parts: BranchItems[];
+}
+
 /** Each branch of `ev` and what evaluates the items where it matches, with what the branches it is in evaluate. */
 function evaluatingItems(
 	ev: Evaluated,
 	length: number,
 	contained: Holder[],
-): ItemsEvaluated[] {
-	return ev.branches.flatMap(({ cond, ev: e }) => {
-		const n = Math.max(length, e.length);
-		const c = [...contained, ...e.contained];
-		const own = { cond, length: n, rest: e.rest, contained: c };
+	top = true,
+	group: Value[] | undefined = undefined,
+): BranchItems[] {
+	return ev.branches.flatMap((b) => {
+		const n = Math.max(length, b.ev.length);
+		const c = [...contained, ...b.ev.contained];
+		const g = top ? b.group : group;
+		const own = { cond: b.cond, length: n, rest: b.ev.rest, contained: c };
 		return [
-			own,
-			...evaluatingItems(e, n, c).map((x) => ({
+			{ ...own, top, group: g },
+			...evaluatingItems(b.ev, n, c, false, g).map((x) => ({
 				...x,
-				cond: () => inter([cond(), x.cond()]),
+				cond: () => inter([b.cond(), x.cond()]),
 			})),
 		];
 	});
@@ -1448,29 +1482,38 @@ function evaluatingItems(
  * What evaluates the items of a value `ev` is read for, in each case that can be: where
  * it matches, and where each set of branches whose `contains` evaluates (which can match
  * together) and one other branch matches. A branch that evaluates a prefix or every item
- * needs no other such branch beside it: the longest is enough.
+ * needs no other such branch beside it: the longest is enough. undefined where branches
+ * with `contains` make more than `MAX_CASES` cases.
  */
-function itemCases(ev: Evaluated): ItemsEvaluated[] {
+function itemCases(
+	ev: Evaluated,
+): { branches: BranchItems[]; cases: ItemsCase[] } | undefined {
 	const branches = evaluatingItems(ev, ev.length, []);
-	const both = (a: ItemsEvaluated, b: ItemsEvaluated): ItemsEvaluated => ({
+	const counting = branches.filter((b) => b.contained.length > 0);
+	const others = branches.filter((b) => b.contained.length === 0);
+	const size = 2 ** counting.length * (others.length + 1);
+	if (counting.length > 0 && size > MAX_CASES) return undefined;
+	const both = (a: ItemsCase, b: BranchItems): ItemsCase => ({
 		cond: () => inter([a.cond(), b.cond()]),
 		length: Math.max(a.length, b.length),
 		rest: a.rest || b.rest,
 		contained: [...a.contained, ...b.contained],
+		parts: [...a.parts, b],
 	});
-	let cases: ItemsEvaluated[] = [
+	let cases: ItemsCase[] = [
 		{
 			cond: () => UNKNOWN,
 			length: ev.length,
 			rest: ev.rest,
 			contained: ev.contained,
+			parts: [],
 		},
 	];
-	for (const b of branches)
-		if (b.contained.length > 0)
-			cases = [...cases, ...cases.map((c) => both(c, b))];
-	const others = branches.filter((b) => b.contained.length === 0);
-	return cases.flatMap((c) => [c, ...others.map((b) => both(c, b))]);
+	for (const b of counting) cases = [...cases, ...cases.map((c) => both(c, b))];
+	return {
+		branches,
+		cases: cases.flatMap((c) => [c, ...others.map((b) => both(c, b))]),
+	};
 }
 
 /** `holders`, each schema once. */
@@ -1481,35 +1524,167 @@ function distinctHolders(holders: Holder[]): Holder[] {
 }
 
 /**
- * The one schema whose `contains` every item matches in this case of `unevaluatedItems:
- * false`: where it alone evaluates the items. undefined where none does.
+ * The one schema whose `contains` every item past those evaluated matches in this case of
+ * `unevaluatedItems: false`: where it alone evaluates them. undefined where none does.
  */
-function soleHolder(c: ItemsEvaluated): Holder | undefined {
+function soleHolder(c: Omit<ItemsEvaluated, "cond">): Holder | undefined {
 	const holders = distinctHolders(c.contained);
-	return c.length === 0 && !c.rest && holders.length === 1
-		? holders[0]
-		: undefined;
+	return !c.rest && holders.length === 1 ? holders[0] : undefined;
+}
+
+const isHolder = (c: ItemsEvaluated, h: JsonObject): boolean =>
+	c.contained.some((x) => x.schema === h);
+
+/** Whether `contains` asks no more than one matching item, so a value fails it only where none matches. */
+const asksOne = (h: JsonObject): boolean =>
+	(count(h, "minContains") ?? 1) <= 1 && count(h, "maxContains") === undefined;
+
+/**
+ * The schemas with `contains` whose matching items the type of `v` says, its
+ * `unevaluatedItems` being `false`, read when first asked for; undefined where it says none.
+ */
+function saying(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+): (() => ReadonlySet<JsonObject>) | undefined {
+	if (v.get("unevaluatedItems") !== false) return undefined;
+	const ev = evaluates(cx, v, at, true, new Set());
+	const read = ev.undecided || ev.rest ? undefined : itemCases(ev);
+	if (read === undefined) return undefined;
+	return later(cx, () => saidHolders(cx, v, at, ev, read.branches, read.cases));
 }
 
 /**
- * The schemas with `contains` whose every item `v` makes match it: with
- * `unevaluatedItems: false`, where in every case one of them evaluates the items alone.
+ * The schemas with `contains` whose matching items the type says, with `unevaluatedItems:
+ * false` (see `unevaluatedItems`). One the value always has (of `v`, its `$ref` target, its
+ * `allOf` members): where it alone evaluates the items past those evaluated in every case,
+ * and whether each item before them matches is told. One a branch has, where nothing else
+ * evaluates the items unless a branch does: where it alone evaluates every item in every
+ * case it is in; or where it asks for one matching item at most, it is in a `oneOf` /
+ * `anyOf` member of the schema whose members alone evaluate the items, and in every case
+ * it is in, the others evaluate as many items without it and do not bound how many match
+ * theirs. Then a value that matches none of its items evaluates the same without it.
  */
-function matchedHolders(cx: Ctx, v: JsonObject, at: string): JsonObject[] {
-	if (v.get("unevaluatedItems") !== false) return [];
-	const ev = evaluates(cx, v, at, true, new Set());
-	if (ev.undecided) return [];
-	const cases = itemCases(ev);
-	const holders = distinctHolders(cases.flatMap((c) => c.contained));
-	return holders
-		.map((x) => x.schema)
-		.filter((h) =>
-			cases.every(
-				(c) =>
-					!c.contained.some((x) => x.schema === h) ||
-					soleHolder(c)?.schema === h,
-			),
-		);
+function saidHolders(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	ev: Evaluated,
+	branches: BranchItems[],
+	cases: ItemsCase[],
+): ReadonlySet<JsonObject> {
+	const sole = (c: ItemsEvaluated, h: Holder): boolean =>
+		soleHolder(c)?.schema === h.schema &&
+		prefixMarks(cx, v, at, h, c.length) !== undefined;
+	const always = new Set(ev.contained.map((h) => h.schema));
+	const evaluating = branches.filter(
+		(b) => b.length > 0 || b.rest || b.contained.length > 0,
+	);
+	// What evaluates the items in a case without the branches the holder is in.
+	const without = (c: ItemsCase, h: JsonObject): boolean => {
+		const parts = c.parts.filter((p) => !isHolder(p, h));
+		const length = Math.max(ev.length, ...parts.map((p) => p.length));
+		const rest = ev.rest || parts.some((p) => p.rest);
+		if (length !== c.length || rest !== c.rest) return false;
+		const other = soleHolder({
+			length,
+			rest,
+			contained: [...ev.contained, ...parts.flatMap((p) => p.contained)],
+		});
+		return other === undefined || (asksOne(other.schema) && length === 0);
+	};
+	const said = distinctHolders(cases.flatMap((c) => c.contained)).filter(
+		(h) => {
+			const within = cases.filter((c) => isHolder(c, h.schema));
+			if (always.has(h.schema)) return within.every((c) => sole(c, h));
+			if (ev.length > 0 || ev.contained.length > 0) return false;
+			if (within.every((c) => c.length === 0 && sole(c, h))) return true;
+			const group = branches.find((b) => b.top && isHolder(b, h.schema))?.group;
+			return (
+				asksOne(h.schema) &&
+				group !== undefined &&
+				evaluating.every((b) => b.group === group) &&
+				within.every((c) => without(c, h.schema))
+			);
+		},
+	);
+	return new Set(said.map((h) => h.schema));
+}
+
+/**
+ * Whether each of the first `length` items matches the holder's `contains`, where that is
+ * told: by the schema's own `prefixItems` (whose items are those of the type), as their
+ * types meet nowhere, as every value it lists is or is not admitted, or as `contains`
+ * admits every value or says only a kind that the prefix item's type is within.
+ * undefined where some is not told.
+ */
+function prefixMarks(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	h: Holder,
+	length: number,
+): boolean[] | undefined {
+	const own = v.get("prefixItems");
+	const prefix = Array.isArray(own) ? own.slice(0, length) : [];
+	if (prefix.length < length) return undefined;
+	const c = h.schema.get("contains") as Value;
+	if (negation(c) === NEVER) return prefix.map(() => true);
+	const item = containsTy(cx, h);
+	const marks = prefix.map((p, i): boolean | undefined => {
+		const ty = schema(cx, p, child(child(at, "prefixItems"), String(i)));
+		const met = inter([ty, item]);
+		if (met.kind === "never") return false;
+		// negation reads every schema but an object and false (whose type meets nothing) as admitting all.
+		const s = c as JsonObject;
+		const verdicts = listed(cx, p, new Set())?.map((x) => accepts(cx, s, x));
+		if (verdicts?.every((x) => x === true)) return true;
+		if (verdicts?.every((x) => x === false)) return false;
+		const kindOnly = s.entries.every(([k]) => k === "type" || isAnnotation(k));
+		return kindOnly && equal(met, ty) ? true : undefined;
+	});
+	return marks.every((m) => m !== undefined) ? (marks as boolean[]) : undefined;
+}
+
+/**
+ * The arrays whose matching items are from `min` to `max` (no bound if undefined), where
+ * the items the `marks` say match it before every item past them does, which are `item`.
+ */
+function containsCount(
+	item: Ty,
+	marks: boolean[],
+	min: number,
+	max: number | undefined,
+): Ty {
+	const length = marks.length;
+	const matching = (n: number) =>
+		marks.slice(0, n).filter(Boolean).length + Math.max(0, n - length);
+	const at = (i: number) => (i < length ? UNKNOWN : item);
+	// The fewest items with min matching: within the prefix, or past it one by one.
+	let lo = 0;
+	while (lo < length && matching(lo) < min) lo++;
+	lo += Math.max(0, min - matching(lo));
+	if (max === undefined) {
+		const n = Math.max(length, lo);
+		return n === 0
+			? arrayTy(item)
+			: {
+					kind: "tuple",
+					items: Array.from({ length: n }, (_, i) => at(i)),
+					min: lo,
+					rest: item,
+				};
+	}
+	// The most items with max matching at most.
+	let hi = length;
+	while (matching(hi) > max) hi--;
+	if (hi === length) hi += max - matching(length);
+	return {
+		kind: "tuple",
+		items: Array.from({ length: hi }, (_, i) => at(i)),
+		min: lo,
+	};
 }
 
 /** The type of a holder's `contains`: an item it matches. */
@@ -1566,7 +1741,9 @@ function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 			);
 		}
 	}
-	if (asked(ui) && !ev.rest) {
+	const read = asked(ui) && !ev.rest ? itemCases(ev) : undefined;
+	if (asked(ui) && !ev.rest && read === undefined) warn("unevaluatedItems", ui);
+	if (read !== undefined) {
 		const ty = schema(cx, ui as Value, child(at, "unevaluatedItems"));
 		parts.push(
 			orOther(
@@ -1574,10 +1751,13 @@ function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 				v,
 				["array"],
 				union(
-					itemCases(ev).map((c) =>
+					read.cases.map((c) =>
 						c.rest
 							? c.cond()
-							: inter([c.cond(), unevaluatedItems(cx, c, ui as Value, ty)]),
+							: inter([
+									c.cond(),
+									unevaluatedItems(cx, v, at, c, ui as Value, ty),
+								]),
 					),
 				),
 			),
@@ -1589,22 +1769,26 @@ function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 /**
  * The arrays `unevaluatedItems` admits in one case of what evaluates the items: past those
  * evaluated, an item matches a `contains` there or is of the keyword's type `ty`. Where one
- * `contains` alone evaluates them and the keyword admits none, every item matches it, so
- * its `minContains` and `maxContains` bound the length.
+ * `contains` alone evaluates them and the keyword admits none, every item past them matches
+ * it; where it is told which items before them match it too (`prefixMarks`), its
+ * `minContains` and `maxContains` bound the length.
  */
-function unevaluatedItems(cx: Ctx, c: ItemsEvaluated, ui: Value, ty: Ty): Ty {
+function unevaluatedItems(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	c: ItemsEvaluated,
+	ui: Value,
+	ty: Ty,
+): Ty {
 	const sole = ui === false ? soleHolder(c) : undefined;
-	if (sole !== undefined) {
-		const item = containsTy(cx, sole);
+	const marks =
+		sole === undefined ? undefined : prefixMarks(cx, v, at, sole, c.length);
+	if (sole !== undefined && marks !== undefined) {
 		const min = count(sole.schema, "minContains") ?? 1;
 		const max = count(sole.schema, "maxContains");
-		if (max !== undefined)
-			return max < min
-				? NEVER
-				: { kind: "tuple", items: Array(max).fill(item), min };
-		return min === 0
-			? arrayTy(item)
-			: { kind: "tuple", items: Array(min).fill(item), min, rest: item };
+		if (max !== undefined && max < min) return NEVER;
+		return containsCount(containsTy(cx, sole), marks, min, max);
 	}
 	const rest = union([
 		...distinctHolders(c.contained).map((h) => containsTy(cx, h)),

@@ -1,0 +1,12 @@
+#/components/schemas/Many/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/1/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/2/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/3/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/4/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/5/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/6/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/7/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/8/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/9/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/anyOf/10/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Many/unevaluatedItems: unevaluatedItems next to an applicator cannot be expressed in TypeScript; ignored

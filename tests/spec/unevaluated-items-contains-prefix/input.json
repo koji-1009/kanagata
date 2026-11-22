@@ -1,0 +1,76 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Always": {
+        "description": "Every value prefixItems lists matches contains, so the prefix item counts: one more item at most.",
+        "type": "array",
+        "prefixItems": [{ "const": "abc" }],
+        "contains": { "type": "string", "minLength": 3 },
+        "maxContains": 2,
+        "unevaluatedItems": false
+      },
+      "Never": {
+        "description": "No value prefixItems lists matches contains, so a matching item follows the prefix item.",
+        "type": "array",
+        "prefixItems": [{ "enum": ["ab"] }],
+        "contains": { "type": "string", "minLength": 3 },
+        "unevaluatedItems": false
+      },
+      "OfKind": {
+        "description": "contains says only a kind, which every prefix item is: it is the one item.",
+        "type": "array",
+        "prefixItems": [{ "type": "string", "format": "email" }],
+        "contains": { "type": "string" },
+        "maxContains": 1,
+        "unevaluatedItems": false
+      },
+      "Fewer": {
+        "description": "Both prefix items match contains, which admits one at most: the second is not admitted.",
+        "type": "array",
+        "prefixItems": [{ "const": "abc" }, { "const": "abc" }],
+        "contains": { "type": "string", "minLength": 3 },
+        "minContains": 0,
+        "maxContains": 1,
+        "unevaluatedItems": false
+      },
+      "Undecided": {
+        "description": "A string may or may not have three characters: whether the prefix item matches contains no type says.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "contains": { "type": "string", "minLength": 3 },
+        "unevaluatedItems": false
+      },
+      "Mixed": {
+        "description": "One value prefixItems lists matches contains and one does not.",
+        "type": "array",
+        "prefixItems": [{ "enum": ["a", "abcd"] }],
+        "contains": { "type": "string", "minLength": 3 },
+        "unevaluatedItems": false
+      },
+      "Wider": {
+        "description": "A number may or may not be an integer.",
+        "type": "array",
+        "prefixItems": [{ "type": "number" }],
+        "contains": { "type": "integer" },
+        "unevaluatedItems": false
+      },
+      "InMember": {
+        "description": "A member's prefixItems: whether its item matches contains is not read.",
+        "type": "array",
+        "allOf": [{ "prefixItems": [{ "type": "number" }] }],
+        "contains": { "type": "string" },
+        "unevaluatedItems": false
+      },
+      "Longer": {
+        "description": "A member evaluates more items than the schema's own prefixItems types: whether the second matches contains is not read.",
+        "type": "array",
+        "prefixItems": [{ "type": "number" }],
+        "allOf": [{ "prefixItems": [{}, { "type": "number" }] }],
+        "contains": { "type": "string" },
+        "unevaluatedItems": false
+      }
+    }
+  }
+}

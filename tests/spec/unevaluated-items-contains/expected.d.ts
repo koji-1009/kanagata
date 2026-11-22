@@ -37,8 +37,8 @@ export type Impossible = never;
 /** An item contains does not match is of the type unevaluatedItems says; which item is a string no type says. */
 export type Typed = [string | number, ...(string | number)[]];
 
-/** Items past prefixItems are those contains matches; whether a prefix item matches it no type says. */
-export type Prefixed = [number, ...string[]];
+/** Items past prefixItems are those contains matches, and a number never does: a string follows it. */
+export type Prefixed = [number, string, ...string[]];
 
 /** contains: {} evaluates every item. */
 export type Everything = [string, ...unknown[]];

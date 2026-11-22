@@ -1,0 +1,5 @@
+#/components/schemas/Undecided/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Mixed/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Wider/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/InMember/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Longer/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

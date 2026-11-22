@@ -1,0 +1,64 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Bounded": {
+        "description": "Both members may match, and the first bounds its strings: [\"a\", \"b\"] matches neither, which no type says.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" }, "maxContains": 1 }, { "contains": { "type": "number" } }],
+        "unevaluatedItems": false
+      },
+      "Apart": {
+        "description": "contains in members of two applicators: [1] matches the anyOf member's type, but not its contains, which no type says.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" } }],
+        "oneOf": [{ "contains": { "type": "number" } }, {}],
+        "unevaluatedItems": false
+      },
+      "Nested": {
+        "description": "contains in a member of a member: [1] matches the outer member's type, but not the inner contains, which no type says; the other member's contains is typed.",
+        "type": "array",
+        "anyOf": [{ "oneOf": [{ "contains": { "type": "string" } }] }, { "contains": { "type": "number" } }],
+        "unevaluatedItems": false
+      },
+      "Conditional": {
+        "description": "contains in then, which applies where if admits the value, and in an anyOf member.",
+        "type": "array",
+        "if": { "minItems": 2 },
+        "then": { "contains": { "type": "string" } },
+        "anyOf": [{ "contains": { "type": "number" } }],
+        "unevaluatedItems": false
+      },
+      "BesidePrefix": {
+        "description": "The prefix item is evaluated without the member: [1] matches the member's type, but not its contains, which no type says.",
+        "type": "array",
+        "prefixItems": [{ "type": "number" }],
+        "anyOf": [{ "contains": { "type": "string" } }],
+        "unevaluatedItems": false
+      },
+      "OnlyMember": {
+        "description": "The one member's contains alone evaluates every item where it matches, which it must: two strings at least.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" }, "minContains": 2 }],
+        "unevaluatedItems": false
+      },
+      "PrefixedMember": {
+        "description": "A member evaluates its prefix item as well: where it does not match, the item is not evaluated, which no type says.",
+        "type": "array",
+        "anyOf": [
+          { "prefixItems": [{ "type": "number" }], "contains": { "type": "string" } },
+          { "contains": { "type": "boolean" } }
+        ],
+        "unevaluatedItems": false
+      },
+      "BesideOwn": {
+        "description": "contains of the schema and of a member: which items match each no type says.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "anyOf": [{ "contains": { "type": "number" } }],
+        "unevaluatedItems": false
+      }
+    }
+  }
+}

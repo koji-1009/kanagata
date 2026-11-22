@@ -39,7 +39,7 @@
         "unevaluatedItems": { "type": "number" }
       },
       "Prefixed": {
-        "description": "Items past prefixItems are those contains matches; whether a prefix item matches it no type says.",
+        "description": "Items past prefixItems are those contains matches, and a number never does: a string follows it.",
         "type": "array",
         "prefixItems": [{ "type": "number" }],
         "contains": { "type": "string" },
