@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Tags": { "type": "array", "items": { "type": "string" } },
+      "OneTag": {
+        "description": "In 3.0 too, a reference to an array stays, and the items it reads are its own.",
+        "allOf": [{ "$ref": "#/components/schemas/Tags" }, { "maxItems": 1 }]
+      }
+    }
+  }
+}

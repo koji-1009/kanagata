@@ -829,8 +829,13 @@ function admits(kinds: ValueKind[], m: Ty): boolean {
 		kind === "number" &&
 		m.kind === "lit" &&
 		kinds.includes("integer") &&
-		Number.isInteger(Number(m.text))
+		isWholeText(m.text)
 	)
 		return true;
 	return kind !== undefined && kinds.includes(kind);
+}
+
+/** Whether a number's text is a whole number by its exact value (`1e400` is, `1e-400` is not). */
+function isWholeText(text: string): boolean {
+	return !numberKey(text).includes("e-");
 }

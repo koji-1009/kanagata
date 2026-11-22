@@ -8,6 +8,8 @@ export interface schemas {
   Pages: Pages;
   StringOrObject: StringOrObject;
   ArrayOrNull: ArrayOrNull;
+  TaggedOrNull: TaggedOrNull;
+  PairOrNull: PairOrNull;
   Typed: Typed;
   OnlyObject: OnlyObject;
   Cat: Cat;
@@ -31,6 +33,23 @@ export type StringOrObject = ({
 
 /** Array keywords constrain only the arrays. */
 export type ArrayOrNull = [string, ...string[]] | null;
+
+/** So does contains. */
+export type TaggedOrNull = [string, ...string[]] | null;
+
+/** dependentRequired, dependentSchemas and propertyNames constrain only the objects. */
+export type PairOrNull = ({
+  a?: never;
+} | {
+  b: {} | null;
+} | null) & ({
+  b?: never;
+} | {
+  a: {} | null;
+} | null) & ({
+  a?: string;
+  b?: string;
+} | null);
 
 /** A member with a type of its own constrains every value. */
 export type Typed = {

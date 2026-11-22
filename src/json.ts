@@ -206,7 +206,8 @@ class Parser {
 			this.ws();
 			const c = this.peek();
 			if (c !== 0x22) {
-				if (c === 0x7d && members.length > 0) throw this.err("trailing comma");
+				// An empty object returned above, so `}` here follows a comma.
+				if (c === 0x7d) throw this.err("trailing comma");
 				throw this.unexpected();
 			}
 			const keyStart = this.pos;

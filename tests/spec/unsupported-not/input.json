@@ -4,7 +4,12 @@
   "components": {
     "schemas": {
       "NotString": { "not": { "type": "string" } },
-      "NonEmpty": { "type": "string", "not": { "const": "" } }
+      "NonEmpty": { "type": "string", "not": { "const": "" } },
+      "Present": {
+        "description": "Values no member admits by its kind (null and false, for a string) are left out without a warning.",
+        "type": ["string", "null"],
+        "not": { "enum": [null, false] }
+      }
     }
   }
 }

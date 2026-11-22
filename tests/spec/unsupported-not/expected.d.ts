@@ -7,8 +7,12 @@ export interface operations {}
 export interface schemas {
   NotString: NotString;
   NonEmpty: NonEmpty;
+  Present: Present;
 }
 
 export type NotString = number | boolean | null | unknown[] | Record<string, unknown>;
 
 export type NonEmpty = string;
+
+/** Values no member admits by its kind (null and false, for a string) are left out without a warning. */
+export type Present = string;

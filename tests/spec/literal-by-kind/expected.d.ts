@@ -10,6 +10,8 @@ export interface schemas {
   TrueTwice: TrueTwice;
   ZeroTwice: ZeroTwice;
   OneTwice: OneTwice;
+  OnTwice: OnTwice;
+  Off: Off;
   NonZero: NonZero;
 }
 
@@ -27,6 +29,12 @@ export type ZeroTwice = boolean | "no" | "zero";
 
 /** Nor does string. */
 export type OneTwice = string | 2;
+
+/** boolean is true or false: true, which every member admits, is in none, and false in boolean alone. */
+export type OnTwice = false | "all" | "any";
+
+/** So not leaves false of boolean. */
+export type Off = false;
 
 /** integer admits 0 by its kind: TypeScript has no type for the numbers but 0. */
 export type NonZero = number;

@@ -23,6 +23,15 @@
         "description": "Nor does string.",
         "oneOf": [{ "type": "string" }, { "const": 1 }, { "enum": [1, 2] }]
       },
+      "OnTwice": {
+        "description": "boolean is true or false: true, which every member admits, is in none, and false in boolean alone.",
+        "oneOf": [{ "type": "boolean" }, { "enum": [true, "all"] }, { "enum": [true, "any"] }]
+      },
+      "Off": {
+        "description": "So not leaves false of boolean.",
+        "type": "boolean",
+        "not": { "const": true }
+      },
       "NonZero": {
         "description": "integer admits 0 by its kind: TypeScript has no type for the numbers but 0.",
         "type": "integer",

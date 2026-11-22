@@ -353,8 +353,8 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	// The schema's own keywords drop the literals (from const, enum, members) they reject,
 	// and `not: { enum }` those it lists.
 	const t = inter(out);
-	const members = t.kind === "union" ? t.items : [t];
 	const out$ = excluded(v) ?? [];
+	const members = booleansListed(t.kind === "union" ? t.items : [t], out$);
 	const listed = (m: Ty) =>
 		out$.some(
 			(x) =>
@@ -508,12 +508,14 @@ function arrayOf(cx: Ctx, name: string, at: string): Ty | undefined {
 }
 
 /**
- * Whether a schema says it admits arrays only: `type` naming `array` alone, array keywords
- * without `type`, `const` / `enum` arrays, a `$ref` to such a schema, an `allOf` member
- * that is one, or `oneOf` / `anyOf` members that all are.
+ * Whether a schema says it admits arrays only, by any of: `type` naming `array` alone,
+ * `const` / `enum` arrays, array keywords without `type`, a `not` that leaves arrays or
+ * nothing, a `$ref` to such a schema, an `allOf` member that is one, or `oneOf` / `anyOf`
+ * members that all are; `false` admits nothing, so arrays only.
  */
 function arraysOnly(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
-	if (!(v instanceof JsonObject)) return false;
+	// false admits no value, so none but arrays.
+	if (!(v instanceof JsonObject)) return v === false;
 	const r = v.str("$ref");
 	const target = r === undefined ? undefined : cx.tryLocate(r);
 	const viaRef =
@@ -524,16 +526,21 @@ function arraysOnly(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
 		);
 	// In 3.0 the keywords next to $ref are ignored.
 	if (viaRef || (r !== undefined && !cx.refSiblings)) return viaRef;
+	// A value meets every keyword, so one that admits arrays only is enough.
 	const type = v.get("type");
-	if (type !== undefined)
-		return (
-			type === "array" ||
-			(Array.isArray(type) && type.every((t) => t === "array"))
-		);
+	if (
+		type === "array" ||
+		(Array.isArray(type) && type.every((t) => t === "array"))
+	)
+		return true;
 	const c = v.get("const");
 	const values = c === undefined ? v.get("enum") : [c];
-	if (Array.isArray(values)) return values.every((x) => Array.isArray(x));
-	if (hasArrayKeywords(v)) return true;
+	if (Array.isArray(values) && values.every((x) => Array.isArray(x)))
+		return true;
+	if (type === undefined && hasArrayKeywords(v)) return true;
+	const n = v.get("not");
+	const left = n === undefined ? undefined : negation(n);
+	if (left === NEVER || left?.kind === "array") return true;
 	const allOf = v.get("allOf");
 	if (Array.isArray(allOf) && allOf.some((m) => arraysOnly(cx, m, seen)))
 		return true;
@@ -563,9 +570,8 @@ const KIND: Record<string, Ty> = {
  */
 function passing(cx: Ctx, v: JsonObject, members: Value[], tys: Ty[]): Ty[] {
 	return tys.map((ty, i) => {
-		const m = members[i];
-		if (!(m instanceof JsonObject) || !typeless(m)) return ty;
-		return widen(cx, v, hasObjectKeywords(m) ? "object" : "array", ty);
+		const kind = typelessKind(members[i] as Value);
+		return kind === undefined ? ty : widen(cx, v, kind, ty);
 	});
 }
 
@@ -909,8 +915,8 @@ function sameValue(a: Value, b: Value): boolean {
  * it can be (their `type`s; any kind where none has one).
  */
 function anyKind(cx: Ctx, v: JsonObject, m: Value, ty: Ty): Ty {
-	if (!(m instanceof JsonObject) || !typeless(m)) return ty;
-	return orOther(cx, v, hasObjectKeywords(m) ? "object" : "array", ty);
+	const kind = typelessKind(m);
+	return kind === undefined ? ty : orOther(cx, v, kind, ty);
 }
 
 /**
@@ -1267,14 +1273,29 @@ function keyNames(names: Value | undefined): string[] | undefined {
 	return strings.length > 0 ? strings : undefined;
 }
 
-/** Whether a schema says nothing but keywords of one kind, without `type`. */
-function typeless(m: JsonObject): boolean {
-	return (
-		["type", "$ref", "const", "enum", "allOf", "oneOf", "anyOf"].every(
-			(k) => m.get(k) === undefined,
-		) &&
-		(hasObjectKeywords(m) || hasArrayKeywords(m))
-	);
+/**
+ * The kind a schema without `type` constrains where it says nothing but keywords of that
+ * kind (`dependentRequired`, `dependentSchemas` and `propertyNames` for objects, `contains`
+ * for arrays, as well as those that make a value one); undefined for any other.
+ */
+function typelessKind(m: Value): "object" | "array" | undefined {
+	if (
+		!(m instanceof JsonObject) ||
+		["type", "$ref", "const", "enum", "allOf", "oneOf", "anyOf"].some(
+			(k) => m.get(k) !== undefined,
+		)
+	)
+		return undefined;
+	if (
+		hasObjectKeywords(m) ||
+		["dependentRequired", "dependentSchemas", "propertyNames"].some(
+			(k) => m.get(k) !== undefined,
+		)
+	)
+		return "object";
+	return hasArrayKeywords(m) || m.get("contains") !== undefined
+		? "array"
+		: undefined;
 }
 
 /** Members, converted knowing the keys the group leaves out of this view (see `leftOutTarget`). */
@@ -1351,8 +1372,10 @@ function forbid(t: Ty, keys: string[]): Ty {
 
 /**
  * oneOf admits a value only one member admits, so a literal or `null` two members
- * admit is in neither. TypeScript can leave it out only where no member admits it by
- * its kind (`string` for `"a"`); other members, refs among them, are not counted.
+ * admit is in neither. It is left out of the members that list it; one that admits it
+ * by its kind (`string` for `"a"`) keeps it in their union, as TypeScript cannot leave
+ * it out of that; `boolean` is `true | false`, which it can. Other members, refs among
+ * them, are not counted.
  */
 function shared(tys: Ty[]): Ty[] {
 	const listed = (t: Ty): Ty[] => (t.kind === "union" ? t.items : [t]);
@@ -1362,16 +1385,26 @@ function shared(tys: Ty[]): Ty[] {
 	const values = tys
 		.flatMap(listed)
 		.filter((m) => m.kind === "lit" || m.kind === "null");
+	const members = tys.map((t) => booleansListed(listed(t), values));
 	const out = new Set<Ty>();
 	for (const value of values) {
-		if (tys.some((t) => listed(t).some((m) => byKind(m, value)))) continue;
-		if (tys.filter((t) => listed(t).some((m) => same(m, value))).length > 1)
+		if (members.filter((ms) => ms.some((m) => same(m, value))).length > 1)
 			out.add(value);
 	}
 	if (out.size === 0) return tys;
 	const drop = [...out];
-	return tys.map((t) =>
-		union(listed(t).filter((m) => !drop.some((d) => same(m, d)))),
+	return members.map((ms) =>
+		union(ms.filter((m) => !drop.some((d) => same(m, d)))),
+	);
+}
+
+/** `members`, `boolean` among them as `true` and `false` where `values` has one of them: TypeScript can leave either out. */
+function booleansListed(members: Ty[], values: Ty[]): Ty[] {
+	const isBoolean = (t: Ty) =>
+		t.kind === "lit" && (t.text === "true" || t.text === "false");
+	if (!values.some(isBoolean)) return members;
+	return members.flatMap((m) =>
+		m.kind === "boolean" ? [literal(true), literal(false)] : [m],
 	);
 }
 
@@ -1388,7 +1421,6 @@ function mayAdmit(m: Ty, x: Ty): boolean {
 
 /** Whether a member admits a literal by its kind, not by listing it. */
 function byKind(m: Ty, value: Ty): boolean {
-	if (m.kind === "unknown") return true;
 	if (value.kind !== "lit") return false;
 	const text = value.text;
 	if (text.startsWith('"')) return m.kind === "string";
@@ -2025,7 +2057,11 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 /** A count keyword (`minItems`, `maxItems`): a non-negative integer, or undefined. */
 function count(v: JsonObject, key: string): number | undefined {
 	const n = v.get(key);
-	const value = n instanceof JsonNumber ? Number(n.text) : Number.NaN;
+	// Whole by its exact value (`1e-400` is not), and one a JavaScript number holds.
+	const value =
+		n instanceof JsonNumber && isWhole(decimal(n.text))
+			? Number(n.text)
+			: Number.NaN;
 	return Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
@@ -2118,8 +2154,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (closed !== undefined && required.some((n) => !closed.has(n)))
 		return NEVER;
 	// maxProperties 0 admits no keys: the empty object, or nothing if one is required.
-	const max = v.get("maxProperties");
-	if (max instanceof JsonNumber && Number(max.text) === 0)
+	if (count(v, "maxProperties") === 0)
 		return required.some((n) => !left.has(n))
 			? NEVER
 			: { kind: "map", props: [], index: NEVER };

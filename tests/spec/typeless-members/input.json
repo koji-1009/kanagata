@@ -20,6 +20,22 @@
         "items": { "type": "string" },
         "allOf": [{ "minItems": 1 }]
       },
+      "TaggedOrNull": {
+        "description": "So does contains.",
+        "type": ["array", "null"],
+        "items": { "type": "string" },
+        "allOf": [{ "contains": {} }]
+      },
+      "PairOrNull": {
+        "description": "dependentRequired, dependentSchemas and propertyNames constrain only the objects.",
+        "type": ["object", "null"],
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "allOf": [
+          { "dependentRequired": { "a": ["b"] } },
+          { "dependentSchemas": { "b": { "required": ["a"] } } },
+          { "propertyNames": { "enum": ["a", "b"] } }
+        ]
+      },
       "Typed": {
         "description": "A member with a type of its own constrains every value.",
         "type": ["object", "null"],

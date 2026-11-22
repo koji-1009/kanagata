@@ -201,10 +201,10 @@ export class Ctx {
 
 	constructor(
 		root: Value,
-		schemas: ReadonlySet<string> = new Set(),
-		refSiblings = false,
-		location?: Location,
-		looseNullable = false,
+		schemas: ReadonlySet<string>,
+		refSiblings: boolean,
+		location: Location | undefined,
+		looseNullable: boolean,
 	) {
 		this.root = root;
 		this.schemas = schemas;
