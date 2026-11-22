@@ -41,6 +41,31 @@
         "type": ["object", "string"],
         "oneOf": [{ "required": ["a"], "maxLength": 0 }, { "required": ["b"], "pattern": "^b$" }]
       },
+      "NestedOrNull": {
+        "description": "A member whose members too are without type constrains only the objects.",
+        "type": ["object", "null"],
+        "allOf": [{ "required": ["a"], "allOf": [{ "minProperties": 1 }] }]
+      },
+      "NestedOrEmpty": {
+        "description": "The strings that pass are those its members' string keywords admit too.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["a"], "allOf": [{ "maxLength": 0 }] }]
+      },
+      "EitherOrEmpty": {
+        "description": "Those one of its anyOf members admits.",
+        "type": ["object", "string"],
+        "allOf": [{ "anyOf": [{ "required": ["a"], "maxLength": 0 }, { "required": ["b"], "pattern": "^b$" }] }]
+      },
+      "OneOrEmpty": {
+        "description": "Those one of its oneOf members admits; null passes both, so neither.",
+        "type": ["object", "string", "null"],
+        "allOf": [{ "oneOf": [{ "required": ["a"], "maxLength": 0 }, { "required": ["b"], "pattern": "^b$" }] }]
+      },
+      "NestedTyped": {
+        "description": "A type in a member's member constrains every value.",
+        "type": ["object", "null"],
+        "allOf": [{ "required": ["a"], "allOf": [{ "type": "object" }] }]
+      },
       "PairOrNull": {
         "description": "dependentRequired, dependentSchemas and propertyNames constrain only the objects.",
         "type": ["object", "null"],

@@ -12,6 +12,11 @@ export interface schemas {
   TaggedOrPrefixed: TaggedOrPrefixed;
   TaggedOrSmall: TaggedOrSmall;
   KeyedOrEmpty: KeyedOrEmpty;
+  NestedOrNull: NestedOrNull;
+  NestedOrEmpty: NestedOrEmpty;
+  EitherOrEmpty: EitherOrEmpty;
+  OneOrEmpty: OneOrEmpty;
+  NestedTyped: NestedTyped;
   PairOrNull: PairOrNull;
   Typed: Typed;
   OnlyObject: OnlyObject;
@@ -52,6 +57,35 @@ export type KeyedOrEmpty = {
 } | "" | {
   b: {} | null;
 } | "b";
+
+/** A member whose members too are without type constrains only the objects. */
+export type NestedOrNull = {
+  a: {} | null;
+} | null;
+
+/** The strings that pass are those its members' string keywords admit too. */
+export type NestedOrEmpty = {
+  a: {} | null;
+} | "";
+
+/** Those one of its anyOf members admits. */
+export type EitherOrEmpty = {
+  a: {} | null;
+} | {
+  b: {} | null;
+} | "" | "b";
+
+/** Those one of its oneOf members admits; null passes both, so neither. */
+export type OneOrEmpty = {
+  a: {} | null;
+} | {
+  b: {} | null;
+} | "" | "b";
+
+/** A type in a member's member constrains every value. */
+export type NestedTyped = {
+  a: {} | null;
+};
 
 /** dependentRequired, dependentSchemas and propertyNames constrain only the objects. */
 export type PairOrNull = ({
