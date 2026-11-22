@@ -1,0 +1,55 @@
+{
+  "openapi": "3.1.0",
+  "components": {
+    "schemas": {
+      "AnyText": {
+        "description": "A pattern every string matches is string.",
+        "type": "string",
+        "pattern": "[\\s\\S]*"
+      },
+      "AnyTextOrA": {
+        "type": "string",
+        "pattern": "^a$|^[^]*$"
+      },
+      "Keys": {
+        "description": "Every key matches the pattern: an index signature by any string.",
+        "type": "object",
+        "patternProperties": { "^[\\s\\S]*$": { "type": "string" } }
+      },
+      "KeysClosed": {
+        "description": "additionalProperties applies to no key.",
+        "type": "object",
+        "patternProperties": { "": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "KeysOthers": {
+        "type": "object",
+        "patternProperties": { "": { "type": "string" } },
+        "additionalProperties": { "type": "integer" }
+      },
+      "KeysAndTemplate": {
+        "description": "The index signature by any string admits the other's type, as TypeScript requires.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "number" }, "^[\\s\\S]*$": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "KeysAndProperty": {
+        "type": "object",
+        "properties": { "id": { "type": "string" } },
+        "required": ["k"],
+        "patternProperties": { "": { "type": "string" } }
+      },
+      "Names": {
+        "description": "propertyNames that admits every key keys the object by any string.",
+        "type": "object",
+        "propertyNames": { "pattern": "^[\\s\\S]*$" },
+        "additionalProperties": { "type": "string" }
+      },
+      "NamesAndKeys": {
+        "type": "object",
+        "propertyNames": { "pattern": "" },
+        "patternProperties": { "": { "type": "number" } }
+      }
+    }
+  }
+}

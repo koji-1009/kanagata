@@ -4,12 +4,14 @@ import { test } from "node:test";
 import { patternType } from "../../src/template.ts";
 import type { Ty } from "../../src/ty.ts";
 
-/** The type a pattern is, as printed: string literals and templates joined by ` | `. */
+/** The type a pattern is, as printed: `string`, string literals and templates joined by ` | `. */
 function printed(pattern: string): string | undefined {
 	const t = patternType(pattern);
 	if (t === undefined) return undefined;
 	const members: Ty[] = t.kind === "union" ? t.items : [t];
-	return members.map((m) => (m as { text: string }).text).join(" | ");
+	return members
+		.map((m) => (m.kind === "string" ? "string" : (m as { text: string }).text))
+		.join(" | ");
 }
 
 const DIGITS = '"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"';
@@ -19,7 +21,7 @@ test("fixed text, anchored or not", () => {
 	assert.equal(printed("^abc"), "`abc${string}`");
 	assert.equal(printed("abc$"), "`${string}abc`");
 	assert.equal(printed("abc"), "`${string}abc${string}`");
-	assert.equal(printed(""), "`${string}`");
+	assert.equal(printed(""), "string", "any text is string");
 	assert.equal(printed("^$"), '""');
 });
 
@@ -52,6 +54,13 @@ test("quantifiers: finite ones are written out, any text is ${string}", () => {
 		"any text twice is once",
 	);
 	assert.equal(printed("^[^]*z$"), "`${string}z`");
+	assert.equal(printed("^[\\s\\S]*$"), "string", "any text alone is string");
+	assert.equal(printed("[\\s\\S]*"), "string");
+	assert.equal(
+		printed("^a$|^[^]*$"),
+		"string",
+		"string admits the other alternatives",
+	);
 	assert.equal(printed("^[\\s\\S]+$"), undefined, "at least one character");
 	assert.equal(printed("^[\\s\\S]?$"), undefined);
 	assert.equal(printed("^[\\s\\S]{2}$"), undefined);
@@ -83,7 +92,7 @@ test("classes", () => {
 	assert.equal(printed("^[\\-\\]\\b]$"), '`${"-" | "]" | "\\b"}`');
 	assert.equal(printed("^[\\d_]$"), `\`\${"_" | ${DIGITS}}\``);
 	assert.equal(printed("^[\\D]$"), undefined, "a negated class escape alone");
-	assert.equal(printed("^[\\w\\W]*$"), "`${string}`");
+	assert.equal(printed("^[\\w\\W]*$"), "string");
 	assert.equal(printed("^[^a]$"), undefined, "a negated class");
 	assert.equal(printed("^[^\\d]$"), undefined);
 	assert.equal(printed("^[^/]*$"), undefined, "any number of a negated class");

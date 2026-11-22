@@ -5,7 +5,7 @@
 // text, finite sets of characters, any text), the pattern is that type; anything else
 // (`.`, `+`, a negated class, lookarounds, …) is no type.
 
-import { lit, type Ty, union } from "./ty.ts";
+import { lit, STRING, type Ty, union } from "./ty.ts";
 
 /**
  * The most strings TypeScript builds into one union from a template: it rejects 100,000
@@ -305,7 +305,10 @@ class Parser {
 /** Characters a template literal would read as more than themselves. */
 const SPECIAL = /[`\\$\p{Cc}\p{Zl}\p{Zp}]+/gu;
 
-/** A template written out: fixed text as it is (or as a string where it would be read), sets as unions of strings. */
+/**
+ * A template written out: fixed text as it is (or as a string where it would be read),
+ * sets as unions of strings; any text alone is `string`.
+ */
 function render(seq: Seq): Ty {
 	// Adjacent single characters are one piece of text, and adjacent any text is one.
 	const parts: (string | Segment)[] = [];
@@ -320,6 +323,7 @@ function render(seq: Seq): Ty {
 	}
 	if (parts.every((p) => typeof p === "string"))
 		return lit(JSON.stringify(parts.join("")));
+	if (parts.length === 1 && parts[0] === ANY) return STRING;
 	const strings = (values: string[]) =>
 		`\${${values.map((c) => JSON.stringify(c)).join(" | ")}}`;
 	const text = parts

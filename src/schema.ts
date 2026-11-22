@@ -3094,14 +3094,18 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (left.has(name) || props.some((p) => p.key === name)) return;
 		if (ty.kind !== "never") props.push({ key: name, ty, optional: true });
 	};
+	// A pattern every key matches leaves additionalProperties no key: its type is every other key's.
+	const everyKey: Ty[] = [];
 	for (const [pattern, ty] of patterns) {
 		const keys = patternType(pattern);
 		if (keys === undefined) unwritten.push(ty);
+		else if (keys.kind === "string") everyKey.push(ty);
 		else
 			for (const key of keys.kind === "union" ? keys.items : [keys])
 				if (key.kind === "lit") named(JSON.parse(key.text) as string, ty);
 				else keyed.push({ pattern, key, ty });
 	}
+	if (everyKey.length > 0) additional = inter(everyKey);
 	// An index signature admits each property it applies to, `undefined` too for an optional one.
 	const admitting = (ty: Ty, applies: (key: string) => boolean): Ty => {
 		const own = props.filter((p) => applies(p.key));
