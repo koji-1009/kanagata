@@ -7,6 +7,11 @@
       "OneTag": {
         "description": "In 3.0 too, a reference to an array stays, and the items it reads are its own.",
         "allOf": [{ "$ref": "#/components/schemas/Tags" }, { "maxItems": 1 }]
+      },
+      "TagsOrNull": { "type": "array", "nullable": true, "items": { "type": "string" } },
+      "OneOrNull": {
+        "description": "And so are those of a nullable array, which meets the other array without null.",
+        "allOf": [{ "$ref": "#/components/schemas/TagsOrNull" }, { "maxItems": 1 }]
       }
     }
   }

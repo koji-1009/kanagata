@@ -1,0 +1,54 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "OneOrNull": {
+        "description": "A $ref to a schema that admits arrays among other kinds keeps its arrays beside it where an array meets it; the other kinds meet no array.",
+        "allOf": [{ "$ref": "#/components/schemas/TagsOrNull" }, { "maxItems": 1 }]
+      },
+      "OneNotNull": {
+        "description": "Its keywords are read together: not leaves arrays only.",
+        "allOf": [{ "$ref": "#/components/schemas/NotNullTags" }, { "maxItems": 1 }]
+      },
+      "OneOrEmpty": {
+        "description": "Its arrays are those of its members, through a $ref too.",
+        "allOf": [{ "$ref": "#/components/schemas/TagsOrEmpty" }, { "maxItems": 1 }]
+      },
+      "OneMixed": {
+        "description": "And its array values.",
+        "allOf": [{ "$ref": "#/components/schemas/Mixed" }, { "maxItems": 1 }]
+      },
+      "OneCounted": {
+        "description": "It is converted where the array meets it, so its warning comes first.",
+        "allOf": [{ "$ref": "#/components/schemas/Counted" }, { "maxItems": 1 }]
+      },
+      "TagsBesideNullable": {
+        "description": "An array among other kinds meets a $ref to an array too.",
+        "allOf": [{ "$ref": "#/components/schemas/Tags" }, { "type": ["array", "null"], "maxItems": 1 }]
+      },
+      "OneOrNullStill": {
+        "description": "Where nothing it meets admits arrays only, its type is put beside it whole: null stays.",
+        "allOf": [{ "$ref": "#/components/schemas/TagsOrNull" }, { "type": ["array", "null"], "maxItems": 1 }]
+      },
+      "BothOrNull": {
+        "description": "So for two such references: arrays of no item, or null.",
+        "allOf": [{ "$ref": "#/components/schemas/TagsOrNull" }, { "$ref": "#/components/schemas/CountsOrNull" }]
+      },
+      "Later": { "type": "array", "items": { "type": "string" }, "contains": { "const": "a" } },
+      "Tags": { "type": "array", "items": { "type": "string" } },
+      "TagsOrNull": { "type": ["array", "null"], "items": { "type": "string" } },
+      "CountsOrNull": { "type": ["array", "null"], "items": { "type": "integer" } },
+      "NotNullTags": { "type": ["array", "null"], "items": { "type": "string" }, "not": { "type": "null" } },
+      "TagsOrEmpty": { "anyOf": [{ "$ref": "#/components/schemas/Tags" }, { "type": "string", "enum": [""] }] },
+      "Mixed": {
+        "enum": [["a"], "none"],
+        "if": { "properties": { "k": { "const": "a" } } },
+        "then": { "required": ["k"] }
+      },
+      "Counted": {
+        "anyOf": [{ "type": "array", "items": { "type": "string" }, "contains": { "const": "a" } }, { "type": "string" }]
+      }
+    }
+  }
+}

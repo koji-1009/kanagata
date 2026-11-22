@@ -85,5 +85,5 @@ export type AtOrigin = Origin & [0, 0];
 
 export type Corners = [0, 0] | [1, 1];
 
-/** Several arrays are no one array type: each is a tuple of its own, which reads its items. */
-export type AtCorner = Corners & [unknown, ...unknown[]];
+/** Several arrays are no one array type: they are put beside it as they are. */
+export type AtCorner = Corners & ([0, 0] | [1, 1]);

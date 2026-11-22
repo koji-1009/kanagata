@@ -467,88 +467,104 @@ function closedMember(cx: Ctx, s: Value): Set<string> | undefined {
 		: undefined;
 }
 
+/** The array types a component admits, and the types of the other values it admits. */
+type Arrays = { ty: Ty; rest: Ty[] };
+
 /**
- * The array types of the components among `out` that are arrays, where another array
- * meets them: the reference stays, and its type beside it lets the items read as it
- * says (`Tags & [unknown?]` is `Tags & [string?]`). TypeScript reads an item of an
- * intersection of arrays as one member's alone.
+ * The types of the components among `out` that admit arrays, where an array meets
+ * them: the reference stays, and its type beside it lets the items read as it says
+ * (`Tags & [unknown?]` is `Tags & [string?]`). TypeScript reads an item of an
+ * intersection of arrays as one member's alone. Where something there admits arrays
+ * only, a component's other values (`null` of `string[] | null`) meet none of it, and
+ * its arrays alone are put beside it.
  */
 function arrayTargets(cx: Ctx, out: Ty[], at: string): Ty[] {
 	const isArray = (t: Ty) => t.kind === "array" || t.kind === "tuple";
-	const arrays = out.filter(isArray).length;
+	const arrays = out.filter(
+		(t) => isArray(t) || (t.kind === "union" && t.items.some(isArray)),
+	);
 	const refs = out.filter(
 		(t): t is Extract<Ty, { kind: "ref" }> =>
 			t.kind === "ref" && cx.schemas.has(t.schema),
 	);
-	if (refs.length + arrays < 2) return [];
-	const targets: Ty[] = [];
+	if (refs.length + arrays.length < 2) return [];
+	const targets: Arrays[] = [];
 	for (const t of refs) {
 		const target = arrayOf(cx, t.schema, at);
 		if (target !== undefined) targets.push(target);
 	}
-	return targets.length > 0 && targets.length + arrays > 1 ? targets : [];
+	if (targets.length + arrays.length < 2) return [];
+	const only = arrays.some(isArray) || targets.some((t) => t.rest.length === 0);
+	return targets.map((t) => (only ? t.ty : union([t.ty, ...t.rest])));
 }
 
-/** The array type of a component that admits arrays only, through the components it is a `$ref` to. */
-function arrayOf(cx: Ctx, name: string, at: string): Ty | undefined {
+/** The arrays of a component that names arrays, through the components it is a `$ref` to. */
+function arrayOf(cx: Ctx, name: string, at: string): Arrays | undefined {
 	const { value, base, uri, where } = cx.withBase(cx.documentBase, () =>
 		cx.locate(SCHEMA_PREFIX + escapeToken(name), at),
 	);
-	// Only an array schema has an array type; others are not converted for it.
-	if (!cx.withBase(base, () => arraysOnly(cx, value)) || !cx.enter(uri))
+	// Only a schema that names arrays has array types; others are not converted for them.
+	if (!cx.withBase(base, () => namesArrays(cx, value)) || !cx.enter(uri))
 		return undefined;
 	try {
-		const target = cx.withBase(base, () => schema(cx, value, where));
-		if (target.kind === "array" || target.kind === "tuple") return target;
-		return target.kind === "ref" && cx.schemas.has(target.schema)
-			? arrayOf(cx, target.schema, at)
-			: undefined;
+		return arraysIn(
+			cx,
+			cx.withBase(base, () => schema(cx, value, where)),
+			at,
+		);
 	} finally {
 		cx.leave();
 	}
 }
 
+/** The arrays of a type: an array or tuple, those of a component it refers to, or those among a union's members. */
+function arraysIn(cx: Ctx, t: Ty, at: string): Arrays | undefined {
+	if (t.kind === "array" || t.kind === "tuple") return { ty: t, rest: [] };
+	if (t.kind === "ref" && cx.schemas.has(t.schema))
+		return arrayOf(cx, t.schema, at);
+	if (t.kind !== "union") return undefined;
+	const arrays: Ty[] = [];
+	const rest: Ty[] = [];
+	for (const m of t.items) {
+		const found = arraysIn(cx, m, at);
+		if (found === undefined) rest.push(m);
+		else {
+			arrays.push(found.ty);
+			rest.push(...found.rest);
+		}
+	}
+	return arrays.length === 0 ? undefined : { ty: union(arrays), rest };
+}
+
 /**
- * Whether a schema says it admits arrays only, by any of: `type` naming `array` alone,
- * `const` / `enum` arrays, array keywords without `type`, a `not` that leaves arrays or
- * nothing, a `$ref` to such a schema, an `allOf` member that is one, or `oneOf` / `anyOf`
- * members that all are; `false` admits nothing, so arrays only.
+ * Whether a schema names arrays, so that its type may have array types: by a `type` that
+ * names `array`, `const` / `enum` with an array, array keywords without `type`, a `$ref`
+ * to such a schema, or an `allOf`, `oneOf` or `anyOf` member that is one.
  */
-function arraysOnly(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
-	// false admits no value, so none but arrays.
-	if (!(v instanceof JsonObject)) return v === false;
+function namesArrays(cx: Ctx, v: Value, seen = new Set<string>()): boolean {
+	if (!(v instanceof JsonObject)) return false;
 	const r = v.str("$ref");
 	const target = r === undefined ? undefined : cx.tryLocate(r);
 	const viaRef =
 		target !== undefined &&
 		!seen.has(target.uri) &&
 		cx.withBase(target.base, () =>
-			arraysOnly(cx, target.value, new Set([...seen, target.uri])),
+			namesArrays(cx, target.value, new Set([...seen, target.uri])),
 		);
 	// In 3.0 the keywords next to $ref are ignored.
 	if (viaRef || (r !== undefined && !cx.refSiblings)) return viaRef;
-	// A value meets every keyword, so one that admits arrays only is enough.
 	const type = v.get("type");
-	if (
-		type === "array" ||
-		(Array.isArray(type) && type.every((t) => t === "array"))
-	)
+	if (type === "array" || (Array.isArray(type) && type.includes("array")))
 		return true;
 	const c = v.get("const");
 	const values = c === undefined ? v.get("enum") : [c];
-	if (Array.isArray(values) && values.every((x) => Array.isArray(x)))
+	if (Array.isArray(values) && values.some((x) => Array.isArray(x)))
 		return true;
 	if (type === undefined && hasArrayKeywords(v)) return true;
-	const n = v.get("not");
-	const left = n === undefined ? undefined : negation(n);
-	if (left === NEVER || left?.kind === "array") return true;
-	const allOf = v.get("allOf");
-	if (Array.isArray(allOf) && allOf.some((m) => arraysOnly(cx, m, seen)))
-		return true;
-	return ["oneOf", "anyOf"].some((k) => {
+	return ["allOf", "oneOf", "anyOf"].some((k) => {
 		const members = v.get(k);
 		return (
-			Array.isArray(members) && members.every((m) => arraysOnly(cx, m, seen))
+			Array.isArray(members) && members.some((m) => namesArrays(cx, m, seen))
 		);
 	});
 }

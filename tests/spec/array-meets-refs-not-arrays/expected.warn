@@ -1,5 +1,3 @@
 #/components/schemas/Retyped/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/Counts/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
-#/components/schemas/Nullable/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
-#/components/schemas/Mixed/if: if / then / else cannot be expressed in TypeScript; ignored
-#/components/schemas/Either/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Named/propertyNames: propertyNames cannot be expressed in TypeScript; ignored

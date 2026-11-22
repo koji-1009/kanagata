@@ -7,9 +7,16 @@ export interface operations {}
 export interface schemas {
   Tags: Tags;
   OneTag: OneTag;
+  TagsOrNull: TagsOrNull;
+  OneOrNull: OneOrNull;
 }
 
 export type Tags = string[];
 
 /** In 3.0 too, a reference to an array stays, and the items it reads are its own. */
 export type OneTag = Tags & [string?];
+
+export type TagsOrNull = string[] | null;
+
+/** And so are those of a nullable array, which meets the other array without null. */
+export type OneOrNull = TagsOrNull & [string?];

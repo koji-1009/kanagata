@@ -60,7 +60,7 @@
       },
       "Corners": { "enum": [[0, 0], [1, 1]] },
       "AtCorner": {
-        "description": "Several arrays are no one array type: each is a tuple of its own, which reads its items.",
+        "description": "Several arrays are no one array type: they are put beside it as they are.",
         "allOf": [{ "$ref": "#/components/schemas/Corners" }, { "minItems": 1 }]
       }
     }
