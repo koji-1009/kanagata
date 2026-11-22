@@ -33,7 +33,7 @@ export type OneNotNull = NotNullTags & [string?];
 export type OneOrEmpty = TagsOrEmpty & ([string?] | "");
 
 /** And its array values. */
-export type OneMixed = Mixed & ["a"];
+export type OneMixed = Mixed & (["a"] | "none");
 
 /** It is converted where the array meets it, so its warning comes first. */
 export type OneCounted = Counted & ([string] | string);

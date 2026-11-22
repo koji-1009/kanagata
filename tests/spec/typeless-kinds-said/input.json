@@ -29,6 +29,26 @@
         "minItems": 1,
         "anyOf": [{ "type": "object" }, { "maxItems": 3 }]
       },
+      "ItemsOfEnum": {
+        "description": "const and enum say the kinds of the values they list, as type does: minItems constrains the arrays, and the string passes it.",
+        "enum": [["a"], "none"],
+        "minItems": 1
+      },
+      "ItemsOfEnumKinds": {
+        "description": "Values of every kind say theirs: only the empty array fails minItems.",
+        "enum": [[1], [], { "a": 1 }, 2, true, null],
+        "minItems": 1
+      },
+      "ItemsOfEnumMember": {
+        "description": "So do those of an allOf member.",
+        "minItems": 1,
+        "allOf": [{ "enum": [["a"], [], "none"] }]
+      },
+      "ItemsOfConstOrArray": {
+        "description": "And of every anyOf member together, const among them.",
+        "minItems": 1,
+        "anyOf": [{ "const": "x" }, { "type": "array" }]
+      },
       "ItemsOfObjectOrNull": {
         "description": "So do the kinds of nested members, and the other kinds they name pass dependentRequired.",
         "dependentRequired": { "a": ["b"] },

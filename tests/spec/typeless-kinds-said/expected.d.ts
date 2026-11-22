@@ -11,6 +11,10 @@ export interface schemas {
   ItemsOfOneOf: ItemsOfOneOf;
   ItemsOfAnyOfRefs: ItemsOfAnyOfRefs;
   ItemsOfSomeTyped: ItemsOfSomeTyped;
+  ItemsOfEnum: ItemsOfEnum;
+  ItemsOfEnumKinds: ItemsOfEnumKinds;
+  ItemsOfEnumMember: ItemsOfEnumMember;
+  ItemsOfConstOrArray: ItemsOfConstOrArray;
   ItemsOfObjectOrNull: ItemsOfObjectOrNull;
   ClosedTypedMember: ClosedTypedMember;
   RequiredOrAnyItems: RequiredOrAnyItems;
@@ -41,6 +45,20 @@ export type ItemsOfAnyOfRefs = [unknown, ...unknown[]] & Anything | [unknown, ..
 
 /** A member without type says nothing, so neither does its group: the keywords say the kind. */
 export type ItemsOfSomeTyped = [unknown, unknown?, unknown?];
+
+/** const and enum say the kinds of the values they list, as type does: minItems constrains the arrays, and the string passes it. */
+export type ItemsOfEnum = ["a"] | "none";
+
+/** Values of every kind say theirs: only the empty array fails minItems. */
+export type ItemsOfEnumKinds = [1] | {
+  a: 1;
+} | 2 | true | null;
+
+/** So do those of an allOf member. */
+export type ItemsOfEnumMember = ["a"] | "none";
+
+/** And of every anyOf member together, const among them. */
+export type ItemsOfConstOrArray = [unknown, ...unknown[]] | "x";
 
 /** So do the kinds of nested members, and the other kinds they name pass dependentRequired. */
 export type ItemsOfObjectOrNull = {

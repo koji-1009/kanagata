@@ -65,13 +65,13 @@ export type OneMaybe = Maybe & [string?];
 
 export type NotOthers = string[];
 
-/** One keyword that admits arrays only is enough: a not that leaves arrays alone, */
+/** One keyword that names arrays is enough: a not that leaves arrays alone, */
 export type OneNotOthers = NotOthers & [string?];
 
-export type CountedEnum = ["a"];
+export type CountedEnum = ["a"] | "none";
 
-/** array keywords next to values of other kinds, */
-export type OneCountedEnum = CountedEnum & ["a"];
+/** array keywords next to values of other kinds, which pass them, */
+export type OneCountedEnum = CountedEnum & (["a"] | "none");
 
 export type TypedPair = ["a", "b"];
 

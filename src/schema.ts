@@ -1666,10 +1666,10 @@ function keywordKinds(v: JsonObject): string[] {
 }
 
 /**
- * The kinds the `type`s of a schema's members allow, at any depth: those of each `allOf`
- * member, of its `$ref` target, and of every `oneOf` / `anyOf` member together (none
- * where one says none); with `around`, those of the schemas it is a member of too.
- * undefined where none of them says any.
+ * The kinds the schema's `const` / `enum` and the `type`s and `const` / `enum` of its
+ * members allow, at any depth: those of each `allOf` member, of its `$ref` target, and of
+ * every `oneOf` / `anyOf` member together (none where one says none); with `around`,
+ * those of the schemas it is a member of too. undefined where none of them says any.
  */
 function saidKinds(
 	cx: Ctx,
@@ -1684,7 +1684,8 @@ function saidKinds(
 						(n) => n.includes(k) || (k === "integer" && n.includes("number")),
 					),
 				);
-	// What a schema's `type`s say (`self`: its own and its `$ref` target's too) and its members'.
+	// What a schema's `const` / `enum` and `type`s say (`self`: its own `type` and its `$ref`
+	// target's too), and its members'.
 	const says = (
 		s: Value,
 		self: boolean,
@@ -1708,6 +1709,7 @@ function saidKinds(
 			if (!cx.refSiblings) return meet(named);
 		}
 		if (self) add(typeKinds(cx, s));
+		add(valueKinds(s));
 		const allOf = s.get("allOf");
 		for (const m of Array.isArray(allOf) ? allOf : []) add(says(m, true, seen));
 		for (const key of ["oneOf", "anyOf"]) {
@@ -1722,11 +1724,34 @@ function saidKinds(
 	const own = says(v, false, new Set());
 	if (own !== undefined) named.push(own);
 	if (around)
-		for (const s of cx.around) {
-			const t = typeKinds(cx, s);
-			if (t !== undefined) named.push(t);
-		}
+		for (const s of cx.around)
+			for (const t of [typeKinds(cx, s), valueKinds(s)])
+				if (t !== undefined) named.push(t);
 	return meet(named);
+}
+
+/** The kinds of the values `const` or `enum` lists, which say the kinds as `type` does; undefined without them. */
+function valueKinds(v: JsonObject): string[] | undefined {
+	const c = v.get("const");
+	const values = c === undefined ? v.get("enum") : [c];
+	if (!Array.isArray(values)) return undefined;
+	return [
+		...new Set(
+			values.map((x) =>
+				x === null
+					? "null"
+					: Array.isArray(x)
+						? "array"
+						: x instanceof JsonObject
+							? "object"
+							: x instanceof JsonNumber
+								? "number"
+								: typeof x === "string"
+									? "string"
+									: "boolean",
+			),
+		),
+	];
 }
 
 /** Members, converted knowing the keys the group leaves out of this view (see `leftOutTarget`). */
