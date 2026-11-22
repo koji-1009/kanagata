@@ -9,6 +9,21 @@
         "description": "Values no member admits by its kind (null and false, for a string) are left out without a warning.",
         "type": ["string", "null"],
         "not": { "enum": [null, false] }
+      },
+      "Partly": {
+        "description": "true is left out of boolean; \"a\", which string admits by its kind, is not, with a warning on it.",
+        "type": ["boolean", "string"],
+        "not": { "enum": [true, "a"] }
+      },
+      "PartlyNull": {
+        "description": "null is left out; \"a\" and \"b\" are not, with a warning on each.",
+        "type": ["string", "null"],
+        "not": { "enum": [null, "a", "b"] }
+      },
+      "PartlyRef": {
+        "description": "null is left out of the member that lists it, not of the reference, which may admit it.",
+        "anyOf": [{ "type": "null" }, { "$ref": "#/components/schemas/NotString" }],
+        "not": { "const": null }
       }
     }
   }

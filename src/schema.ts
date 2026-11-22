@@ -354,7 +354,8 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	// The schema's own keywords drop the literals (from const, enum, members) they reject,
 	// and `not: { enum }` those it lists.
 	const t = inter(out);
-	const out$ = excluded(v) ?? [];
+	const not = excluded(v) ?? [];
+	const out$ = not.map((x) => x.ty);
 	const members = booleansListed(t.kind === "union" ? t.items : [t], out$);
 	const listed = (m: Ty) =>
 		out$.some(
@@ -371,9 +372,17 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const keep = (m: Ty) => admits(m) && !listed(m);
 	const kept = members.every(keep) ? t : union(members.filter(keep));
 	// A value `not` lists that a member may admit other than by listing it (`string` for
-	// "a", a reference) stays.
-	if (out$.some((x) => members.some((m) => mayAdmit(m, x))))
+	// "a", a reference) stays in that member: `not` is ignored where it leaves out nothing,
+	// and for those values where it leaves out others.
+	const stay = not.filter((x) => members.some((m) => mayAdmit(m, x.ty)));
+	if (stay.length > 0 && !members.some(listed))
 		cx.warn(child(at, "not"), "not cannot be expressed in TypeScript; ignored");
+	else
+		for (const x of stay)
+			cx.warn(
+				`${child(at, "not")}/${x.at}`,
+				"not: leaving out this value cannot be expressed in TypeScript; ignored",
+			);
 	return loose ? union([kept, NULL]) : kept;
 }
 
@@ -1265,16 +1274,22 @@ function notContained(cx: Ctx, v: JsonObject, contains: Value): Ty | undefined {
 		: arrayTy(rest);
 }
 
-/** The values `not: { enum }` or `not: { const }` leave out; undefined for any other `not`. */
-function excluded(v: JsonObject): Ty[] | undefined {
+/**
+ * The values `not: { enum }` or `not: { const }` leave out, each with where it is in
+ * `not` (`enum/0`, `const`); undefined for any other `not`.
+ */
+function excluded(v: JsonObject): { ty: Ty; at: string }[] | undefined {
 	const n = v.get("not");
 	if (!(n instanceof JsonObject)) return undefined;
 	const keys = n.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
 	if (keys.length !== 1) return undefined;
 	const e = n.get("enum");
-	if (keys[0] === "enum" && Array.isArray(e)) return e.map(literal);
+	if (keys[0] === "enum" && Array.isArray(e))
+		return e.map((x, i) => ({ ty: literal(x), at: `enum/${i}` }));
 	const c = n.get("const");
-	return keys[0] === "const" && c !== undefined ? [literal(c)] : undefined;
+	return keys[0] === "const" && c !== undefined
+		? [{ ty: literal(c), at: "const" }]
+		: undefined;
 }
 
 /** The keys `propertyNames: { enum }` or `{ const }` allow; undefined for any other. */

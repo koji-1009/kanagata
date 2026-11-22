@@ -1,1 +1,5 @@
 #/components/schemas/NonEmpty/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/Partly/not/enum/1: not: leaving out this value cannot be expressed in TypeScript; ignored
+#/components/schemas/PartlyNull/not/enum/1: not: leaving out this value cannot be expressed in TypeScript; ignored
+#/components/schemas/PartlyNull/not/enum/2: not: leaving out this value cannot be expressed in TypeScript; ignored
+#/components/schemas/PartlyRef/not/const: not: leaving out this value cannot be expressed in TypeScript; ignored
