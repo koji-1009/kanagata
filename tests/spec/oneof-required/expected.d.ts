@@ -83,9 +83,7 @@ export type Mixed = {
   h: {} | null;
 };
 
-export type Alone = Record<string, unknown> | {
-  a: {} | null;
-};
+export type Alone = Record<string, unknown>;
 
 export type Either = {
   a: {} | null;

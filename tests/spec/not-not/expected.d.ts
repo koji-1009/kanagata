@@ -55,9 +55,9 @@ export type Required = {
 };
 
 /** Values of other kinds pass required. */
-export type Present = (Record<string, unknown> | string) & (string | {
+export type Present = {
   a: {} | null;
-});
+} | string;
 
 /** What each keyword of X admits. */
 export type Both = "a";

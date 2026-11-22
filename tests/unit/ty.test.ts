@@ -185,6 +185,42 @@ test("a union drops literals its primitive members already admit", () => {
 	assert.equal(union([lit("true"), BOOLEAN, lit("false")]), BOOLEAN);
 });
 
+test("a union drops the object and array types Record and unknown[] admit", () => {
+	const a = object([prop("a", STRING)]);
+	const closed: Ty = { kind: "map", props: [], index: NEVER };
+	assert.equal(union([a, closed, RECORD]), RECORD);
+	assert.deepEqual(union([tuple([STRING]), array(STRING), array(UNKNOWN)]), {
+		kind: "array",
+		elem: UNKNOWN,
+	});
+	assert.deepEqual(union([a, array(UNKNOWN)]), {
+		kind: "union",
+		items: [a, array(UNKNOWN)],
+	});
+});
+
+test("unions of one member of each kind meet kind by kind", () => {
+	const a = object([prop("a", STRING)]);
+	assert.deepEqual(
+		inter([union([a, lit('""')]), union([lit('""'), RECORD])]),
+		union([a, lit('""')]),
+	);
+	// A member of no one kind, two of one kind, or many members leave them as they are.
+	const refOrNull = union([schemaRef("A"), NULL]);
+	assert.equal(inter([refOrNull, union([STRING, NULL])]).kind, "inter");
+	const twoObjects = union([
+		inter([schemaRef("A"), a]),
+		inter([schemaRef("B"), object([prop("b", STRING)])]),
+		NULL,
+	]);
+	assert.equal(inter([twoObjects, union([RECORD, NULL])]).kind, "inter");
+	const many = union([
+		...["a", "b", "c", "d", "e", "f", "g", "h"].map((s) => lit(`"${s}"`)),
+		schemaRef("A"),
+	]);
+	assert.equal(inter([many, union([STRING, schemaRef("B")])]).kind, "inter");
+});
+
 test("union of a single member", () => {
 	assert.deepEqual(union([lit("1")]), lit("1"));
 	assert.deepEqual(union([lit("1"), lit("1")]), lit("1"));

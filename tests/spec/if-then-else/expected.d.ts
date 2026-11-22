@@ -56,11 +56,10 @@ export type ByKeyOrString = ({
 export type ByKeyOrEmpty = ({
   a?: string;
   b?: string;
-} | string) & (({
-  a: {} | null;
 } | string) & ({
+  a: {} | null;
   b: {} | null;
-} | "") | {
+} | "" | {
   a?: never;
 });
 
@@ -74,13 +73,11 @@ export type InAllOf = {
 /** if: { type } fails for the other kinds, and a property's type for its others. */
 export type ByType = ({
   n?: number | string;
-} | string | null) & ("s" | null | Record<string, unknown> & (({
-  n?: number;
-} | string | null) & ({
+} | string | null) & ("s" | null | {
   n?: 1;
-} | string | null) | {
+} | {
   n: string | boolean | null | unknown[] | Record<string, unknown>;
-}));
+});
 
 /** if without then and else asks nothing. */
 export type Nothing = Record<string, unknown>;

@@ -103,7 +103,7 @@ Two types say what would otherwise be written out item by item. The output decla
 
 ## Object types together
 
-Object types the parts of a schema give (its own keywords, members, `if` / `then` / `else`, `dependentRequired`, …) are one object type, as TypeScript reads their intersection: each property's types met, required where one requires it, and no object where a required property admits nothing. A union of object types next to one is a union of one object type each: `{ a?: string } & ({ b: string } | { c: string })` is `{ a?: string; b: string } | { a?: string; c: string }`. References (`Base`), index signatures and other kinds stay as they are.
+Object types the parts of a schema give (its own keywords, members, `if` / `then` / `else`, `dependentRequired`, …) are one object type, as TypeScript reads their intersection: each property's types met, required where one requires it, and no object where a required property admits nothing. A union of object types next to one is a union of one object type each: `{ a?: string } & ({ b: string } | { c: string })` is `{ a?: string; b: string } | { a?: string; c: string }`. Unions with one member of each kind meet kind by kind: `({ a: string } | null) & ({ a?: string; b?: string } | null)` is `{ a: string; b?: string } | null`, and `({ a: A } | "") & ("" | Record<string, unknown>)` is `{ a: A } | ""`. A union with `Record<string, unknown>` (`unknown[]`) leaves out the object (array) types beside it, which it admits. References (`Base`), index signatures and other kinds stay as they are.
 
 ## Keys
 

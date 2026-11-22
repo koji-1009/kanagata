@@ -340,14 +340,20 @@ export function union(items: Ty[]): Ty {
 	const kinds = out.flatMap((t) =>
 		t.kind === "lit" ? [] : (kindsOf(t) ?? []),
 	);
-	// `number` admits every whole number; a primitive admits its literals, `string` its templates.
+	// `number` admits every whole number; a primitive admits its literals, `string` its
+	// templates, `Record<string, unknown>` every object type and `unknown[]` every array.
 	if (kinds.length > 0)
 		out = out.filter((t) =>
 			t.kind === "integer"
 				? !kinds.includes("number")
 				: t.kind === "template"
 					? !kinds.includes("string")
-					: t.kind !== "lit" || !admits(kinds, t),
+					: t.kind === "object" || t.kind === "map"
+						? !kinds.includes("object")
+						: t.kind === "tuple" ||
+								(t.kind === "array" && t.elem.kind !== "unknown")
+							? !kinds.includes("array")
+							: t.kind !== "lit" || !admits(kinds, t),
 		);
 	if (out.length === 0) return NEVER;
 	const [only] = out;
@@ -410,6 +416,8 @@ export function inter(items: Ty[]): Ty {
 	// Narrowing can make members equal (`"a" & ("a" | 1) & string`); normalize again.
 	// Each round drops a member or shrinks a set of values, so this ends.
 	if (narrowed !== out) return inter(narrowed);
+	const byKind = meetByKind(out);
+	if (byKind !== undefined) return byKind;
 	if (out.some((t) => t.kind === "never")) return NEVER;
 	// Members of kinds no value has both of meet nowhere: `null & string[]`.
 	const kinds = out.map(kindSet).filter((k) => k !== undefined);
@@ -423,6 +431,42 @@ export function inter(items: Ty[]): Ty {
 		return NEVER;
 	if (out.length === 0) return UNKNOWN;
 	return { kind: "inter", items: out };
+}
+
+/**
+ * Unions whose members are each of one kind, no two of the same, meet kind by kind:
+ * `({ a: A } | "") & ("" | Record<string, unknown>)` is `{ a: A } | ""`. undefined where
+ * a member is no such union or type of one kind, or none is a union.
+ */
+function meetByKind(items: Ty[]): Ty | undefined {
+	if (!items.some((t) => t.kind === "union")) return undefined;
+	const rows: { kind: ValueKind; ty: Ty }[][] = [];
+	for (const t of items) {
+		const members = t.kind === "union" ? t.items : [t];
+		if (members.length > 7) return undefined;
+		const row: { kind: ValueKind; ty: Ty }[] = [];
+		for (const m of members) {
+			const k = memberKinds(m);
+			if (k?.length !== 1) return undefined;
+			const kind = k[0] as ValueKind;
+			if (row.some((r) => meets(r.kind, kind))) return undefined;
+			row.push({ kind, ty: m });
+		}
+		rows.push(row);
+	}
+	const [first, ...rest] = rows as [
+		{ kind: ValueKind; ty: Ty }[],
+		...{ kind: ValueKind; ty: Ty }[][],
+	];
+	// `prune` has left in each union only the kinds every other one has.
+	return union(
+		first.map(({ kind, ty }) =>
+			inter([
+				ty,
+				...rest.map((row) => row.find((r) => meets(r.kind, kind))?.ty as Ty),
+			]),
+		),
+	);
 }
 
 type ArrayTy = Extract<Ty, { kind: "array" | "tuple" }>;

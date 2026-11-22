@@ -49,9 +49,9 @@ export type Pages = ({
 });
 
 /** So do strings. */
-export type StringOrObject = ({
+export type StringOrObject = {
   a?: string;
-} | string) & (string | Record<string, unknown>);
+} | string;
 
 /** Array keywords constrain only the arrays. */
 export type ArrayOrNull = [string, ...string[]] | null;
@@ -128,13 +128,13 @@ export type NotUnread = {
 } | null;
 
 /** So does the member's if / then / else: if admits every string, so then holds for it. */
-export type IfInMember = ({
+export type IfInMember = {
   a: {} | null;
-} & (({
   b: {} | null;
-} | string) & ("" | Record<string, unknown>) | {
+} | {
+  a: {} | null;
   b?: never;
-}) | "") & (Record<string, unknown> | string);
+} | "";
 
 /** Every string has the keys if asks of objects only, so no else holds for it. */
 export type IfElseInMember = ({
@@ -156,9 +156,9 @@ export type Keyed = {
 };
 
 /** A $ref in the member is read as the schema it reaches. */
-export type RefInMember = (Keys & {
+export type RefInMember = Keys & {
   a: {} | null;
-} | null) & (Record<string, unknown> | null);
+} | null;
 
 /** So is a $ref member. */
 export type RefMember = (Keyed | null) & (Record<string, unknown> | null);
