@@ -224,10 +224,17 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 						? NEVER
 						: t,
 				);
+	// Every member is the same object: a property one member leaves out of this view
+	// stays out even where another member lists it as required.
+	const group = leftOutKeys(cx, v);
+	for (const k of cx.leftOutIn(v)) group.add(k);
 	const r = v.str("$ref");
 	if (r !== undefined) {
 		// The target is the same value, this schema's keywords around it.
-		const target = cx.withAround(v, () => reference(cx, r, at));
+		const target = cx.withAround(
+			v,
+			() => leftOutTarget(cx, r, at, group) ?? reference(cx, r, at),
+		);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
 		// are ignored, nullable among them unless loose.
 		if (!cx.refSiblings) return loose ? union([target, NULL]) : target;
@@ -248,10 +255,6 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (c !== undefined) out.push(literal(c));
 	const e = v.get("enum");
 	if (Array.isArray(e)) out.push(union(e.map(literal)));
-	// Every member is the same object: a property one member leaves out of this view
-	// stays out even where another member lists it as required.
-	const group = leftOutKeys(cx, v);
-	for (const k of cx.leftOutIn(v)) group.add(k);
 	const allOf = v.get("allOf");
 	if (Array.isArray(allOf)) {
 		const members = membersIn(cx, v, allOf, group, child(at, "allOf"));
@@ -1232,11 +1235,7 @@ function typeless(m: JsonObject): boolean {
 	);
 }
 
-/**
- * Members, converted knowing the keys the group leaves out of this view. A member that
- * is only a `$ref` to a schema naming one of them is written out without it: the
- * reference's own view would have it.
- */
+/** Members, converted knowing the keys the group leaves out of this view (see `leftOutTarget`). */
 function membersIn(
 	cx: Ctx,
 	parent: JsonObject,
@@ -1250,33 +1249,36 @@ function membersIn(
 	return cx.withLeftOut(members, group, () =>
 		members.map((m, i) =>
 			cx.withAround(parent, () =>
-				cx.withRaw(here, () => {
-					const where = child(at, tokens[i] as string);
-					const r = str(m, "$ref");
-					if (
-						r === undefined ||
-						group.size === 0 ||
-						!(m as JsonObject).entries.every(
-							([k]) => k === "$ref" || isAnnotation(k),
-						)
-					)
-						return schema(cx, m, where);
-					const { value, base, uri, where: there } = cx.locate(r, where);
-					const named = cx.withBase(base, () => namedKeys(cx, value));
-					const own = cx.withBase(base, () => leftOutKeys(cx, value));
-					if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
-						return schema(cx, m, where);
-					try {
-						return cx.withBase(base, () =>
-							cx.withLeftOut([value], group, () => schema(cx, value, there)),
-						);
-					} finally {
-						cx.leave();
-					}
-				}),
+				cx.withRaw(here, () => schema(cx, m, child(at, tokens[i] as string))),
 			),
 		),
 	);
+}
+
+/**
+ * A `$ref`'s target written out without the keys the group leaves out of this view, where
+ * it names one that it does not leave out itself: the reference's own view would have it.
+ * Undefined where the reference stays.
+ */
+function leftOutTarget(
+	cx: Ctx,
+	r: string,
+	at: string,
+	group: ReadonlySet<string>,
+): Ty | undefined {
+	if (group.size === 0) return undefined;
+	const { value, base, uri, where } = cx.locate(r, at);
+	const named = cx.withBase(base, () => namedKeys(cx, value));
+	const own = cx.withBase(base, () => leftOutKeys(cx, value));
+	if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
+		return undefined;
+	try {
+		return cx.withBase(base, () =>
+			cx.withLeftOut([value], group, () => schema(cx, value, where)),
+		);
+	} finally {
+		cx.leave();
+	}
 }
 
 /** A closed oneOf / anyOf member admits no key another member names. */

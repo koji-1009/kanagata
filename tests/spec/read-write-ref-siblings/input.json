@@ -1,0 +1,19 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Item": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
+      "Member": {
+        "description": "A readOnly key the group names stays out when sending, though the member has keywords beside its $ref.",
+        "properties": { "id": { "readOnly": true } },
+        "allOf": [{ "$ref": "#/components/schemas/Item", "required": ["name"] }]
+      },
+      "Beside": {
+        "description": "So does one the keywords beside the $ref name.",
+        "$ref": "#/components/schemas/Item",
+        "properties": { "id": { "readOnly": true } }
+      }
+    }
+  }
+}
