@@ -85,16 +85,16 @@ export type NestedOrEmpty = {
 /** Those one of its anyOf members admits. */
 export type EitherOrEmpty = {
   a: {} | null;
-} | {
+} | "" | {
   b: {} | null;
-} | "" | "b";
+} | "b";
 
 /** Those one of its oneOf members admits; null passes both, so neither. */
 export type OneOrEmpty = {
   a: {} | null;
-} | {
+} | "" | {
   b: {} | null;
-} | "" | "b";
+} | "b";
 
 /** A type in a member's member constrains every value. */
 export type NestedTyped = {

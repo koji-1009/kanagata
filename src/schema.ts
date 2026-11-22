@@ -212,14 +212,17 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	const nullable = !cx.refSiblings && v.get("nullable") === true;
 	const loose = nullable && cx.looseNullable;
 	const out: Ty[] = [];
-	// A member that requires a key this closed object forbids admits no value.
+	// A member that requires a key this closed object forbids admits no object: no value,
+	// or its arrays where its keywords say it can be one.
 	const closed = closedKeys(v);
 	const admitted = (members: Value[], tys: Ty[]) =>
 		closed === undefined
 			? tys
 			: tys.map((t, i) =>
 					requiredKeys(cx, members[i] as Value).some((k) => !closed.has(k))
-						? NEVER
+						? typelessKinds(cx, members[i] as Value).includes("array")
+							? inter([t, KIND.array as Ty])
+							: NEVER
 						: t,
 				);
 	const r = v.str("$ref");
@@ -309,7 +312,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 				widen(
 					cx,
 					v,
-					"object",
+					["object"],
 					union([
 						{ kind: "object", props: [{ key, ty: NEVER, optional: true }] },
 						tys[i] as Ty,
@@ -601,7 +604,7 @@ function ofKind(cx: Ctx, s: JsonObject, kind: string): Ty {
 }
 
 /**
- * The values of a kind that a member `typelessKind` reads admits: every one for `true`
+ * The values of a kind that a member `typelessKinds` reads admits: every one for `true`
  * (and anything else read as a schema that admits every value), none for `false`;
  * otherwise those its keywords for the kind admit, its `$ref` target (that alone in 3.0),
  * all its `allOf` members, one of its `anyOf` members and one of its `oneOf` members (a
@@ -683,15 +686,16 @@ function passed(
 
 /**
  * A member without `type` whose object or array keywords (`{ required: [a] }`,
- * `{ minItems: 1 }`), or those of its members, make it that kind constrains only values
- * of that kind. Where the schema's own `type` (or `nullable: true`, 3.0) names other
- * kinds, their values pass the member as its keywords and its members' for them say.
+ * `{ minItems: 1 }`), or those of its members, make it those kinds constrains only values
+ * of those kinds. Where the schema is of other kinds (its `type`, or `nullable: true` in
+ * 3.0; `severalKinds` without `type`), their values pass the member as its keywords and
+ * its members' for them say.
  */
 function passing(cx: Ctx, v: JsonObject, members: Value[], tys: Ty[]): Ty[] {
 	return tys.map((ty, i) => {
 		const m = members[i] as Value;
-		const kind = typelessKind(cx, m);
-		return kind === undefined ? ty : widen(cx, v, kind, ty, m);
+		const kinds = typelessKinds(cx, m);
+		return kinds.length === 0 ? ty : widen(cx, v, kinds, ty, m);
 	});
 }
 
@@ -711,23 +715,33 @@ function typeKinds(cx: Ctx, v: JsonObject): string[] | undefined {
 }
 
 /**
- * `ty`, a constraint on values of `kind` only, with the other kinds `type` names, which
- * pass it as the keywords of `v` for them say, or as those of `m`, the member `ty` is of,
- * and of its members (`passed`).
+ * `ty`, a constraint on values of `kinds` only, with the other kinds the schema is (those
+ * `type` names; without it, `severalKinds`), which pass it as the keywords of `v` for them
+ * say, or as those of `m`, the member `ty` is of, and of its members (`passed`).
  */
-function widen(cx: Ctx, v: JsonObject, kind: string, ty: Ty, m?: Value): Ty {
-	const kinds = typeKinds(cx, v);
-	if (kinds === undefined) return ty;
+function widen(cx: Ctx, v: JsonObject, kinds: string[], ty: Ty, m?: Value): Ty {
+	const named = typeKinds(cx, v) ?? severalKinds(v);
+	if (named === undefined) return ty;
 	return union([
 		ty,
-		...kinds
-			.filter((k) => k !== kind && k in KIND)
+		...named
+			.filter((k) => !kinds.includes(k) && k in KIND)
 			.map((k) =>
 				m === undefined
 					? ofKind(cx, v, k)
 					: passed(cx, m, k, [v, ...cx.around]),
 			),
 	]);
+}
+
+/**
+ * The kinds the keywords of a schema without `type`, and those of its `allOf` members
+ * without `type`, `$ref`, `const` or `enum` at any depth, say it is, where they say
+ * several (`keywordKinds`); undefined otherwise.
+ */
+function severalKinds(v: JsonObject): string[] | undefined {
+	const kinds = keywordKinds(v);
+	return kinds.length > 1 ? kinds : undefined;
 }
 
 /**
@@ -750,7 +764,7 @@ function keywordParts(
 			widen(
 				cx,
 				v,
-				"object",
+				["object"],
 				union([
 					{ kind: "object", props: [{ key, ty: NEVER, optional: true }] },
 					{
@@ -764,7 +778,7 @@ function keywordParts(
 	const names = v.get("propertyNames");
 	if (names === false)
 		parts.push(
-			widen(cx, v, "object", { kind: "map", props: [], index: NEVER }),
+			widen(cx, v, ["object"], { kind: "map", props: [], index: NEVER }),
 		);
 	else if (
 		names !== undefined &&
@@ -785,27 +799,27 @@ function keywordParts(
 		const none = max === 0 ? notContained(cx, v, contains) : undefined;
 		const items = (n: number): Ty[] => Array.from({ length: n }, () => UNKNOWN);
 		if (max !== undefined && min > max)
-			parts.push(widen(cx, v, "array", NEVER));
+			parts.push(widen(cx, v, ["array"], NEVER));
 		else if (negation(contains) === NEVER) {
 			// Every item matches: the length is from min to max.
 			if (max !== undefined)
 				parts.push(
-					widen(cx, v, "array", { kind: "tuple", items: items(max), min }),
+					widen(cx, v, ["array"], { kind: "tuple", items: items(max), min }),
 				);
 			else if (min > 0)
 				parts.push(
-					widen(cx, v, "array", {
+					widen(cx, v, ["array"], {
 						kind: "tuple",
 						items: items(min),
 						min,
 						rest: UNKNOWN,
 					}),
 				);
-		} else if (none !== undefined) parts.push(widen(cx, v, "array", none));
+		} else if (none !== undefined) parts.push(widen(cx, v, ["array"], none));
 		else {
 			if (min > 0)
 				parts.push(
-					widen(cx, v, "array", {
+					widen(cx, v, ["array"], {
 						kind: "tuple",
 						items: items(min),
 						min,
@@ -1097,26 +1111,32 @@ function sameValue(a: Value, b: Value): boolean {
 
 /**
  * A member's type as the values it admits: one whose object or array keywords, or those of
- * its members, make it that kind (no `type`) admits the values of the other kinds too, of
- * those the schema and the schemas around it can be (their `type`s; any kind where none
+ * its members, make it those kinds (no `type`) admits the values of the other kinds too,
+ * of those the schema and the schemas around it can be (their `type`s; any kind where none
  * has one), as its keywords and its members' for them say.
  */
 function anyKind(cx: Ctx, v: JsonObject, m: Value, ty: Ty): Ty {
-	const kind = typelessKind(cx, m);
-	return kind === undefined ? ty : orOther(cx, v, kind, ty, m);
+	const kinds = typelessKinds(cx, m);
+	return kinds.length === 0 ? ty : orOther(cx, v, kinds, ty, m);
 }
 
 /**
- * `ty`, a constraint on values of `kind` only, with the values of the other kinds the
+ * `ty`, a constraint on values of `kinds` only, with the values of the other kinds the
  * schema and the schemas around it can be (their `type`s; any kind where none has one),
  * as the keywords of `v` for them say, or as those of `m`, the member `ty` is of, and of
  * its members (`passed`).
  */
-function orOther(cx: Ctx, v: JsonObject, kind: string, ty: Ty, m?: Value): Ty {
+function orOther(
+	cx: Ctx,
+	v: JsonObject,
+	kinds: string[],
+	ty: Ty,
+	m?: Value,
+): Ty {
 	return union([
 		ty,
 		...contextKinds(cx, v)
-			.filter((k) => k !== kind)
+			.filter((k) => !kinds.includes(k))
 			.map((k) =>
 				m === undefined
 					? ofKind(cx, v, k)
@@ -1364,7 +1384,7 @@ function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 				orOther(
 					cx,
 					v,
-					"object",
+					["object"],
 					union([
 						{ kind: "object", props: [{ key, ty, optional: true }] },
 						...evaluating(ev, key),
@@ -1392,7 +1412,7 @@ function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 				orOther(
 					cx,
 					v,
-					"array",
+					["array"],
 					union([
 						upTo(ev.length),
 						...evaluatingItems(ev, ev.length).map((b) =>
@@ -1486,35 +1506,32 @@ function keyNames(names: Value | undefined): string[] | undefined {
 }
 
 /**
- * The kind a schema without `type` constrains where its keywords and those of the schemas
+ * The kinds a schema without `type` constrains where its keywords and those of the schemas
  * it applies (`$ref` target, `allOf` / `oneOf` / `anyOf` members, `if` / `then` / `else`)
- * make it that kind and no other (`ownKind`), and none of them has `type`, `const` or
- * `enum`; undefined for any other.
+ * make it those kinds (`ownKinds`), and none of them has `type`, `const` or `enum`; none
+ * for any other.
  */
-function typelessKind(cx: Ctx, m: Value): "object" | "array" | undefined {
+function typelessKinds(cx: Ctx, m: Value): string[] {
 	const kinds = madeKinds(cx, m);
-	return kinds?.made.size === 1 && kinds.all.size === 1
-		? [...kinds.made][0]
-		: undefined;
+	return kinds !== undefined && kinds.all.size === kinds.made.size
+		? [...kinds.made]
+		: [];
 }
 
 /**
  * The kinds a schema's keywords and those of the schemas it applies make it (`made`: its
  * own, its `$ref` target's and its members'), and those its `if` / `then` / `else` add
  * (`all`), which let the other kinds pass in its own type already; undefined where one of
- * them says more, or its `$ref` reaches nothing (`typelessKind`). `true`, and anything else
- * read as a schema that admits every value, makes no kind; nor does `false`, which admits
- * none (`passed`).
+ * them says more, or its `$ref` reaches nothing (`typelessKinds`). `true`, and anything
+ * else read as a schema that admits every value, makes no kind; nor does `false`, which
+ * admits none (`passed`).
  */
 function madeKinds(
 	cx: Ctx,
 	m: Value,
 	seen: ReadonlySet<string> = new Set(),
-): { made: Set<"object" | "array">; all: Set<"object" | "array"> } | undefined {
-	const kinds = {
-		made: new Set<"object" | "array">(),
-		all: new Set<"object" | "array">(),
-	};
+): { made: Set<string>; all: Set<string> } | undefined {
+	const kinds = { made: new Set<string>(), all: new Set<string>() };
 	if (!(m instanceof JsonObject)) return kinds;
 	if (["type", "const", "enum"].some((k) => m.get(k) !== undefined))
 		return undefined;
@@ -1538,10 +1555,9 @@ function madeKinds(
 		// In 3.0 the keywords next to $ref are ignored.
 		if (!cx.refSiblings) return kinds;
 	}
-	const own = ownKind(m);
-	if (own !== undefined) {
-		kinds.made.add(own);
-		kinds.all.add(own);
+	for (const k of ownKinds(m)) {
+		kinds.made.add(k);
+		kinds.all.add(k);
 	}
 	const members = ["allOf", "oneOf", "anyOf"].flatMap((key) => {
 		const ms = m.get(key);
@@ -1558,21 +1574,63 @@ function madeKinds(
 }
 
 /**
- * The kind a schema's keywords make it: `dependentRequired`, `dependentSchemas` and
- * `propertyNames` for objects, `contains` for arrays, as well as those that make a value
- * one; undefined where none does.
+ * The kinds a schema's keywords make it: object for `dependentRequired`,
+ * `dependentSchemas`, `propertyNames` and those that make a value one; array for
+ * `contains` and those that make a value one.
  */
-function ownKind(m: JsonObject): "object" | "array" | undefined {
+function ownKinds(m: JsonObject): string[] {
+	const kinds: string[] = [];
 	if (
 		hasObjectKeywords(m) ||
 		["dependentRequired", "dependentSchemas", "propertyNames"].some(
 			(k) => m.get(k) !== undefined,
 		)
 	)
-		return "object";
-	return hasArrayKeywords(m) || m.get("contains") !== undefined
-		? "array"
-		: undefined;
+		kinds.push("object");
+	if (hasArrayKeywords(m) || m.get("contains") !== undefined)
+		kinds.push("array");
+	return kinds;
+}
+
+/** Whether a schema is an object without `type`, `$ref`, `const` or `enum`. */
+function isTypeless(m: Value): m is JsonObject {
+	return (
+		m instanceof JsonObject &&
+		["type", "$ref", "const", "enum"].every((k) => m.get(k) === undefined)
+	);
+}
+
+/**
+ * The kinds the keywords of a schema without `type` say it is: object or array for those
+ * that make it one (`ownKinds`), and beside them string and number for theirs (alone,
+ * those say nothing of the kind); with the kinds of its `allOf` members without `type`,
+ * `$ref`, `const` or `enum` (at any depth), which ask the same value.
+ */
+function keywordKinds(v: JsonObject): string[] {
+	const kinds = new Set<string>();
+	const read = (s: JsonObject) => {
+		const has = (keys: string[]) => keys.some((k) => s.get(k) !== undefined);
+		const own = ownKinds(s);
+		for (const k of own) kinds.add(k);
+		if (own.length > 0 && has(["pattern", "minLength", "maxLength"]))
+			kinds.add("string");
+		if (
+			own.length > 0 &&
+			has([
+				"minimum",
+				"maximum",
+				"exclusiveMinimum",
+				"exclusiveMaximum",
+				"multipleOf",
+			])
+		)
+			kinds.add("number").add("integer");
+		const allOf = s.get("allOf");
+		for (const m of Array.isArray(allOf) ? allOf : [])
+			if (isTypeless(m)) read(m);
+	};
+	read(v);
+	return [...kinds];
 }
 
 /** Members, converted knowing the keys the group leaves out of this view (see `leftOutTarget`). */
@@ -1843,6 +1901,22 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (typeof type === "string") return typed(cx, v, type, at);
 	if (Array.isArray(type))
 		return union(type.map((t) => typed(cx, v, t as string, at)));
+	// Keywords of several kinds, object or array among them, say the value is of one of
+	// those kinds (strings and numbers of those the schemas around it can be), each as its
+	// keywords and its members' say.
+	const several = severalKinds(v);
+	if (several !== undefined) {
+		const around = contextKinds(cx, v);
+		return union(
+			several
+				.filter((k) => k === "object" || k === "array" || around.includes(k))
+				.map((k) =>
+					k === "object" || k === "array"
+						? typed(cx, v, k, at)
+						: passed(cx, v, k, [...cx.around]),
+				),
+		);
+	}
 	if (hasObjectKeywords(v)) return object(cx, v, at);
 	if (hasArrayKeywords(v)) return array(cx, v, at);
 	// Keywords for strings and numbers without type constrain those kinds alone.
