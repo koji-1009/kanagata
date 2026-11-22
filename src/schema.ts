@@ -108,13 +108,9 @@ export function schema(cx: Ctx, v: Value, at: string): Ty {
 	cx.here = cx.raw;
 	try {
 		return cx.inSchema(() =>
-			cx.withRaw(undefined, () => {
-				// A schema with $id is a resource: $refs inside it resolve against its URI.
-				const id = v.str("$id");
-				if (id !== undefined && cx.refSiblings)
-					return cx.inResource(cx.baseOf(id), () => convert(cx, v, at));
-				return convert(cx, v, at);
-			}),
+			cx.withRaw(undefined, () =>
+				inOwnResource(cx, v, () => convert(cx, v, at)),
+			),
 		);
 	} finally {
 		cx.here = saved;
@@ -164,6 +160,28 @@ function binaryAt(
 	return [v.get("items"), ...(Array.isArray(prefix) ? prefix : [])].some(
 		(s) => s !== undefined && binaryAt(cx, s, "part", seen),
 	);
+}
+
+/** Reads a schema in its own resource: one with `$id` (3.1, 3.2) is one, and `$ref`s inside it resolve against its URI. */
+function inOwnResource<T>(cx: Ctx, v: Value, f: () => T): T {
+	const id = str(v, "$id");
+	return id !== undefined && cx.refSiblings
+		? cx.inResource(cx.baseOf(id), f)
+		: f();
+}
+
+/**
+ * What a `$dynamicRef` reaches from its target where that is a `$dynamicAnchor`: the
+ * one of that name in the outermost resource the value was reached through. undefined
+ * where it reaches its target, as a `$ref` does.
+ */
+function dynamicAnchorOf(
+	cx: Ctx,
+	target: ReturnType<Ctx["locate"]>,
+): string | undefined {
+	return cx.isDynamicAnchor(target.uri)
+		? cx.dynamicTarget(new URL(target.uri).hash.slice(1))
+		: undefined;
 }
 
 function convert(cx: Ctx, v: JsonObject, at: string): Ty {
@@ -245,11 +263,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	// one of that name in the outermost resource the value was reached through.
 	const dr = v.str("$dynamicRef");
 	if (dr !== undefined) {
-		const target = cx.locate(dr, at);
-		const name = new URL(target.uri).hash.slice(1);
-		const outer = cx.isDynamicAnchor(target.uri)
-			? cx.dynamicTarget(name)
-			: undefined;
+		const outer = dynamicAnchorOf(cx, cx.locate(dr, at));
 		out.push(cx.withAround(v, () => reference(cx, outer ?? dr, at)));
 	}
 	const c = v.get("const");
@@ -433,18 +447,38 @@ function keysOf(
 		keys.push(...props.entries.map(([k]) => k));
 	const allOf = get(s, "allOf");
 	for (const m of Array.isArray(allOf) ? allOf : [])
-		keys.push(...keysOf(cx, m, seen, properties));
+		keys.push(...inOwnResource(cx, m, () => keysOf(cx, m, seen, properties)));
+	for (const target of reachedTargets(cx, s)) {
+		if (seen.has(target.uri)) continue;
+		seen.add(target.uri);
+		// The target's own $refs resolve against the resource it is in.
+		keys.push(
+			...cx.inResource(target.base, () =>
+				inOwnResource(cx, target.value, () =>
+					keysOf(cx, target.value, seen, properties),
+				),
+			),
+		);
+	}
+	return keys;
+}
+
+/**
+ * The schemas a schema's `$ref` and `$dynamicRef` reach (see `parts`), where they are
+ * found: the conversion reports one that is not.
+ */
+function reachedTargets(cx: Ctx, s: Value): ReturnType<Ctx["locate"]>[] {
+	const targets: ReturnType<Ctx["locate"]>[] = [];
 	const r = str(s, "$ref");
 	const target = r === undefined ? undefined : cx.tryLocate(r);
-	if (target === undefined || seen.has(target.uri)) return keys;
-	seen.add(target.uri);
-	// The target's own $refs resolve against the document it is in.
-	return [
-		...keys,
-		...cx.withBase(target.base, () =>
-			keysOf(cx, target.value, seen, properties),
-		),
-	];
+	if (target !== undefined) targets.push(target);
+	const dr = str(s, "$dynamicRef");
+	const found = dr === undefined ? undefined : cx.tryLocate(dr);
+	if (found !== undefined) {
+		const outer = dynamicAnchorOf(cx, found);
+		targets.push(outer === undefined ? found : cx.locate(outer, ""));
+	}
+	return targets;
 }
 
 /**
@@ -1248,20 +1282,32 @@ function evaluates(
 ): Evaluated {
 	const ev = nothingEvaluated();
 	if (!(s instanceof JsonObject)) return ev;
+	// What a schema in its own resource evaluates, a member or the target of a reference.
+	const inner = (m: Value, where: string) =>
+		inOwnResource(cx, m, () => evaluates(cx, m, where, false, seen));
+	// A schema reached again inside itself evaluates nothing more; reached again
+	// elsewhere, in another member, it evaluates there too.
+	const follow = (target: ReturnType<Ctx["locate"]>) => {
+		if (seen.has(target.uri)) return;
+		seen.add(target.uri);
+		evaluateBoth(
+			ev,
+			cx.inResource(target.base, () => inner(target.value, target.where)),
+		);
+		seen.delete(target.uri);
+	};
 	const r = s.str("$ref");
 	if (r !== undefined) {
-		const target = cx.locate(r, at);
-		if (!seen.has(target.uri)) {
-			seen.add(target.uri);
-			evaluateBoth(
-				ev,
-				cx.withBase(target.base, () =>
-					evaluates(cx, target.value, target.where, false, seen),
-				),
-			);
-		}
+		follow(cx.locate(r, at));
 		// In 3.0 the keywords next to $ref are ignored.
 		if (!cx.refSiblings) return ev;
+	}
+	// $dynamicRef reaches what it does in `parts`.
+	const dr = s.str("$dynamicRef");
+	if (dr !== undefined) {
+		const found = cx.locate(dr, at);
+		const outer = dynamicAnchorOf(cx, found);
+		follow(outer === undefined ? found : cx.locate(outer, at));
 	}
 	const props = s.get("properties");
 	for (const [k] of props instanceof JsonObject ? props.entries : []) {
@@ -1289,13 +1335,11 @@ function evaluates(
 	const group = leftOutKeys(cx, s);
 	for (const k of cx.leftOutIn(s)) group.add(k);
 	const allOf = s.get("allOf");
+	// Members are the same value: the schema's keywords apply to it too.
+	const member = (m: Value, where: string) =>
+		cx.withAround(s, () => inner(m, where));
 	for (const [i, m] of (Array.isArray(allOf) ? allOf : []).entries())
-		evaluateBoth(
-			ev,
-			cx.withAround(s, () =>
-				evaluates(cx, m, child(child(at, "allOf"), String(i)), false, seen),
-			),
-		);
+		evaluateBoth(ev, member(m, child(child(at, "allOf"), String(i))));
 	// A member, if or dependent schema evaluates where it matches.
 	const branch = (cond: Ty, e: Evaluated): void => {
 		for (const k of e.keys) ev.keys.add(k);
@@ -1303,14 +1347,12 @@ function evaluates(
 		ev.undecided ||= e.undecided;
 		ev.branches.push({ cond, ev: e });
 	};
-	const inner = (m: Value, where: string) =>
-		cx.withAround(s, () => evaluates(cx, m, where, false, seen));
 	for (const key of ["oneOf", "anyOf"]) {
 		const members = s.get(key);
 		if (!Array.isArray(members)) continue;
 		const tys = membersIn(cx, s, members, group, child(at, key));
 		for (const [i, m] of members.entries())
-			branch(tys[i] as Ty, inner(m, child(child(at, key), String(i))));
+			branch(tys[i] as Ty, member(m, child(child(at, key), String(i))));
 	}
 	const cond = s.get("if");
 	if (cond !== undefined) {
@@ -1322,12 +1364,12 @@ function evaluates(
 			"else",
 		]) as [Ty, Ty, Ty];
 		// if and then evaluate where if admits the value; else where it does not.
-		const both = inner(cond, child(at, "if"));
-		evaluateBoth(both, inner(then, child(at, "then")));
+		const both = member(cond, child(at, "if"));
+		evaluateBoth(both, member(then, child(at, "then")));
 		branch(inter([i, t]), both);
 		const not = refuted(cx, cond, [s, ...cx.around]);
 		if (not === undefined) ev.undecided ||= otherwise !== true;
-		else branch(inter([not, e]), inner(otherwise, child(at, "else")));
+		else branch(inter([not, e]), member(otherwise, child(at, "else")));
 	}
 	const ds = s.get("dependentSchemas");
 	for (const [k, d] of ds instanceof JsonObject ? ds.entries : [])
@@ -1336,7 +1378,7 @@ function evaluates(
 				kind: "object",
 				props: [{ key: k, ty: UNKNOWN, optional: false, present: true }],
 			},
-			inner(d, child(child(at, "dependentSchemas"), k)),
+			member(d, child(child(at, "dependentSchemas"), k)),
 		);
 	return ev;
 }

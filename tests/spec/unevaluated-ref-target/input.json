@@ -24,6 +24,15 @@
         "allOf": [{ "$ref": "#/components/schemas/Pair" }],
         "unevaluatedItems": false
       },
+      "Named": { "type": "object", "properties": { "name": { "type": "string" } } },
+      "Owned": { "allOf": [{ "$ref": "#/components/schemas/Named" }], "properties": { "owner": { "type": "string" } } },
+      "Dated": { "allOf": [{ "$ref": "#/components/schemas/Named" }], "properties": { "date": { "type": "string" } } },
+      "Entry": {
+        "description": "Both members reach Named, which evaluates name.",
+        "allOf": [{ "$ref": "#/components/schemas/Owned" }, { "$ref": "#/components/schemas/Dated" }],
+        "required": ["name"],
+        "unevaluatedProperties": false
+      },
       "Strings": { "type": "array", "items": { "type": "string" } },
       "AnyStrings": {
         "description": "Strings' items evaluate every item: unevaluatedItems leaves none.",
