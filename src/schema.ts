@@ -873,13 +873,33 @@ function keywordParts(
 	else if (
 		names !== undefined &&
 		!asksNothing(names) &&
-		keyNames(cx, names) === undefined &&
-		keyPattern(names) === undefined
-	)
-		cx.warn(
-			child(at, "propertyNames"),
-			"propertyNames cannot be expressed in TypeScript; ignored",
-		);
+		keyNames(cx, names) === undefined
+	) {
+		const keys = keyPattern(names);
+		if (keys === undefined)
+			cx.warn(
+				child(at, "propertyNames"),
+				"propertyNames cannot be expressed in TypeScript; ignored",
+			);
+		// The pattern's templates cannot carry the lengths next to it; the keys it names can.
+		else if (
+			(keys.kind === "union" ? keys.items : [keys]).some(
+				(k) => k.kind !== "lit",
+			)
+		) {
+			const s = names as JsonObject;
+			const asked: [string, boolean][] = [
+				["minLength", (count(s, "minLength") ?? 0) > 0],
+				["maxLength", count(s, "maxLength") !== undefined],
+			];
+			for (const [key, on] of asked)
+				if (on)
+					cx.warn(
+						child(child(at, "propertyNames"), key),
+						`${key} cannot be expressed in TypeScript; ignored`,
+					);
+		}
+	}
 	// contains requires from minContains (1 if not given) to maxContains items that match
 	// it; TypeScript can say how many, and which where every item matches or, for none,
 	// where it can say the values contains does not admit. An `unevaluatedItems: false`
@@ -1923,6 +1943,9 @@ function notOnly(s: Value | undefined): Value | undefined {
  */
 function keyNames(cx: Ctx, names: Value | undefined): string[] | undefined {
 	if (!(names instanceof JsonObject)) return undefined;
+	// A key is a string: a type that does not name string admits none.
+	const t = names.get("type");
+	if (t !== undefined && !namesString(t)) return [];
 	const c = names.get("const");
 	const e = names.get("enum");
 	const values = c !== undefined ? [c] : Array.isArray(e) ? e : undefined;
@@ -1937,10 +1960,13 @@ function keyNames(cx: Ctx, names: Value | undefined): string[] | undefined {
 function asksNothing(names: Value): boolean {
 	if (!(names instanceof JsonObject)) return names === true;
 	return names.entries.every(
-		([k, x]) =>
-			isAnnotation(k) ||
-			(k === "type" && (Array.isArray(x) ? x : [x]).includes("string")),
+		([k, x]) => isAnnotation(k) || (k === "type" && namesString(x)),
 	);
+}
+
+/** Whether a `type` names `string`. */
+function namesString(type: Value): boolean {
+	return (Array.isArray(type) ? type : [type]).includes("string");
 }
 
 /**
@@ -3233,20 +3259,24 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		...props.map((p) => p.ty),
 	];
 
-	// propertyNames: { pattern } keys the object by it: a property it does not admit cannot
-	// be there, a key it names is a property with the value the patterns or
-	// additionalProperties give it, and the others index signatures by its templates.
+	// propertyNames: { pattern } keys the object by it: a property it (with the lengths next
+	// to it) does not admit cannot be there, a key it names and admits is a property with
+	// the value the patterns or additionalProperties give it, and the others index
+	// signatures by its templates, which cannot carry the lengths.
 	const names = keyPattern(v.get("propertyNames"));
 	if (names !== undefined) {
-		const pattern = (v.get("propertyNames") as JsonObject).str(
-			"pattern",
-		) as string;
-		const admits = (key: string) => matches(pattern, key);
+		const schema = v.get("propertyNames") as JsonObject;
+		const admits = (key: string) => accepts(cx, schema, key) === true;
 		if (props.some((p) => !p.optional && !admits(p.key))) return NEVER;
 		for (const p of props) if (!admits(p.key)) p.ty = NEVER;
-		const own = templates(pattern).filter((t) => {
+		// The keys a template without any text names that the lengths next to it admit.
+		const nameAdmitted = (t: Template) => {
+			for (const key of strings(t) as string[])
+				if (admits(key)) named(key, keyValue(key));
+		};
+		const own = templates(schema.str("pattern") as string).filter((t) => {
 			if (strings(t) === undefined) return true;
-			name(t);
+			nameAdmitted(t);
 			return false;
 		});
 		// The object without the keys it names that no value is admitted for (see `shut`).
@@ -3267,7 +3297,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 				for (const t of (both as (Template | Template[])[]).flat())
 					if (t === k.t)
 						signature(signatures, t.key, admitting(exact[i] as Ty, within(t)));
-					else if (strings(t) !== undefined) name(t);
+					else if (strings(t) !== undefined) nameAdmitted(t);
 					else
 						signature(signatures, t.key, admitting(inter(types(t)), within(t)));
 		}
@@ -3328,15 +3358,26 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	};
 }
 
-/** The keys a `propertyNames` with only `pattern` admits, as template literal types; undefined for any other, or a pattern none says. */
+/** The keys a `propertyNames` with `pattern` and other keywords for strings admits, as the pattern's template literal types; undefined for any other, or a pattern none says. */
 function keyPattern(names: Value | undefined): Ty | undefined {
 	if (!(names instanceof JsonObject)) return undefined;
-	const keys = names.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
 	const pattern = names.str("pattern");
-	return keys.length === 1 && pattern !== undefined
-		? patternType(pattern)
-		: undefined;
+	const forStrings = names.entries.every(
+		([k, x]) =>
+			isAnnotation(k) ||
+			STRING_KEYWORDS.has(k) ||
+			(k === "type" && namesString(x)),
+	);
+	return forStrings && pattern !== undefined ? patternType(pattern) : undefined;
 }
+
+/** Keywords for strings `propertyNames: { pattern }` may have next to it; `format` asserts nothing. */
+const STRING_KEYWORDS = new Set([
+	"pattern",
+	"minLength",
+	"maxLength",
+	"format",
+]);
 
 /**
  * A closed object, its properties all it can have: `minProperties` requires that many

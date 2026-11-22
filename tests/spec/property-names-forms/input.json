@@ -54,6 +54,33 @@
         "type": "object",
         "propertyNames": { "enum": ["x-a", "b"], "pattern": "^x-" }
       },
+      "NotStrings": {
+        "description": "A type that does not name string admits no key: every key is a string.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "propertyNames": { "type": "number" }
+      },
+      "NotStringsAlone": {
+        "description": "Without type, it says the value is an object without keys.",
+        "propertyNames": { "type": ["integer", "null"] }
+      },
+      "PatternShort": {
+        "description": "A pattern next to lengths keys the object by its templates; the lengths they cannot carry are ignored, with a warning.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-", "maxLength": 5 },
+        "additionalProperties": { "type": "string" }
+      },
+      "PatternLong": {
+        "description": "A declared property they reject is never.",
+        "type": "object",
+        "properties": { "x-abcdef": { "type": "string" }, "x-a": { "type": "string" } },
+        "propertyNames": { "type": "string", "pattern": "^x-", "minLength": 4 }
+      },
+      "PatternNamed": {
+        "description": "Where the pattern names every key, the lengths leave out those they reject, with no warning.",
+        "type": "object",
+        "propertyNames": { "pattern": "^(a|bb)$", "maxLength": 1 }
+      },
       "Unread": {
         "description": "Lengths without a list of keys are ignored, with a warning.",
         "type": "object",

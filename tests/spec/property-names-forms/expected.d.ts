@@ -15,6 +15,11 @@ export interface schemas {
   NoStringsRequired: NoStringsRequired;
   Short: Short;
   Prefixed: Prefixed;
+  NotStrings: NotStrings;
+  NotStringsAlone: NotStringsAlone;
+  PatternShort: PatternShort;
+  PatternLong: PatternLong;
+  PatternNamed: PatternNamed;
   Unread: Unread;
 }
 
@@ -52,6 +57,33 @@ export type Short = {
 /** pattern among them. */
 export type Prefixed = {
   "x-a"?: unknown;
+};
+
+/** A type that does not name string admits no key: every key is a string. */
+export type NotStrings = {
+  [key: string]: never;
+};
+
+/** Without type, it says the value is an object without keys. */
+export type NotStringsAlone = {
+  [key: string]: never;
+};
+
+/** A pattern next to lengths keys the object by its templates; the lengths they cannot carry are ignored, with a warning. */
+export type PatternShort = {
+  [key: `x-${string}`]: string;
+};
+
+/** A declared property they reject is never. */
+export type PatternLong = {
+  "x-abcdef"?: string;
+  "x-a"?: never;
+  [key: `x-${string}`]: unknown;
+};
+
+/** Where the pattern names every key, the lengths leave out those they reject, with no warning. */
+export type PatternNamed = {
+  a?: unknown;
 };
 
 /** Lengths without a list of keys are ignored, with a warning. */
