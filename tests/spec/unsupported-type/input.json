@@ -3,7 +3,18 @@
   "paths": {},
   "components": {
     "schemas": {
-      "File": { "description": "A type JSON Schema does not have says nothing (Swagger 2.0's file).", "type": "file" }
+      "File": { "description": "A type JSON Schema does not have says nothing (Swagger 2.0's file).", "type": "file" },
+      "NotFile": { "description": "So not of it admits nothing.", "not": { "type": "file" } },
+      "NotStringOrFile": { "description": "In a type list too.", "not": { "type": ["string", "file"] } },
+      "NotIntegerOrFile": { "description": "Integer without number beside it as well.", "not": { "type": ["integer", "file"] } },
+      "IfFile": {
+        "description": "An if of it admits every value: then applies.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "if": { "type": "file" },
+        "then": { "required": ["a"] },
+        "else": { "required": ["b"] }
+      }
     }
   }
 }

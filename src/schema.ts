@@ -793,9 +793,14 @@ function admitted(s: Value): Ty | undefined {
 	return inter(parts);
 }
 
-/** The values of the kinds `type` does not name; undefined for `integer` without `number`. */
+/**
+ * The values of the kinds `type` does not name: none where it names one JSON Schema does
+ * not have, which says nothing; undefined for `integer` without `number`.
+ */
 function otherKinds(t: Value | undefined): Ty | undefined {
 	const named = Array.isArray(t) ? t : [t];
+	if (!named.every((k) => typeof k === "string" && Object.hasOwn(KIND, k)))
+		return NEVER;
 	// Without number, an integer is a number TypeScript cannot leave out.
 	if (named.includes("integer") && !named.includes("number")) return undefined;
 	return union(

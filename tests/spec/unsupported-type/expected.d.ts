@@ -6,7 +6,26 @@ export interface operations {}
 
 export interface schemas {
   File: File;
+  NotFile: NotFile;
+  NotStringOrFile: NotStringOrFile;
+  NotIntegerOrFile: NotIntegerOrFile;
+  IfFile: IfFile;
 }
 
 /** A type JSON Schema does not have says nothing (Swagger 2.0's file). */
 export type File = unknown;
+
+/** So not of it admits nothing. */
+export type NotFile = never;
+
+/** In a type list too. */
+export type NotStringOrFile = never;
+
+/** Integer without number beside it as well. */
+export type NotIntegerOrFile = never;
+
+/** An if of it admits every value: then applies. */
+export type IfFile = {
+  a: string;
+  b?: string;
+};
