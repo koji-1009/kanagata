@@ -61,17 +61,15 @@ const APPLICATORS = [
  * they are `additionalProperties` / `items`. undefined where they are not that.
  */
 function unevaluated(v: JsonObject, key: string): Value | undefined {
-	return applicatorsFor(key).every((k) => v.get(k) === undefined)
-		? v.get(key)
-		: undefined;
+	const x = v.get(key);
+	if (x === undefined) return undefined;
+	const evaluating =
+		key === "unevaluatedItems" ? ITEM_APPLICATORS : APPLICATORS;
+	return evaluating.every((k) => v.get(k) === undefined) ? x : undefined;
 }
 
-/** The keywords next to an `unevaluated*` keyword that evaluate for it: `contains` evaluates the items it matches. */
-function applicatorsFor(key: string): string[] {
-	return key === "unevaluatedItems"
-		? [...APPLICATORS, "contains"]
-		: APPLICATORS;
-}
+/** The keywords next to `unevaluatedItems` that evaluate for it: `contains` evaluates the items it matches. */
+const ITEM_APPLICATORS = [...APPLICATORS, "contains"];
 
 /**
  * Accepts a `$schema` or `jsonSchemaDialect` that names the dialect kanagata reads: JSON
@@ -224,16 +222,15 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 						? NEVER
 						: t,
 				);
-	// Every member is the same object: a property one member leaves out of this view
-	// stays out even where another member lists it as required.
-	const group = leftOutKeys(cx, v);
-	for (const k of cx.leftOutIn(v)) group.add(k);
 	const r = v.str("$ref");
 	if (r !== undefined) {
+		// The keys left out beside the target: those it leaves out itself it is written without anyway.
+		const beside = leftOutKeys(cx, v, new Set(), false);
+		for (const k of cx.leftOutIn(v)) beside.add(k);
 		// The target is the same value, this schema's keywords around it.
 		const target = cx.withAround(
 			v,
-			() => leftOutTarget(cx, r, at, group) ?? reference(cx, r, at),
+			() => leftOutTarget(cx, r, at, beside) ?? reference(cx, r, at),
 		);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
 		// are ignored, nullable among them unless loose.
@@ -255,6 +252,10 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (c !== undefined) out.push(literal(c));
 	const e = v.get("enum");
 	if (Array.isArray(e)) out.push(union(e.map(literal)));
+	// Every member is the same object: a property one member leaves out of this view
+	// stays out even where another member lists it as required.
+	const group = leftOutKeys(cx, v);
+	for (const k of cx.leftOutIn(v)) group.add(k);
 	const allOf = v.get("allOf");
 	if (Array.isArray(allOf)) {
 		const members = membersIn(cx, v, allOf, group, child(at, "allOf"));
@@ -2097,9 +2098,15 @@ function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
 
 /**
  * The properties left out of this view: the schema's own, and those of its `allOf`
- * members, so that `required` next to `allOf` does not bring one back.
+ * members, so that `required` next to `allOf` does not bring one back, and of its `$ref`
+ * target unless `throughRef` is false.
  */
-function leftOutKeys(cx: Ctx, v: Value, seen = new Set<string>()): Set<string> {
+function leftOutKeys(
+	cx: Ctx,
+	v: Value,
+	seen = new Set<string>(),
+	throughRef = true,
+): Set<string> {
 	const keys = new Set<string>();
 	const r = str(v, "$ref");
 	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
@@ -2112,7 +2119,7 @@ function leftOutKeys(cx: Ctx, v: Value, seen = new Set<string>()): Set<string> {
 		for (const m of Array.isArray(allOf) ? allOf : [])
 			for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
 	}
-	const target = r === undefined ? undefined : cx.tryLocate(r);
+	const target = r === undefined || !throughRef ? undefined : cx.tryLocate(r);
 	if (target === undefined || seen.has(target.uri)) return keys;
 	seen.add(target.uri);
 	// The target's own $refs resolve against the document it is in.
