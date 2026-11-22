@@ -23,7 +23,7 @@
         "unevaluatedItems": false
       },
       "Conditional": {
-        "description": "contains in then, which applies where if admits the value, and in an anyOf member.",
+        "description": "contains in then, which applies where if admits the value, and in an anyOf member: [1, 2] has the two items if asks for and not the string then asks for, which no type says.",
         "type": "array",
         "if": { "minItems": 2 },
         "then": { "contains": { "type": "string" } },
@@ -44,7 +44,7 @@
         "unevaluatedItems": false
       },
       "PrefixedMember": {
-        "description": "A member evaluates its prefix item as well: where it does not match, the item is not evaluated, which no type says.",
+        "description": "[1] matches the first member's type but not its contains, and no member matches, which no type says; where the second does not match, the first evaluates the same: its contains is typed.",
         "type": "array",
         "anyOf": [
           { "prefixItems": [{ "type": "number" }], "contains": { "type": "string" } },

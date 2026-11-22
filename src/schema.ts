@@ -882,8 +882,9 @@ function keywordParts(
 						rest: UNKNOWN,
 					}),
 				);
-			// The type of the schema with the unevaluatedItems that says which says how many.
-			if (!cx.containsSaid(v)) {
+			// minContains 0 without maxContains asks nothing; the type of the schema with the
+			// unevaluatedItems that says which items match says how many.
+			if ((min > 0 || max !== undefined) && !cx.containsSaid(v)) {
 				cx.warn(
 					child(at, "contains"),
 					"contains: which items match it cannot be expressed in TypeScript; only how many is typed",
@@ -1563,8 +1564,9 @@ function saying(
  * evaluates the items unless a branch does: where it alone evaluates every item in every
  * case it is in; or where it asks for one matching item at most, it is in a `oneOf` /
  * `anyOf` member of the schema whose members alone evaluate the items, and in every case
- * it is in, the others evaluate as many items without it and do not bound how many match
- * theirs. Then a value that matches none of its items evaluates the same without it.
+ * it is in, the others evaluate as many items without it and, where the one `contains`
+ * left evaluates every item (and so is counted), it asks for one matching item at most.
+ * Then a value that matches none of its items evaluates the same without it.
  */
 function saidHolders(
 	cx: Ctx,
@@ -1592,7 +1594,8 @@ function saidHolders(
 			rest,
 			contained: [...ev.contained, ...parts.flatMap((p) => p.contained)],
 		});
-		return other === undefined || (asksOne(other.schema) && length === 0);
+		// Past items evaluated otherwise, the one left is not counted (see `prefixMarks`).
+		return other === undefined || length > 0 || asksOne(other.schema);
 	};
 	const said = distinctHolders(cases.flatMap((c) => c.contained)).filter(
 		(h) => {

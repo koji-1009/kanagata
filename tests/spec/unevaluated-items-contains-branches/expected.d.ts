@@ -24,7 +24,7 @@ export type Apart = [number, ...number[]] | [string, ...string[]] | [number | st
 /** contains in a member of a member: [1] matches the outer member's type, but not the inner contains, which no type says; the other member's contains is typed. */
 export type Nested = [string, ...string[]] | [number, ...number[]] | [string | number, ...(string | number)[]];
 
-/** contains in then, which applies where if admits the value, and in an anyOf member. */
+/** contains in then, which applies where if admits the value, and in an anyOf member: [1, 2] has the two items if asks for and not the string then asks for, which no type says. */
 export type Conditional = [number, number, ...number[]] | [string, string, ...string[]] | [number | string, number | string, ...(number | string)[]] | [number];
 
 /** The prefix item is evaluated without the member: [1] matches the member's type, but not its contains, which no type says. */
@@ -33,7 +33,7 @@ export type BesidePrefix = [number] | [number, string, ...string[]];
 /** The one member's contains alone evaluates every item where it matches, which it must: two strings at least. */
 export type OnlyMember = [string, string, ...string[]];
 
-/** A member evaluates its prefix item as well: where it does not match, the item is not evaluated, which no type says. */
+/** [1] matches the first member's type but not its contains, and no member matches, which no type says; where the second does not match, the first evaluates the same: its contains is typed. */
 export type PrefixedMember = [number, ...string[]] | [number, ...(string | boolean)[]] | [boolean, ...boolean[]];
 
 /** contains of the schema and of a member: which items match each no type says. */
