@@ -1,0 +1,96 @@
+{
+  "openapi": "3.1.0",
+  "components": {
+    "schemas": {
+      "NamesApart": {
+        "description": "No key propertyNames admits matches ^y-: its signature is left out.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-" },
+        "patternProperties": { "^y-": { "type": "number" } },
+        "additionalProperties": { "type": "string" }
+      },
+      "NamesOpen": {
+        "description": "The keys both admit: x-b is not one.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-a" },
+        "patternProperties": { "^x-": { "type": "number" } }
+      },
+      "NamesTwo": {
+        "type": "object",
+        "propertyNames": { "pattern": "^x-(a|b)" },
+        "patternProperties": { "^x-": { "type": "number" } },
+        "additionalProperties": false
+      },
+      "NamesTwoPatterns": {
+        "type": "object",
+        "propertyNames": { "pattern": "^x-a" },
+        "patternProperties": { "^x-": { "type": "number" }, "^x-ab": { "type": "integer" } }
+      },
+      "NamesWithinTwo": {
+        "description": "Both patterns keep the keys of x-ab, one signature of both types.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-ab" },
+        "patternProperties": { "^x-": { "type": "number" }, "^x-a": { "type": "integer" } }
+      },
+      "NamesWithProperty": {
+        "type": "object",
+        "properties": { "x-ab": { "type": "string" } },
+        "propertyNames": { "pattern": "^x-a" },
+        "patternProperties": { "^x-": { "type": ["string", "number"] } }
+      },
+      "NamesSomeKeysOfBoth": {
+        "description": "Which keys both admit no template says: the signatures stay.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-" },
+        "patternProperties": { "-y$": { "type": "number" } },
+        "additionalProperties": { "type": "string" }
+      },
+      "UnwrittenIncludes": {
+        "description": "^[a-z-]+$ matches both keys of the template: they have its type too.",
+        "type": "object",
+        "patternProperties": { "^x-[ab]$": { "type": ["number", "string"] }, "^[a-z-]+$": { "type": ["number", "boolean"] } },
+        "additionalProperties": false
+      },
+      "UnwrittenSome": {
+        "type": "object",
+        "patternProperties": { "^x-[aB]$": { "type": ["number", "string"] }, "^[a-z-]+$": { "type": ["number", "boolean"] } },
+        "additionalProperties": false
+      },
+      "UnwrittenAnyText": {
+        "description": "Whether ^[a-z-]+$ matches every key of x-${string} is not read: it does not.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "number" }, "^[a-z-]+$": { "type": "boolean" } },
+        "additionalProperties": false
+      },
+      "NamesUnwritten": {
+        "type": "object",
+        "propertyNames": { "pattern": "^x-[ab]$" },
+        "patternProperties": { "^[a-z-]+$": { "type": "number" } },
+        "additionalProperties": { "type": "string" }
+      },
+      "NamesUnwrittenAnyText": {
+        "description": "Which keys of x-${string} ^[a-z-]+$ matches is not read: its type joins additionalProperties'.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-" },
+        "patternProperties": { "^[a-z-]+$": { "type": "number" } },
+        "additionalProperties": { "type": "string" }
+      },
+      "FiniteKeys": {
+        "description": "A template without any text names its keys: TypeScript keys no index signature by it.",
+        "type": "object",
+        "patternProperties": { "^x-[ab]$": { "type": "number" } },
+        "additionalProperties": false
+      },
+      "FiniteNames": {
+        "type": "object",
+        "propertyNames": { "pattern": "^x-[ab]$" },
+        "additionalProperties": { "type": "number" }
+      },
+      "NamedTwice": {
+        "description": "a has both patterns' types, which admit no value.",
+        "type": "object",
+        "patternProperties": { "^(a|b)$": { "type": "number" }, "^a$": { "type": "string" } }
+      }
+    }
+  }
+}

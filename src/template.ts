@@ -357,6 +357,59 @@ function contains(b: Seq, a: Seq, i: number, j: number): boolean {
 }
 
 /**
+ * Whether the templates `a` and `b` admit a string both do, from segment `i` of `a` and
+ * `j` of `b`: any text in either takes any number of the other's segments, and two sets
+ * meet where they share a character.
+ */
+function meets(a: Seq, b: Seq, i: number, j: number): boolean {
+	const x = a[i];
+	const y = b[j];
+	if (x === undefined && y === undefined) return true;
+	if (x !== undefined && "any" in x)
+		return meets(a, b, i + 1, j) || (y !== undefined && meets(a, b, i, j + 1));
+	if (y !== undefined && "any" in y)
+		return meets(a, b, i, j + 1) || (x !== undefined && meets(a, b, i + 1, j));
+	if (x === undefined || y === undefined) return false;
+	const set = new Set(y.set);
+	return x.set.some((c) => set.has(c)) && meets(a, b, i + 1, j + 1);
+}
+
+/** The template of a pattern's strings (see `patternType`) written as `text`. */
+function template(pattern: string, text: string): Seq {
+	return new Parser(pattern)
+		.alternation(true)
+		.find((seq) => (render(seq) as { text?: string }).text === text) as Seq;
+}
+
+/**
+ * How the strings of template `a` stand to those of template `b`, each a pattern and the
+ * text of one of its templates: all among them, some, or none.
+ */
+export function relation(
+	a: [string, string],
+	b: [string, string],
+): "within" | "meets" | "apart" {
+	const x = template(...a);
+	const y = template(...b);
+	return contains(y, x, 0, 0)
+		? "within"
+		: meets(x, y, 0, 0)
+			? "meets"
+			: "apart";
+}
+
+/** The strings of a pattern's template (see `relation`), where it has no any text. */
+export function strings(pattern: string, text: string): string[] | undefined {
+	const seq = template(pattern, text);
+	if (seq.some((s) => "any" in s)) return undefined;
+	return seq.reduce(
+		(out, s) =>
+			out.flatMap((p) => (s as { set: string[] }).set.map((c) => p + c)),
+		[""],
+	);
+}
+
+/**
  * The templates of the strings the pattern `inner` matches (see `patternType`), as
  * written, whose strings the pattern `outer` all matches. Both are patterns
  * `patternType` reads.

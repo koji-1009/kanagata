@@ -53,11 +53,11 @@ export type WithProperty = {
 
 /** Every key propertyNames admits matches the pattern: additionalProperties applies to none. */
 export type NamesWithinPattern = {
-  [key: `x-${string}`]: number;
+  [key: `x-a${string}`]: number;
 };
 
 export type NamesWithinPatternClosed = {
-  [key: `x-${string}`]: number;
+  [key: `x-a${string}`]: number;
 };
 
 export type NamesSamePattern = {

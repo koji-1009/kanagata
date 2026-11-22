@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the strings are TypeScript template literal types as printed, not JavaScript templates.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { patternType, within } from "../../src/template.ts";
+import { patternType, relation, strings, within } from "../../src/template.ts";
 import type { Ty } from "../../src/ty.ts";
 
 /** The type a pattern is, as printed: `string`, string literals and templates joined by ` | `. */
@@ -175,6 +175,37 @@ test("the templates of a pattern whose strings another pattern all matches", () 
 		["`x-${string}`"],
 		"templates only, not the keys a pattern names",
 	);
+});
+
+test("how the strings of one template of a pattern stand to another's", () => {
+	const xa: [string, string] = ["^x-a", "`x-a${string}`"];
+	const x: [string, string] = ["^x-", "`x-${string}`"];
+	const ab: [string, string] = ["^[ab]$", '`${"a" | "b"}`'];
+	assert.equal(relation(xa, x), "within");
+	assert.equal(relation(x, xa), "meets", "some strings of both");
+	assert.equal(relation(x, ["-y$", "`${string}-y`"]), "meets");
+	assert.equal(relation(x, ["^y-", "`y-${string}`"]), "apart");
+	assert.equal(relation(ab, ["^[bc]$", '`${"b" | "c"}`']), "meets");
+	assert.equal(relation(ab, ["^[cd]$", '`${"c" | "d"}`']), "apart");
+	const abz: [string, string] = [
+		"^[ab][\\s\\S]*z$",
+		'`${"a" | "b"}${string}z`',
+	];
+	assert.equal(relation(abz, ab), "apart", "z after the one character");
+	assert.equal(relation(ab, abz), "apart");
+	assert.equal(
+		relation(
+			["^x-[ab]", '`x-${"a" | "b"}${string}`'],
+			["^x-|^y-", "`x-${string}`"],
+		),
+		"within",
+		"the template of the other pattern's that the text names",
+	);
+});
+
+test("the strings of a template without any text", () => {
+	assert.deepEqual(strings("^x-[ab]$", '`x-${"a" | "b"}`'), ["x-a", "x-b"]);
+	assert.equal(strings("^x-", "`x-${string}`"), undefined, "any text");
 });
 
 test("templates keep the pattern they are from", () => {
