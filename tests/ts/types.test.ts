@@ -287,6 +287,12 @@ export async function okResults(): Promise<void> {
 	// A status the document does not list may fail, so a HEAD with only 200 has both sides.
 	type Head = ResultOf<NoBodyPaths, "head", "/n">;
 	expectType<Equal<NotOkResult<Head>["data"], undefined>>();
+	// HEAD's 2xx statuses, documented or not, are ok, with no body.
+	expectType<Equal<OkResult<Head>["ok"], true>>();
+	expectType<
+		Equal<200 extends OkResult<Head>["status"] ? true : false, true>
+	>();
+	expectType<Equal<OkResult<Head>["data"], undefined>>();
 	type Basic404 = Extract<
 		ResultOf<Basic.paths, "get", "/users/{id}">,
 		{ status: 404 }

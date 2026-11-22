@@ -1,0 +1,21 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Base": {
+        "description": "unevaluatedProperties without an applicator is additionalProperties.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "unevaluatedProperties": { "type": "string" }
+      },
+      "Extended": {
+        "description": "A member's $ref target evaluates every key with its own unevaluatedProperties.",
+        "type": "object",
+        "allOf": [{ "$ref": "#/components/schemas/Base" }],
+        "required": ["c"],
+        "unevaluatedProperties": false
+      }
+    }
+  }
+}

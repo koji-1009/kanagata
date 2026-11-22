@@ -164,6 +164,11 @@ test("union keeps tuples that differ in their items, minimum or rest", () => {
 	assert.equal(union([rest, { ...rest }]), rest, "equal tuples are one");
 });
 
+test("union keeps references to the two views of a schema apart", () => {
+	const views = [ref("A"), ref("A", "write")];
+	assert.deepEqual(union(views), { kind: "union", items: views });
+});
+
 test("union drops never and absorbs unknown", () => {
 	assert.equal(union([NEVER, STRING]), STRING);
 	assert.equal(union([STRING, UNKNOWN]), UNKNOWN);

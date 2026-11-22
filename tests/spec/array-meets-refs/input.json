@@ -1,0 +1,24 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Items": { "description": "Array keywords without type: an array.", "items": { "type": "string" } },
+      "Short": {
+        "description": "A reference to an array without type stays, and the items it reads are its own.",
+        "allOf": [{ "$ref": "#/components/schemas/Items" }, { "maxItems": 1 }]
+      },
+      "Tags": { "type": "array", "items": { "type": "string" } },
+      "Documented": { "description": "Annotations only." },
+      "Labeled": {
+        "description": "An array reference that meets no other array needs no type beside it.",
+        "allOf": [{ "$ref": "#/components/schemas/Tags" }, { "$ref": "#/components/schemas/Documented" }]
+      },
+      "Tree": {
+        "description": "An array whose items meet a reference to it: the reference is read once, then stays a reference.",
+        "type": "array",
+        "items": { "allOf": [{ "$ref": "#/components/schemas/Tree" }, { "maxItems": 1 }] }
+      }
+    }
+  }
+}

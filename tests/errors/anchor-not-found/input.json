@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Item": { "type": "object", "properties": { "next": { "$ref": "#undefined" } } }
+    }
+  }
+}

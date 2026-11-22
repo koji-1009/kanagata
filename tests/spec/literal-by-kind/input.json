@@ -1,0 +1,33 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Overlap": {
+        "description": "Every literal two oneOf members list is in neither.",
+        "oneOf": [{ "enum": ["a", "b", "c"] }, { "enum": ["b", "c", "d"] }]
+      },
+      "FalseTwice": {
+        "description": "number does not admit false by its kind, so false, which two members list, is left out.",
+        "oneOf": [{ "type": "number" }, { "enum": [false, "none"] }, { "enum": [false, "off"] }]
+      },
+      "TrueTwice": {
+        "description": "Nor true.",
+        "oneOf": [{ "type": "number" }, { "enum": [true, "all"] }, { "enum": [true, "any"] }]
+      },
+      "ZeroTwice": {
+        "description": "boolean does not admit a number by its kind.",
+        "oneOf": [{ "type": "boolean" }, { "enum": [0, "no"] }, { "enum": [0, "zero"] }]
+      },
+      "OneTwice": {
+        "description": "Nor does string.",
+        "oneOf": [{ "type": "string" }, { "const": 1 }, { "enum": [1, 2] }]
+      },
+      "NonZero": {
+        "description": "integer admits 0 by its kind: TypeScript has no type for the numbers but 0.",
+        "type": "integer",
+        "not": { "const": 0 }
+      }
+    }
+  }
+}

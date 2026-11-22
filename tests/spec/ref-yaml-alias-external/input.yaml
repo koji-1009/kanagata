@@ -1,0 +1,20 @@
+openapi: 3.1.0
+info: { title: Shop, version: "1" }
+paths: {}
+components:
+  schemas:
+    Wishlist:
+      description: A schema in another file whose property points back into this document.
+      $ref: wishlist.yaml
+    Money: &money
+      description: Price is a YAML alias of this node, the same schema under another name.
+      type: string
+    Price: *money
+    Customer:
+      description: A $ref to a component names that component, though another component is the same YAML node, also where another file reaches it.
+      type: object
+      properties:
+        budget:
+          type: object
+          properties:
+            max: { $ref: "#/components/schemas/Price" }

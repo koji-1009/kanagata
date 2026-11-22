@@ -99,6 +99,14 @@ test("generate to a file, then --check it", () => {
 	);
 	assert.equal(text("schema.d.ts"), "stale", "--check never writes");
 
+	const bom = String.fromCharCode(0xfeff);
+	fs.set("schema.d.ts", encode(`${bom}${BASIC_DTS}`));
+	assert.equal(
+		run(["generate", "api.json", "-o", "schema.d.ts", "--check"], io),
+		1,
+		"a byte order mark the output does not have is a difference",
+	);
+
 	fs.set("schema.d.ts", new Uint8Array([0xff, 0xfe]));
 	assert.equal(
 		run(["generate", "api.json", "-o", "schema.d.ts", "--check"], io),
@@ -311,6 +319,37 @@ test("help and version", () => {
 		assert.equal(run(args, io), 0, args.join(" "));
 		assert.match(out.stdout, /kanagata generate/, args.join(" "));
 	}
+	const help = memoryIo();
+	assert.equal(run(["--help"], help.io), 0);
+	assert.equal(
+		help.out.stdout,
+		`kanagata - TypeScript types from OpenAPI 3.0 / 3.1 / 3.2 (JSON or YAML), and a typed fetch client
+
+Usage:
+  kanagata generate <openapi.json|yaml> [-o <out.d.ts>] [--check]
+                    [--loose-nullable] [--omit-version]
+  kanagata init [-o <client.ts>] [--force]
+
+Commands:
+  generate   Write the type declarations for the document (- reads stdin)
+  init       Copy the fetch client (kanagata/client) into your project to own it
+
+Options:
+  -o <path>      Output file (generate: stdout, init: ./client.ts)
+  --check        Exit with 1 if the -o file differs from the generated output
+  --loose-nullable
+                 In 3.0, read nullable: true as "this schema or null", even
+                 where OpenAPI 3.0.3 gives it no effect (no type, next to
+                 $ref, an enum without null)
+  --omit-version Leave the kanagata version out of the first line
+  --force        Let init overwrite an existing file
+  -h, --help     Show this help
+  -V, --version  Show the version
+
+Exit codes: 0 success, 1 --check found a difference, 2 an error in the
+document, the command line or a file, 3 a bug in kanagata
+`,
+	);
 	for (const args of [["--version"], ["-V"]]) {
 		const { io, out } = memoryIo();
 		assert.equal(run(args, io), 0);

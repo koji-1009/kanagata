@@ -1,0 +1,23 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "TwoOfThree": {
+        "description": "minProperties 2 with three properties: any two of them.",
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 2,
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } }
+      },
+      "Contradictory": {
+        "description": "minProperties above maxProperties admits nothing.",
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 2,
+        "maxProperties": 1,
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } }
+      }
+    }
+  }
+}

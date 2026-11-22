@@ -1,0 +1,28 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Listed": {
+        "description": "A key propertyNames lists that nothing declares has the value additionalProperties gives it.",
+        "type": "object",
+        "propertyNames": { "enum": ["a", "b"] },
+        "additionalProperties": { "type": "string" }
+      },
+      "Prefixed": {
+        "description": "The index signature by the pattern's keys admits the optional property's type, and undefined.",
+        "type": "object",
+        "properties": { "x-id": { "type": "integer" } },
+        "propertyNames": { "pattern": "^x-" },
+        "additionalProperties": { "type": "string" }
+      },
+      "AtMostOne": {
+        "description": "A pattern that names every key closes the object, so maxProperties says which properties are present.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "propertyNames": { "pattern": "^(a|b)$" },
+        "maxProperties": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Children": {
+        "description": "The items reach the node anchor of the outermost resource they are reached through: from the document, the tree's.",
+        "$id": "https://example.com/children",
+        "type": "array",
+        "items": { "$dynamicRef": "https://example.com/tree#node" }
+      },
+      "Tree": {
+        "description": "A tree whose children are in another resource, reached through $ref.",
+        "$id": "https://example.com/tree",
+        "$dynamicAnchor": "node",
+        "type": "object",
+        "properties": { "data": true, "children": { "$ref": "children" } }
+      },
+      "StrictTree": {
+        "description": "Reached through this resource, the nodes the other resource reaches are strict trees.",
+        "$id": "https://example.com/strict-tree",
+        "$dynamicAnchor": "node",
+        "$ref": "tree",
+        "unevaluatedProperties": false
+      },
+      "Linked": {
+        "description": "A $ref to a $dynamicAnchor reaches it as an $anchor does, wherever the schema is used.",
+        "$id": "https://example.com/linked",
+        "$dynamicAnchor": "node",
+        "type": "object",
+        "properties": { "data": true, "next": { "$ref": "#node" } }
+      },
+      "StrictLinked": {
+        "description": "So reached through this resource, the next node is still Linked.",
+        "$id": "https://example.com/strict-linked",
+        "$dynamicAnchor": "node",
+        "$ref": "linked",
+        "unevaluatedProperties": false
+      }
+    }
+  }
+}

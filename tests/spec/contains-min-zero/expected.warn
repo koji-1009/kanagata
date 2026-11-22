@@ -1,0 +1,2 @@
+#/components/schemas/Optional/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/Optional/maxContains: maxContains cannot be expressed in TypeScript; ignored

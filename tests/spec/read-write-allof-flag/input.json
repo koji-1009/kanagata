@@ -1,0 +1,18 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Name": { "type": "string" },
+      "User": {
+        "description": "readOnly in one allOf member of a property, next to a $ref, leaves the property out when sending.",
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "allOf": [{ "$ref": "#/components/schemas/Name" }, { "readOnly": true }] },
+          "name": { "type": "string" }
+        }
+      }
+    }
+  }
+}
