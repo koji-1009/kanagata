@@ -1,0 +1,21 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Extensions": {
+        "description": "A key propertyNames names has the value the patterns it matches give it, and no other key is admitted.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "string" } },
+        "propertyNames": { "pattern": "^(x-a|x-b)$" }
+      },
+      "Fallback": {
+        "description": "A key no pattern matches has additionalProperties' value.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "string" } },
+        "additionalProperties": { "type": "integer" },
+        "propertyNames": { "pattern": "^(x-a|id)$" }
+      }
+    }
+  }
+}

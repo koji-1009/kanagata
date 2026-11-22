@@ -2160,14 +2160,19 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (matched.length > 0) p.ty = inter([p.ty, ...matched]);
 	}
 
-	// A required key without a property schema must be present, with the value the
-	// patterns it matches admit, or else additionalProperties; any value without either.
-	for (const name of required) {
-		if (left.has(name) || props.some((p) => p.key === name)) continue;
+	// The value of a key without a property schema: what the patterns it matches admit,
+	// or else additionalProperties; any value without either.
+	const keyValue = (name: string): Ty => {
 		const matched = patterns
 			.filter(([p]) => matches(p, name))
 			.map(([, t]) => t);
-		const ty = matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
+		return matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
+	};
+
+	// A required key without a property schema must be present, with that value.
+	for (const name of required) {
+		if (left.has(name) || props.some((p) => p.key === name)) continue;
+		const ty = keyValue(name);
 		if (ty.kind === "never") return NEVER;
 		props.push({ ...prop(name, ty), present: true });
 	}
@@ -2184,10 +2189,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		);
 		for (const name of allowed) {
 			if (left.has(name) || kept.some((p) => p.key === name)) continue;
-			const matched = patterns
-				.filter(([p]) => matches(p, name))
-				.map(([, t]) => t);
-			const ty = matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
+			const ty = keyValue(name);
 			if (ty.kind !== "never") kept.push({ key: name, ty, optional: true });
 		}
 		return counted(v, kept);
@@ -2219,18 +2221,21 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 			...(own.some((p) => p.optional) ? [UNDEFINED] : []),
 		]);
 	};
-	const byPattern: Keyed[] = keyed.map((k) => ({
-		key: k.key,
-		ty: admitting(k.ty, (key) => matches(k.pattern, key)),
-	}));
-	const everyType = [
+	// Read once the properties are all there.
+	const keyedSignatures = (): Keyed[] =>
+		keyed.map((k) => ({
+			key: k.key,
+			ty: admitting(k.ty, (key) => matches(k.pattern, key)),
+		}));
+	const allTypes = (): Ty[] => [
 		...unwritten,
 		...keyed.map((k) => k.ty),
 		...props.map((p) => p.ty),
 	];
 
 	// propertyNames: { pattern } keys the object by it: a property it does not admit cannot
-	// be there, a key it names is a property, and the others index signatures by its templates.
+	// be there, a key it names is a property with the value the patterns or
+	// additionalProperties give it, and the others index signatures by its templates.
 	const names = keyPattern(v.get("propertyNames"));
 	if (names !== undefined) {
 		const pattern = (v.get("propertyNames") as JsonObject).str(
@@ -2239,21 +2244,32 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		if (props.some((p) => !p.optional && !matches(pattern, p.key)))
 			return NEVER;
 		for (const p of props) if (!matches(pattern, p.key)) p.ty = NEVER;
-		const rest: Keyed[] = [];
-		for (const key of names.kind === "union" ? names.items : [names])
-			if (key.kind === "lit")
-				named(JSON.parse(key.text) as string, additional ?? UNKNOWN);
-			else if (additional?.kind !== "never")
-				rest.push({
-					key,
-					ty: admitting(
-						union([additional ?? UNKNOWN, ...everyType]),
-						() => true,
-					),
-				});
+		const keys = names.kind === "union" ? names.items : [names];
+		for (const key of keys)
+			if (key.kind === "lit") {
+				const name = JSON.parse(key.text) as string;
+				named(name, keyValue(name));
+			}
+		const templates = keys.filter((k) => k.kind !== "lit");
+		// Where it names every key, those are the properties: no other key is admitted.
+		if (templates.length === 0) return counted(v, props);
+		const rest: Keyed[] =
+			additional?.kind === "never"
+				? []
+				: templates.map((key) => ({
+						key,
+						ty: admitting(
+							union([additional ?? UNKNOWN, ...allTypes()]),
+							() => true,
+						),
+					}));
+		const byPattern = keyedSignatures();
 		if (byPattern.length === 0 && rest.length === 0) return counted(v, props);
 		return { kind: "map", props, keyed: [...byPattern, ...rest] };
 	}
+
+	const byPattern = keyedSignatures();
+	const everyType = allTypes();
 
 	if (additional === undefined) {
 		if (byPattern.length === 0)
