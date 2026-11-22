@@ -1,0 +1,22 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Integer": {
+        "description": "A member's bounds list the integers between them where the schema it is a member of is an integer, as next to type.",
+        "type": "integer",
+        "allOf": [{ "minimum": 1, "maximum": 3 }]
+      },
+      "Decimal": {
+        "description": "Numbers between bounds are no union.",
+        "type": "number",
+        "allOf": [{ "minimum": 1, "maximum": 3 }]
+      },
+      "Any": {
+        "description": "Without type the member admits any value outside its bounds' kind.",
+        "allOf": [{ "minimum": 1, "maximum": 3 }]
+      }
+    }
+  }
+}

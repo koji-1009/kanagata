@@ -1539,9 +1539,16 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 	// Keywords for strings and numbers without type constrain those kinds alone.
 	const s = text(v);
 	const n = numeric(cx, v, false);
-	if (s === STRING && n === NUMBER) return UNKNOWN;
+	const kinds = contextKinds(cx, v);
+	// The integers between the bounds say more where integers, not numbers, are a kind there.
+	if (
+		s === STRING &&
+		n === NUMBER &&
+		(kinds.includes("number") || numeric(cx, v, true) === INTEGER)
+	)
+		return UNKNOWN;
 	return union(
-		contextKinds(cx, v).map((k) =>
+		kinds.map((k) =>
 			k === "string"
 				? s
 				: k === "number"
