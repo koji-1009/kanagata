@@ -10,12 +10,14 @@ import {
 	NULL,
 	NUMBER,
 	object,
+	type Prop,
 	prop,
 	RECORD,
 	ref,
 	STRING,
 	type Ty,
 	tuple,
+	UNDEFINED,
 	UNKNOWN,
 	union,
 } from "../../src/ty.ts";
@@ -244,4 +246,74 @@ test("intersection with never and unknown", () => {
 test("union keeps intersection members", () => {
 	const i = inter([schemaRef("A"), schemaRef("B")]);
 	assert.deepEqual(union([i, NULL]), { kind: "union", items: [i, NULL] });
+});
+
+test("union keeps members that differ in structure and removes equal ones", () => {
+	const field = (p: Partial<Prop>): Ty =>
+		object([{ key: "a,b", ty: STRING, optional: true, ...p }]);
+	const differing: Ty[] = [
+		field({}),
+		field({ optional: false }),
+		field({ present: true }),
+		field({ doc: "x" }),
+		field({ ty: NUMBER }),
+		field({ key: "a" }),
+		{ kind: "map", props: [], index: STRING },
+		{ kind: "map", props: [], index: NUMBER },
+		array(STRING),
+		array(tuple([STRING])),
+		inter([schemaRef("A"), schemaRef("B")]),
+	];
+	assert.deepEqual(union(differing), { kind: "union", items: differing });
+	const copies = differing.map((t) => ({ ...t }));
+	assert.deepEqual(union([...differing, ...copies]), {
+		kind: "union",
+		items: differing,
+	});
+	// Many members, literals and others, are told apart the same.
+	const many = Array.from({ length: 20 }, (_, i) => [
+		lit(String(i)),
+		tuple([lit(String(i))]),
+	]).flat();
+	const again = many.map((t) => ({ ...t }));
+	assert.deepEqual(union([...many, ...again]), { kind: "union", items: many });
+});
+
+test("many members are told apart by their keys, every kind", () => {
+	const id = prop("id", STRING);
+	const name = prop("name", STRING);
+	const x: Ty = { kind: "template", text: "`x-a`" };
+	const distinctOnes: Ty[] = [
+		lit('"a"'),
+		{ kind: "template", text: "`t`" },
+		ref("A"),
+		ref("A", "write"),
+		NULL,
+		UNDEFINED,
+		object([id, name]),
+		object([name, id]),
+		object([id]),
+		object([]),
+		object([
+			{ key: "id", ty: STRING, optional: true, present: true, doc: "An id" },
+		]),
+		{ kind: "map", props: [], index: NEVER },
+		{ kind: "map", props: [], keyed: [{ key: x, ty: STRING }] },
+		{
+			kind: "map",
+			props: [id, name],
+			index: STRING,
+			keyed: [{ key: x, ty: NUMBER }],
+		},
+		array(STRING),
+		{ kind: "tuple", items: [STRING], min: 1, rest: NUMBER },
+		{ kind: "inter", items: [schemaRef("B"), object([id])] },
+		tuple([union([lit('"x"'), lit('"y"')])]),
+		lit("1"),
+	];
+	const copies = distinctOnes.map((t) => ({ ...t }));
+	assert.deepEqual(union([...distinctOnes, ...copies]), {
+		kind: "union",
+		items: distinctOnes,
+	});
 });

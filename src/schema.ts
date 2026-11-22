@@ -1519,9 +1519,14 @@ function itemCases(
 
 /** `holders`, each schema once. */
 function distinctHolders(holders: Holder[]): Holder[] {
-	return holders.filter(
-		(h, i) => holders.findIndex((x) => x.schema === h.schema) === i,
-	);
+	const seen = new Set<JsonObject>();
+	const out: Holder[] = [];
+	for (const h of holders) {
+		if (seen.has(h.schema)) continue;
+		seen.add(h.schema);
+		out.push(h);
+	}
+	return out;
 }
 
 /**

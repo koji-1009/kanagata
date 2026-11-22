@@ -307,19 +307,90 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
 
 /**
  * Collects distinct members: literals by their text through a Set (enums can have
- * thousands), other types by structure.
+ * thousands), other types by their structure: a few one by one (`equal`), past `FEW` by
+ * their keys (`structure`) through a Set (unions of thousands of tuples are built too).
  */
 function distinct(): { out: Ty[]; add: (t: Ty) => void } {
 	const out: Ty[] = [];
 	const texts = new Set<string>();
+	let others = 0;
+	let keys: Set<string> | undefined;
 	const add = (t: Ty): void => {
 		if (t.kind === "lit") {
 			if (texts.has(t.text)) return;
 			texts.add(t.text);
-		} else if (out.some((o) => equal(o, t))) return;
+		} else if (keys === undefined) {
+			if (out.some((o) => equal(o, t))) return;
+			out.push(t);
+			if (++others >= FEW)
+				keys = new Set(
+					out.flatMap((o) => (o.kind === "lit" ? [] : [structure(o)])),
+				);
+			return;
+		} else {
+			const key = structure(t);
+			if (keys.has(key)) return;
+			keys.add(key);
+		}
 		out.push(t);
 	};
 	return { out, add };
+}
+
+/** How many members other than literals `distinct` compares one by one. */
+const FEW = 16;
+
+/**
+ * A key that is equal for types `equal` finds equal (references to the two views of a
+ * schema differ). Strings in it are JSON, so the key of a member does not run into the
+ * next one's. Remembered: a type is never changed once built.
+ */
+const structure = (t: Ty): string => {
+	let key = structures.get(t);
+	if (key === undefined) {
+		key = structureOf(t);
+		structures.set(t, key);
+	}
+	return key;
+};
+
+const structures = new WeakMap<Ty, string>();
+
+function structureOf(t: Ty): string {
+	const list = (ts: Ty[]) => ts.map(structure).join(",");
+	const props = (ps: Prop[]) =>
+		ps
+			.map(
+				(p) =>
+					`${JSON.stringify(p.key)}${p.optional ? "?" : ""}${p.present ? "!" : ""}${p.doc === undefined ? "" : JSON.stringify(p.doc)}:${structure(p.ty)}`,
+			)
+			.join(",");
+	switch (t.kind) {
+		case "lit":
+		case "template":
+			return `${t.kind}${JSON.stringify(t.text)}`;
+		case "ref":
+			return `ref${JSON.stringify(t.schema)}${t.view}`;
+		case "array":
+			return `array(${structure(t.elem)})`;
+		case "tuple":
+			return `tuple${t.min}(${list(t.items)}${t.rest === undefined ? "" : `;${structure(t.rest)}`})`;
+		case "object":
+			return `object(${props(t.props)})`;
+		case "map": {
+			// As `equal` reads them: the index signatures in a row, `[key: string]` last.
+			const keyed = [
+				...(t.keyed ?? []).flatMap((k) => [k.key, k.ty]),
+				...(t.index === undefined ? [] : [STRING, t.index]),
+			];
+			return `map(${props(t.props)};${list(keyed)})`;
+		}
+		case "union":
+		case "inter":
+			return `${t.kind}(${list(t.items)})`;
+		default:
+			return t.kind;
+	}
 }
 
 /**
