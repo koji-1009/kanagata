@@ -2057,7 +2057,11 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 /** A count keyword (`minItems`, `maxItems`): a non-negative integer, or undefined. */
 function count(v: JsonObject, key: string): number | undefined {
 	const n = v.get(key);
-	const value = n instanceof JsonNumber ? Number(n.text) : Number.NaN;
+	// Whole by its exact value (`1e-400` is not), and one a JavaScript number holds.
+	const value =
+		n instanceof JsonNumber && isWhole(decimal(n.text))
+			? Number(n.text)
+			: Number.NaN;
 	return Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
@@ -2150,8 +2154,7 @@ function object(cx: Ctx, v: JsonObject, at: string): Ty {
 	if (closed !== undefined && required.some((n) => !closed.has(n)))
 		return NEVER;
 	// maxProperties 0 admits no keys: the empty object, or nothing if one is required.
-	const max = v.get("maxProperties");
-	if (max instanceof JsonNumber && Number(max.text) === 0)
+	if (count(v, "maxProperties") === 0)
 		return required.some((n) => !left.has(n))
 			? NEVER
 			: { kind: "map", props: [], index: NEVER };

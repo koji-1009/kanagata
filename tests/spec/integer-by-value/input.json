@@ -1,0 +1,28 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Huge": {
+        "description": "An integer is a number with no fraction, by its exact value: 1e400 is one, though a JavaScript number cannot hold it.",
+        "type": "integer",
+        "enum": [1e400, 2]
+      },
+      "Tiny": {
+        "description": "1e-400 is not, though a JavaScript number rounds it to 0.",
+        "type": "integer",
+        "enum": [1e-400, 2]
+      },
+      "TinyMax": {
+        "description": "A count that is not an integer is ignored.",
+        "type": "array",
+        "maxItems": 1e-400
+      },
+      "TinyMaxProperties": {
+        "description": "So is maxProperties.",
+        "type": "object",
+        "maxProperties": 1e-400
+      }
+    }
+  }
+}
