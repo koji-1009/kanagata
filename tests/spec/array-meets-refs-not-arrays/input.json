@@ -1,0 +1,41 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "OneNullable": {
+        "description": "A schema that admits other kinds too is not converted for the array it meets: its warning comes where it is.",
+        "allOf": [{ "$ref": "#/components/schemas/Nullable" }, { "maxItems": 1 }]
+      },
+      "OneMixed": {
+        "description": "Nor are values that are not all arrays.",
+        "allOf": [{ "$ref": "#/components/schemas/Mixed" }, { "maxItems": 1 }]
+      },
+      "OneEither": {
+        "description": "Nor members that are not all arrays.",
+        "allOf": [{ "$ref": "#/components/schemas/Either" }, { "maxItems": 1 }]
+      },
+      "OneRetyped": {
+        "description": "A $ref beside type: array is an array, read where it is met (its warning comes first), but its type is an intersection with the target's, which leaves no array type to put beside it.",
+        "allOf": [{ "$ref": "#/components/schemas/Retyped" }, { "maxItems": 1 }]
+      },
+      "Counts": { "type": "array", "items": { "type": "string" }, "contains": { "const": "a" } },
+      "Nullable": { "type": ["array", "null"], "items": { "type": "string" }, "contains": { "const": "a" } },
+      "Mixed": {
+        "enum": [["a"], "none"],
+        "if": { "properties": { "k": { "const": "a" } } },
+        "then": { "required": ["k"] }
+      },
+      "Either": {
+        "anyOf": [{ "type": "array", "items": { "type": "string" }, "contains": { "const": "a" } }, { "type": "string" }]
+      },
+      "Base": { "description": "Any value." },
+      "Retyped": {
+        "$ref": "#/components/schemas/Base",
+        "type": "array",
+        "items": { "type": "string" },
+        "contains": { "const": "a" }
+      }
+    }
+  }
+}

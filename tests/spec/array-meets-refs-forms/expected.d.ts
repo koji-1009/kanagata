@@ -14,6 +14,8 @@ export interface schemas {
   OneAlias: OneAlias;
   Wrapped: Wrapped;
   OneWrapped: OneWrapped;
+  Titled: Titled;
+  OneTitled: OneTitled;
   Origin: Origin;
   AtOrigin: AtOrigin;
   Corners: Corners;
@@ -42,6 +44,11 @@ export type Wrapped = Tags;
 
 /** And an allOf member that is one. */
 export type OneWrapped = Wrapped & [string?];
+
+export type Titled = Tags;
+
+/** Its other members need not be arrays. */
+export type OneTitled = Titled & [string?];
 
 export type Origin = [0, 0];
 

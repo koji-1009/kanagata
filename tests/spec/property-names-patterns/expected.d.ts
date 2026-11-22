@@ -7,6 +7,8 @@ export interface operations {}
 export interface schemas {
   Extensions: Extensions;
   Fallback: Fallback;
+  Closed: Closed;
+  ClosedExtensions: ClosedExtensions;
 }
 
 /** A key propertyNames names has the value the patterns it matches give it, and no other key is admitted. */
@@ -19,4 +21,14 @@ export type Extensions = {
 export type Fallback = {
   "x-a"?: string;
   id?: number;
+};
+
+/** Without patternProperties, a closed object admits no key, whatever propertyNames admits. */
+export type Closed = {
+  [key: string]: never;
+};
+
+/** The keys patternProperties gives a value are the only ones a closed object admits. */
+export type ClosedExtensions = {
+  [key: `x-${string}`]: string;
 };

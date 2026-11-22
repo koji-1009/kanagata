@@ -15,6 +15,19 @@
         "patternProperties": { "^x-": { "type": "string" } },
         "additionalProperties": { "type": "integer" },
         "propertyNames": { "pattern": "^(x-a|id)$" }
+      },
+      "Closed": {
+        "description": "Without patternProperties, a closed object admits no key, whatever propertyNames admits.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-" },
+        "additionalProperties": false
+      },
+      "ClosedExtensions": {
+        "description": "The keys patternProperties gives a value are the only ones a closed object admits.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "string" } },
+        "propertyNames": { "pattern": "^x-" },
+        "additionalProperties": false
       }
     }
   }

@@ -24,6 +24,11 @@
         "description": "And an allOf member that is one.",
         "allOf": [{ "$ref": "#/components/schemas/Wrapped" }, { "maxItems": 1 }]
       },
+      "Titled": { "allOf": [{ "$ref": "#/components/schemas/Tags" }, { "title": "Tags" }] },
+      "OneTitled": {
+        "description": "Its other members need not be arrays.",
+        "allOf": [{ "$ref": "#/components/schemas/Titled" }, { "maxItems": 1 }]
+      },
       "Origin": { "const": [0, 0] },
       "AtOrigin": {
         "description": "A const array is a tuple.",
