@@ -1,18 +1,20 @@
 // Intermediate representation of TypeScript types, and its normalization.
 
+import { type JsonNumber, JsonObject, toJson, type Value } from "./json.ts";
+
 export interface Prop {
-	key: string;
-	ty: Ty;
-	optional: boolean;
-	doc?: string;
+	readonly key: string;
+	readonly ty: Ty;
+	readonly optional: boolean;
+	readonly doc?: string;
 	/** A key a JSON object must have: its value is a JSON value, never `undefined` (see `presentKeys`). */
-	present?: true;
+	readonly present?: true;
 }
 
 /** An index signature by a template literal type: `[key: `x-${string}`]: ty`. */
 export interface Keyed {
-	key: Ty;
-	ty: Ty;
+	readonly key: Ty;
+	readonly ty: Ty;
 }
 
 /** Which view of a component schema a reference means: as returned, or as sent. */
@@ -39,52 +41,71 @@ export function inTemplate(seq: Segment[], s: string, i = 0, at = 0): boolean {
 }
 
 export type Ty =
-	| { kind: "unknown" }
+	| { readonly kind: "unknown" }
 	/** `{}`: any value but `null` and `undefined`. */
-	| { kind: "nonNullish" }
-	| { kind: "never" }
-	| { kind: "null" }
-	| { kind: "undefined" }
-	| { kind: "string" }
-	| { kind: "number" }
+	| { readonly kind: "nonNullish" }
+	| { readonly kind: "never" }
+	| { readonly kind: "null" }
+	| { readonly kind: "undefined" }
+	| { readonly kind: "string" }
+	| { readonly kind: "number" }
 	/** A whole number; printed as `number`, but it narrows `enum` / `const` values to whole ones. */
-	| { kind: "integer" }
-	| { kind: "boolean" }
-	| { kind: "blob" }
+	| { readonly kind: "integer" }
+	| { readonly kind: "boolean" }
+	| { readonly kind: "blob" }
 	/** `Record<string, unknown>`: any object. */
-	| { kind: "record" }
+	| { readonly kind: "record" }
 	/** Literal in JSON notation: `"admin"` with quotes, `1`, `true`. */
-	| { kind: "lit"; text: string }
+	| { readonly kind: "lit"; readonly text: string }
 	/**
 	 * A template literal type, as printed: `` `https://${"us" | "eu"}.example.com` ``, and
 	 * its segments, which say which strings it admits (see `inTemplate`).
 	 */
-	| { kind: "template"; text: string; seq: Segment[] }
+	| {
+			readonly kind: "template";
+			readonly text: string;
+			readonly seq: Segment[];
+	  }
 	/**
 	 * A component schema, by its key in `components.schemas`; named when emitted. `kinds`
 	 * are those of its type, once all components are converted (see `withRefKinds`).
 	 */
-	| { kind: "ref"; schema: string; view: View; kinds?: ValueKind[] }
+	| {
+			readonly kind: "ref";
+			readonly schema: string;
+			readonly view: View;
+			readonly kinds?: ValueKind[];
+	  }
 	/** `operations[id]` */
-	| { kind: "opRef"; id: string }
-	| { kind: "array"; elem: Ty }
+	| { readonly kind: "opRef"; readonly id: string }
+	| { readonly kind: "array"; readonly elem: Ty }
 	/**
 	 * `[A, B?, ...R[]]`: the first `min` items are required, the rest optional,
 	 * followed by any number of `rest` items when given.
 	 */
-	| { kind: "tuple"; items: Ty[]; min: number; rest?: Ty }
+	| {
+			readonly kind: "tuple";
+			readonly items: Ty[];
+			readonly min: number;
+			readonly rest?: Ty;
+	  }
 	/** Object literal; `{}` when empty. */
-	| { kind: "object"; props: Prop[] }
+	| { readonly kind: "object"; readonly props: Prop[] }
 	/**
 	 * Object literal with index signatures: `{ a: A; [key: `x-${string}`]: K; [key: string]: T }`,
 	 * `keyed` by template literal types, `index` by any string.
 	 */
-	| { kind: "map"; props: Prop[]; index?: Ty; keyed?: Keyed[] }
-	| { kind: "union"; items: Ty[] }
-	| { kind: "inter"; items: Ty[] };
+	| {
+			readonly kind: "map";
+			readonly props: Prop[];
+			readonly index?: Ty;
+			readonly keyed?: Keyed[];
+	  }
+	| { readonly kind: "union"; readonly items: Ty[] }
+	| { readonly kind: "inter"; readonly items: Ty[] };
 
 export const UNKNOWN: Ty = { kind: "unknown" };
-export const NON_NULLISH: Ty = { kind: "nonNullish" };
+const NON_NULLISH: Ty = { kind: "nonNullish" };
 export const NEVER: Ty = { kind: "never" };
 export const NULL: Ty = { kind: "null" };
 export const UNDEFINED: Ty = { kind: "undefined" };
@@ -95,7 +116,7 @@ export const BOOLEAN: Ty = { kind: "boolean" };
 export const BLOB: Ty = { kind: "blob" };
 export const RECORD: Ty = { kind: "record" };
 /** `{} | null`: any JSON value. */
-export const ANY_JSON: Ty = { kind: "union", items: [NON_NULLISH, NULL] };
+const ANY_JSON: Ty = { kind: "union", items: [NON_NULLISH, NULL] };
 
 export const lit = (text: string): Ty => ({ kind: "lit", text });
 export const ref = (schema: string, view: View = "read"): Ty => ({
@@ -119,6 +140,27 @@ export const prop = (key: string, ty: Ty): Prop => ({
 	key,
 	ty,
 	optional: false,
+});
+
+/** A key a JSON object must have, of this type (see `Prop.present`). */
+export const present = (key: string, ty: Ty): Prop => ({
+	key,
+	ty,
+	optional: false,
+	present: true,
+});
+
+/** A key an object does not have: `key?: never`. */
+export const neverProp = (key: string): Prop => ({
+	key,
+	ty: NEVER,
+	optional: true,
+});
+
+/** The objects without this key: `{ key?: never }`. */
+export const absent = (key: string): Ty => ({
+	kind: "object",
+	props: [neverProp(key)],
 });
 
 /**
@@ -331,7 +373,7 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
 }
 
 /** What a reference's component is: its type and the kinds of value it admits, in the reference's view. */
-export interface Components {
+interface Components {
 	kinds: (r: RefTy) => ValueKind[] | undefined;
 	type: (r: RefTy) => Ty;
 }
@@ -690,7 +732,7 @@ export function union(items: Ty[]): Ty {
 						: t.kind === "tuple" ||
 								(t.kind === "array" && t.elem.kind !== "unknown")
 							? !kinds.includes("array")
-							: t.kind !== "lit" || !admits(kinds, t),
+							: t.kind !== "lit" || !ofKinds(kinds, t),
 		);
 	if (out.length === 0) return NEVER;
 	const [only] = out;
@@ -856,14 +898,13 @@ function mergeObjects(items: Ty[]): Ty[] {
 				props.push(p);
 				continue;
 			}
-			const met: Prop = {
+			props[i] = {
 				...q,
 				ty: inter([q.ty, p.ty]),
 				optional: q.optional && p.optional,
+				...(p.present ? { present: true } : {}),
+				...(q.doc === undefined && p.doc !== undefined ? { doc: p.doc } : {}),
 			};
-			if (p.present) met.present = true;
-			if (met.doc === undefined && p.doc !== undefined) met.doc = p.doc;
-			props[i] = met;
 		}
 	if (props.some((p) => !p.optional && p.ty.kind === "never")) return [NEVER];
 	return [
@@ -978,7 +1019,7 @@ const ONE_KIND: Record<ValueKind, ValueKind[]> = {
  * tuple as an array, any object or map type as an object (not only those from
  * const / enum, so `type: string` with `properties` meets as `never`).
  */
-function valueKind(t: Ty): ValueKind | undefined {
+export function valueKind(t: Ty): ValueKind | undefined {
 	if (t.kind === "lit")
 		return t.text.startsWith('"')
 			? "string"
@@ -1015,9 +1056,11 @@ function narrow(items: Ty[]): Ty[] {
 		.filter(isLiterals)
 		.map((v) => new Set(v.map(valueKey)));
 	const keep = (m: Ty) =>
-		(kinds === undefined || admits(kinds, m)) &&
+		(kinds === undefined || ofKinds(kinds, m)) &&
 		(!isLiteral(m) || literalSets.every((s) => s.has(valueKey(m)))) &&
-		templates.every((t) => admitsString(t, m));
+		templates.every((t) =>
+			admitsText(t, JSON.parse((m as { text: string }).text)),
+		);
 	const hasValues = valueSets.some((v) => v !== undefined);
 	let changed = false;
 	let literalsSeen = false;
@@ -1071,14 +1114,13 @@ function isStrings(t: Ty): boolean {
 	);
 }
 
-/** Whether a type of some strings admits a string literal: a template by its segments, a literal by its text. */
-function admitsString(t: Ty, m: Ty): boolean {
-	const text = (m as { text: string }).text;
-	const s = JSON.parse(text) as string;
+/** Whether a type of some strings admits a string: a template by its segments, a literal by its text. */
+export function admitsText(t: Ty, s: string): boolean {
+	const text = JSON.stringify(s);
 	return (t.kind === "union" ? t.items : [t]).some((x) =>
 		x.kind === "template"
 			? inTemplate(x.seq, s)
-			: (x as { text: string }).text === text,
+			: x.kind === "lit" && x.text === text,
 	);
 }
 
@@ -1184,8 +1226,8 @@ const isLiteral = (m: Ty): boolean => m.kind === "lit" || m.kind === "null";
 const isLiterals = (v: Ty[] | undefined): v is Ty[] =>
 	v?.every(isLiteral) === true;
 
-/** The type for each kind of value. */
-const KIND_TY: Record<ValueKind, Ty> = {
+/** The type for each kind of value, which `type` names. */
+export const KIND_TY: Readonly<Record<ValueKind, Ty>> = {
 	string: STRING,
 	number: NUMBER,
 	integer: INTEGER,
@@ -1194,6 +1236,10 @@ const KIND_TY: Record<ValueKind, Ty> = {
 	object: RECORD,
 	array: { kind: "array", elem: UNKNOWN },
 };
+
+/** Whether a `type` names a kind of value JSON Schema has. */
+export const isValueKind = (k: unknown): k is ValueKind =>
+	typeof k === "string" && Object.hasOwn(KIND_TY, k);
 
 /** The kinds both sets allow; `integer` is within `number`. */
 function meet(a: ValueKind[], b: ValueKind[]): ValueKind[] {
@@ -1242,8 +1288,26 @@ export function equalValues(a: Ty, b: Ty): boolean {
 		: equal(a, b);
 }
 
-/** Whether a value (`"a"`, `1.5`, `null`, an exact object) is of one of these kinds. */
-function admits(kinds: ValueKind[], m: Ty): boolean {
+/** The exact type of a JSON value: objects become object types with every key required, arrays become closed tuples. */
+export function literal(v: Value): Ty {
+	if (v === null) return NULL;
+	if (Array.isArray(v)) return tuple(v.map(literal));
+	if (v instanceof JsonObject) {
+		// `{}` would admit any non-nullish value; an empty const object admits no keys.
+		if (v.entries.length === 0) return { kind: "map", props: [], index: NEVER };
+		return {
+			kind: "object",
+			props: v.entries.map(([k, x]) => prop(k, literal(x))),
+		};
+	}
+	return lit(toJson(v as string | boolean | JsonNumber));
+}
+
+/**
+ * Whether a value (`"a"`, `1.5`, `null`, an exact object) is of one of these kinds: a
+ * whole number of `integer` too.
+ */
+export function ofKinds(kinds: readonly ValueKind[], m: Ty): boolean {
 	const kind = m.kind === "null" ? "null" : valueKind(m);
 	if (
 		kind === "number" &&
@@ -1256,6 +1320,6 @@ function admits(kinds: ValueKind[], m: Ty): boolean {
 }
 
 /** Whether a number's text is a whole number by its exact value (`1e400` is, `1e-400` is not). */
-function isWholeText(text: string): boolean {
+export function isWholeText(text: string): boolean {
 	return !numberKey(text).includes("e-");
 }

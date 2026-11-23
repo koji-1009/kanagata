@@ -6,21 +6,34 @@
 // a list (`negation`, `refuted`, `excluded`). Whether a schema admits a literal is decided
 // by its keywords where they say (`accepts`).
 
-import { get, JsonNumber, JsonObject, type Value } from "./json.ts";
-import { KIND } from "./kinds.ts";
-import { admitting, count, decimal, isWhole } from "./number.ts";
-import type { Ctx } from "./pointer.ts";
-import { isAnnotation, literal } from "./schema.ts";
 import {
+	get,
+	JsonNumber,
+	JsonObject,
+	jsonKind,
+	stringsIn,
+	type Value,
+} from "./json.ts";
+import { admitting, count } from "./number.ts";
+import type { Ctx } from "./pointer.ts";
+import {
+	absent,
 	array as arrayTy,
 	equalValues,
 	inter,
+	isValueKind,
+	isWholeText,
+	KIND_TY,
+	literal,
 	NEVER,
-	prop,
+	ofKinds,
+	present,
 	type Ty,
 	UNKNOWN,
 	union,
+	type ValueKind,
 } from "./ty.ts";
+import { asserted, assertions, isAnnotation } from "./vocab.ts";
 
 /**
  * The values `not` leaves, where TypeScript can say them: none for a schema that admits
@@ -32,7 +45,7 @@ export function negation(n: Value): Ty | undefined {
 	if (n === false) return UNKNOWN;
 	// true, and anything else read as a schema that admits every value.
 	if (!(n instanceof JsonObject)) return NEVER;
-	const keys = n.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	const keys = asserted(n);
 	if (keys.length === 0) return NEVER;
 	if (keys.length !== 1) return undefined;
 	if (keys[0] === "type") return otherKinds(n.get("type"));
@@ -58,9 +71,7 @@ function admitted(s: Value): Ty | undefined {
 			// A type JSON Schema does not have says nothing.
 			t = union(
 				(Array.isArray(x) ? x : [x]).map((n) =>
-					typeof n === "string" && Object.hasOwn(KIND, n)
-						? (KIND[n] as Ty)
-						: UNKNOWN,
+					isValueKind(n) ? KIND_TY[n] : UNKNOWN,
 				),
 			);
 		else if (k === "required" && Array.isArray(x))
@@ -69,9 +80,7 @@ function admitted(s: Value): Ty | undefined {
 				otherKinds("object") as Ty,
 				{
 					kind: "object",
-					props: x
-						.filter((r): r is string => typeof r === "string")
-						.map((key) => ({ ...prop(key, UNKNOWN), present: true })),
+					props: stringsIn(x).map((key) => present(key, UNKNOWN)),
 				},
 			]);
 		else if (k === "enum" && Array.isArray(x)) t = union(x.map(literal));
@@ -89,27 +98,23 @@ function admitted(s: Value): Ty | undefined {
  */
 function otherKinds(t: Value | undefined): Ty | undefined {
 	const named = Array.isArray(t) ? t : [t];
-	if (!named.every((k) => typeof k === "string" && Object.hasOwn(KIND, k)))
-		return NEVER;
+	if (!named.every(isValueKind)) return NEVER;
 	// Without number, an integer is a number TypeScript cannot leave out.
 	if (named.includes("integer") && !named.includes("number")) return undefined;
-	return union(
-		["string", "number", "boolean", "null", "array", "object"]
-			.filter((k) => !named.includes(k))
-			.map((k) => KIND[k] as Ty),
-	);
+	const kinds: ValueKind[] = [
+		"string",
+		"number",
+		"boolean",
+		"null",
+		"array",
+		"object",
+	];
+	return union(kinds.filter((k) => !named.includes(k)).map((k) => KIND_TY[k]));
 }
 
 /** The objects without one of these keys. */
 function lacking(names: Value[]): Ty {
-	return union(
-		names
-			.filter((r): r is string => typeof r === "string")
-			.map((key) => ({
-				kind: "object",
-				props: [{ key, ty: NEVER, optional: true }],
-			})),
-	);
+	return union(stringsIn(names).map(absent));
 }
 
 /**
@@ -117,10 +122,14 @@ function lacking(names: Value[]): Ty {
  * `type`, the objects without a key for `required`, the shorter arrays for `minItems` and
  * the longer for `maxItems`, and for `properties` the objects with
  * a property it does not admit: of the other kinds for one with `type`, or of the values
- * the schema and the schemas around it declare the property with (`enum`, `const`) that
- * it rejects. undefined for any other `if`.
+ * the schemas `if` is in (`parents`: the schema and those around it) declare the property
+ * with (`enum`, `const`) that it rejects. undefined for any other `if`.
  */
-export function refuted(cx: Ctx, cond: Value, around: Value[]): Ty | undefined {
+export function refuted(
+	cx: Ctx,
+	cond: Value,
+	parents: Value[],
+): Ty | undefined {
 	if (cond === false) return UNKNOWN;
 	if (!(cond instanceof JsonObject)) return NEVER;
 	const terms: Ty[] = [];
@@ -153,13 +162,10 @@ export function refuted(cx: Ctx, cond: Value, around: Value[]): Ty | undefined {
 			terms.push(t);
 		} else if (k === "properties" && x instanceof JsonObject) {
 			for (const [p, s] of x.entries) {
-				const t = rejected(cx, s, declared(cx, around, p));
+				const t = rejected(cx, s, declared(cx, parents, p));
 				if (t === undefined) return undefined;
 				if (t.kind !== "never")
-					terms.push({
-						kind: "object",
-						props: [{ key: p, ty: t, optional: false, present: true }],
-					});
+					terms.push({ kind: "object", props: [present(p, t)] });
 			}
 		} else return undefined;
 	}
@@ -174,7 +180,7 @@ function rejected(
 ): Ty | undefined {
 	if (s === false) return UNKNOWN;
 	if (!(s instanceof JsonObject)) return NEVER;
-	const keys = s.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	const keys = asserted(s);
 	if (keys.length === 0) return NEVER;
 	if (values !== undefined) {
 		const verdicts = values.map((x) => accepts(cx, s, x));
@@ -213,13 +219,10 @@ function declared(
 				const allOf = get(s, "allOf");
 				if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
 			}
-			for (const target of cx.reached(s)) {
-				if (seen.has(target.uri)) continue;
-				seen.add(target.uri);
-				meet(
-					cx.inTarget(target, () => declared(cx, [target.value], key, seen)),
-				);
-			}
+			for (const values of cx.eachTarget(s, seen, (t) =>
+				declared(cx, [t.value], key, seen),
+			))
+				meet(values);
 		});
 	return out;
 }
@@ -232,12 +235,10 @@ export function listed(
 ): Value[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
 	return cx.inOwnResource(s, () => {
-		for (const target of cx.reached(s)) {
-			if (seen.has(target.uri)) continue;
-			seen.add(target.uri);
-			const values = cx.inTarget(target, () => listed(cx, target.value, seen));
+		for (const values of cx.eachTarget(s, seen, (t) =>
+			listed(cx, t.value, seen),
+		))
 			if (values !== undefined) return values;
-		}
 		return ownValues(s);
 	});
 }
@@ -253,16 +254,10 @@ function ownValues(s: JsonObject): Value[] | undefined {
 	return t === "null" ? [null] : undefined;
 }
 
-/** Keywords `accepts` decides for a literal value. */
+/** Keywords `accepts` decides for a literal value (see `admitting`). */
 const VALUE_KEYWORDS = new Set([
-	"pattern",
-	"minLength",
-	"maxLength",
-	"minimum",
-	"maximum",
-	"exclusiveMinimum",
-	"exclusiveMaximum",
-	"multipleOf",
+	...assertions("string"),
+	...assertions("number"),
 ]);
 
 /** Whether a schema admits a value; undefined where it says what this cannot decide. */
@@ -289,14 +284,10 @@ export function accepts(cx: Ctx, s: JsonObject, x: Value): boolean | undefined {
 
 /** Whether a JSON value is of a kind `type` names. */
 function isOfKind(x: Value, kind: string): boolean {
-	if (x === null) return kind === "null";
-	if (typeof x === "string") return kind === "string";
-	if (typeof x === "boolean") return kind === "boolean";
-	if (x instanceof JsonNumber)
-		return (
-			kind === "number" || (kind === "integer" && isWhole(decimal(x.text)))
-		);
-	return kind === (Array.isArray(x) ? "array" : "object");
+	return (
+		jsonKind(x) === kind ||
+		(kind === "integer" && x instanceof JsonNumber && isWholeText(x.text))
+	);
 }
 
 /** Whether two JSON values are equal, numbers by value. */
@@ -345,7 +336,7 @@ export function excluded(v: JsonObject): { ty: Ty; at: string }[] | undefined {
 		path += "not/not/";
 	}
 	if (!(n instanceof JsonObject)) return undefined;
-	const keys = n.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	const keys = asserted(n);
 	if (keys.length !== 1) return undefined;
 	const e = n.get("enum");
 	if (keys[0] === "enum" && Array.isArray(e))
@@ -359,7 +350,7 @@ export function excluded(v: JsonObject): { ty: Ty; at: string }[] | undefined {
 /** X for a schema that has no keyword but `not: X`; undefined for any other. */
 function notOnly(s: Value | undefined): Value | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const keys = s.entries.map(([k]) => k).filter((k) => !isAnnotation(k));
+	const keys = asserted(s);
 	return keys.length === 1 && keys[0] === "not" ? s.get("not") : undefined;
 }
 
@@ -368,19 +359,10 @@ export function mayAdmit(m: Ty, x: Ty): boolean {
 	const of = (kinds: string[], t: Ty) => kinds.includes(t.kind);
 	const objects = ["object", "map", "record"];
 	if (of(["lit", "null", "blob"], m)) return false;
-	if (of(["string", "number", "integer", "boolean"], m)) return byKind(m, x);
+	// A primitive admits the values of its kind.
+	if (of(["string", "number", "integer", "boolean"], m))
+		return ofKinds([m.kind as ValueKind], x);
 	if (of(objects, m)) return of(objects, x);
 	if (of(["array", "tuple"], m)) return x.kind === "tuple";
 	return true;
-}
-
-/** Whether a member admits a literal by its kind, not by listing it. */
-function byKind(m: Ty, value: Ty): boolean {
-	if (value.kind !== "lit") return false;
-	const text = value.text;
-	if (text.startsWith('"')) return m.kind === "string";
-	if (text === "true" || text === "false") return m.kind === "boolean";
-	return (
-		m.kind === "number" || (m.kind === "integer" && isWhole(decimal(text)))
-	);
 }

@@ -1,7 +1,7 @@
 // Paths, webhooks and operations → `Ty`.
 
 import { isBinaryMedia, isFormMedia, isTextMedia, METHODS } from "./client.ts";
-import { get, JsonObject, str, type Value } from "./json.ts";
+import { get, JsonObject, str, stringsIn, type Value } from "./json.ts";
 import { type Ctx, child, DiagError } from "./pointer.ts";
 import { doc, docText, schema } from "./schema.ts";
 import {
@@ -24,7 +24,7 @@ const LOCATIONS = ["path", "query", "querystring", "header", "cookie"];
 /** Header parameters OpenAPI says to ignore, in lower case. */
 const RESERVED_HEADERS = ["accept", "content-type", "authorization"];
 
-export interface Paths {
+interface Paths {
 	paths: Prop[];
 	/** Present only when the document has `webhooks` and is 3.1 or later. */
 	webhooks?: Prop[];
@@ -37,7 +37,7 @@ export interface Paths {
  * An operation with an operationId reached again through a Path Item that paths or
  * webhooks share: `ty` is its type there, `first` the one `operations[id]` declares.
  */
-export interface Again {
+interface Again {
 	id: string;
 	ty: Ty;
 	at: string;
@@ -73,9 +73,9 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
 		operations: [],
 		again: [],
 	};
-	// `webhooks` is an OpenAPI 3.1 field, no field of a 3.0 document.
-	const v30 = (root.get("openapi") as string).startsWith("3.0.");
-	if (!v30 && root.get("webhooks") !== undefined)
+	// `webhooks` is an OpenAPI 3.1 field, no field of a 3.0 document (whose schemas ignore
+	// the keywords next to `$ref`).
+	if (cx.refSiblings && root.get("webhooks") !== undefined)
 		out.webhooks = pathItems(cx, root, "webhooks", operations);
 	out.operations = [...operations.values()].map((o) => o.prop);
 	out.again = [...operations].flatMap(([id, o]) =>
@@ -481,12 +481,7 @@ function serverUrl(url: string, variables: Value | undefined): Ty {
 	if (absolute && parts.length === 1) return lit(JSON.stringify(url));
 	const text = (s: string) =>
 		s.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
-	const values = (name: string) => {
-		const e = get(get(variables, name), "enum");
-		return Array.isArray(e)
-			? e.filter((x): x is string => typeof x === "string")
-			: [];
-	};
+	const values = (name: string) => stringsIn(get(get(variables, name), "enum"));
 	const hole = (name: string) => {
 		const vs = values(name);
 		return vs.length === 0

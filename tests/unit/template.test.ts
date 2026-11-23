@@ -4,10 +4,9 @@ import { test } from "node:test";
 import {
 	admits,
 	includes,
-	matching,
+	matchesAll,
 	meet,
 	patternType,
-	relation,
 	strings,
 	type Template,
 	templates,
@@ -196,19 +195,6 @@ test("whether a template admits a string", () => {
 	assert.equal(admits(one("^x-[ab]$"), "x-b"), true);
 });
 
-test("how the strings of one template stand to another's", () => {
-	const ab = one("^[ab]$");
-	assert.equal(relation(one("^x-a"), one("^x-")), "within");
-	assert.equal(relation(one("^x-"), one("^x-a")), "meets", "some of both");
-	assert.equal(relation(one("^x-"), one("-y$")), "meets");
-	assert.equal(relation(one("^x-"), one("^y-")), "apart");
-	assert.equal(relation(ab, one("^[bc]$")), "meets");
-	assert.equal(relation(ab, one("^[cd]$")), "apart");
-	const abz = one("^[ab][\\s\\S]*z$");
-	assert.equal(relation(abz, ab), "apart", "z after the one character");
-	assert.equal(relation(ab, abz), "apart");
-});
-
 test("the strings of a template without any text", () => {
 	assert.deepEqual(strings(one("^x-[ab]$")), ["x-a", "x-b"]);
 	assert.equal(strings(one("^x-")), undefined, "any text");
@@ -242,44 +228,44 @@ test("the strings two templates admit, as templates", () => {
 });
 
 test("whether a pattern that is a regular expression matches all strings of a template", () => {
-	assert.equal(matching("^[a-z-]+$", one("^x-[ab]$")), "within");
-	assert.equal(matching("^[a-z-]+$", one("^x-")), "meets");
-	assert.equal(matching("^[0-9]+$", one("^x-")), "apart");
-	assert.equal(matching("^x-.+", one("^x-a")), "within", "anything after it");
+	assert.equal(matchesAll("^[a-z-]+$", one("^x-[ab]$")), true);
+	assert.equal(matchesAll("^[a-z-]+$", one("^x-")), false, "some");
+	assert.equal(matchesAll("^[0-9]+$", one("^x-")), false, "none");
+	assert.equal(matchesAll("^x-.+", one("^x-a")), true, "anything after it");
 	assert.equal(
-		matching("^x-.+$", one("^x-a")),
-		"meets",
+		matchesAll("^x-.+$", one("^x-a")),
+		false,
 		". is not a line break",
 	);
-	assert.equal(matching("^x-[\\s\\S]+", one("^x-a")), "within");
-	assert.equal(matching("^(?:x-|y-)", one("^y-")), "within", "a group");
-	assert.equal(matching("^(?<p>x)-", one("^x-")), "within", "a named group");
-	assert.equal(matching("^x-a?b*c{0,2}d{0,}", one("^x-")), "within");
-	assert.equal(matching("^x-a{2}", one("^x-aa")), "within");
-	assert.equal(matching("^x-[^a]", one("^x-b")), "within", "a negated class");
-	assert.equal(matching("^x-[^a]", one("^x-a")), "apart");
-	assert.equal(matching("^x-\\D", one("^x-a")), "within");
-	assert.equal(matching("^x-[\\d\\-]", one("^x-1")), "within");
-	assert.equal(matching("^x-[0-9]", one("^x-1")), "within");
-	assert.equal(matching("^x\\.y$", one("^x\\.y$")), "within", "an escape");
-	assert.equal(matching("x$", one("^ax$")), "within", "anywhere");
-	assert.equal(matching("x$", one("^ax")), "meets");
-	assert.equal(matching("^a|b$", one("^a")), "within");
-	assert.equal(matching("^(?=x)", one("^x")), undefined, "a lookahead");
-	assert.equal(matching("\\bx", one("^x")), undefined, "a word boundary");
-	assert.equal(matching("^(a$)", one("^a")), undefined, "$ in a group");
-	assert.equal(matching("a$b", one("^a")), undefined, "$ before the end");
-	assert.equal(matching("a^", one("^a")), undefined, "^ after the start");
-	assert.equal(matching("^(a", one("^a")), undefined, "not a pattern");
+	assert.equal(matchesAll("^x-[\\s\\S]+", one("^x-a")), true);
+	assert.equal(matchesAll("^(?:x-|y-)", one("^y-")), true, "a group");
+	assert.equal(matchesAll("^(?<p>x)-", one("^x-")), true, "a named group");
+	assert.equal(matchesAll("^x-a?b*c{0,2}d{0,}", one("^x-")), true);
+	assert.equal(matchesAll("^x-a{2}", one("^x-aa")), true);
+	assert.equal(matchesAll("^x-[^a]", one("^x-b")), true, "a negated class");
+	assert.equal(matchesAll("^x-[^a]", one("^x-a")), false);
+	assert.equal(matchesAll("^x-\\D", one("^x-a")), true);
+	assert.equal(matchesAll("^x-[\\d\\-]", one("^x-1")), true);
+	assert.equal(matchesAll("^x-[0-9]", one("^x-1")), true);
+	assert.equal(matchesAll("^x\\.y$", one("^x\\.y$")), true, "an escape");
+	assert.equal(matchesAll("x$", one("^ax$")), true, "anywhere");
+	assert.equal(matchesAll("x$", one("^ax")), false);
+	assert.equal(matchesAll("^a|b$", one("^a")), true);
+	assert.equal(matchesAll("^(?=x)", one("^x")), false, "a lookahead");
+	assert.equal(matchesAll("\\bx", one("^x")), false, "a word boundary");
+	assert.equal(matchesAll("^(a$)", one("^a")), false, "$ in a group");
+	assert.equal(matchesAll("a$b", one("^a")), false, "$ before the end");
+	assert.equal(matchesAll("a^", one("^a")), false, "^ after the start");
+	assert.equal(matchesAll("^(a", one("^a")), false, "not a pattern");
 	assert.equal(
-		matching("^[a-z]{1,6000}$", one("^a")),
-		undefined,
+		matchesAll("^[a-z]{1,6000}$", one("^a")),
+		false,
 		"more states than read",
 	);
 	assert.equal(
-		matching("^[ab]*a[ab]{14}$", one("^[\\s\\S]*$")),
-		undefined,
-		"more pairs of states than read",
+		matchesAll("a[ab]{14}$", one("^[\\s\\S]*a[ab]{14}$")),
+		false,
+		"more pairs of states than read, though it matches them all",
 	);
 });
 

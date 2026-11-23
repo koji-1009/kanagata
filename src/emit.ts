@@ -84,13 +84,13 @@ function header(version: string | undefined): string {
 }
 
 /** Context precedence. A type binding looser than its context is parenthesized. */
-export const Prec = { Union: 0, Inter: 1, Postfix: 2 } as const;
-export type Prec = (typeof Prec)[keyof typeof Prec];
+const Prec = { Union: 0, Inter: 1, Postfix: 2 } as const;
+type Prec = (typeof Prec)[keyof typeof Prec];
 
 /** The declared name of a view of a component schema. */
-export type Namer = (schema: string, view: View) => string;
+type Namer = (schema: string, view: View) => string;
 
-export class Out {
+class Out {
 	buf = "";
 	depth = 0;
 	/** The helper types written so far. */
@@ -326,7 +326,7 @@ export interface Decl {
 }
 
 /** Everything the generator emits. */
-export interface Document {
+interface Document {
 	paths: Prop[];
 	/** Emitted only when the document has webhooks. */
 	webhooks?: Prop[];

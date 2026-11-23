@@ -7,14 +7,25 @@
 
 import { JsonNumber, type JsonObject } from "./json.ts";
 import type { Ctx } from "./pointer.ts";
-import { MAX_UNION } from "./template.ts";
-import { INTEGER, lit, NEVER, NUMBER, type Ty } from "./ty.ts";
+import { MAX_UNION, regex } from "./template.ts";
+import {
+	INTEGER,
+	isWholeText,
+	lit,
+	NEVER,
+	NUMBER,
+	type Ty,
+	valueKind,
+} from "./ty.ts";
 
 /**
  * `numeric`'s type for each schema object, read once: a schema is converted again for
  * each view and place it is reached from, and its values can be thousands.
  */
-const numerics = new WeakMap<JsonObject, Map<string, Ty>>();
+const numerics = new WeakMap<
+	JsonObject,
+	[number: Ty | undefined, integer: Ty | undefined]
+>();
 
 /**
  * A number (an integer if `integer`), or the values its bounds admit where they are
@@ -22,15 +33,18 @@ const numerics = new WeakMap<JsonObject, Map<string, Ty>>();
  * as TypeScript builds their union.
  */
 export function numeric(cx: Ctx, v: JsonObject, integer: boolean): Ty {
-	// The bounds read the same in a document: as 3.0's or as 3.1's.
-	const key = `${integer} ${cx.refSiblings}`;
+	// A schema object is of one document, whose bounds read one way: as 3.0's or as 3.1's.
 	let known = numerics.get(v);
 	if (known === undefined) {
-		known = new Map();
+		known = [undefined, undefined];
 		numerics.set(v, known);
 	}
-	const ty = known.get(key) ?? valuesBetween(cx, v, integer);
-	known.set(key, ty);
+	const i = integer ? 1 : 0;
+	let ty = known[i];
+	if (ty === undefined) {
+		ty = valuesBetween(cx, v, integer);
+		known[i] = ty;
+	}
 	return ty;
 }
 
@@ -173,34 +187,24 @@ export function admitting(cx: Ctx, v: JsonObject): (t: Ty) => boolean {
 	};
 	return (t) => {
 		if (t.kind !== "lit" || boundedBy.get(t) === v) return true;
-		if (t.text.startsWith('"')) {
+		const kind = valueKind(t);
+		if (kind === "string") {
 			const s = JSON.parse(t.text) as string;
 			const length = [...s].length;
 			if (length < minLength) return false;
 			if (maxLength !== undefined && length > maxLength) return false;
 			return pattern === undefined || matches(pattern, s);
 		}
-		if (t.text === "true" || t.text === "false") return true;
+		if (kind === "boolean") return true;
 		const n = decimal(t.text);
 		if (beyond(n, low, 1) || beyond(n, high, -1)) return false;
 		return step === undefined || isMultiple(n, step);
 	};
 }
 
-/** Patterns compiled once each; null for one JavaScript cannot read. */
-const compiled = new Map<string, RegExp | null>();
-
 /** Whether `s` matches an ECMA-262 pattern; true when JavaScript cannot read the pattern. */
 export function matches(pattern: string, s: string): boolean {
-	let re = compiled.get(pattern);
-	if (re === undefined) {
-		try {
-			re = new RegExp(pattern, "u");
-		} catch {
-			re = null;
-		}
-		compiled.set(pattern, re);
-	}
+	const re = regex(pattern);
 	return re === null || re.test(s);
 }
 
@@ -210,7 +214,7 @@ interface Decimal {
 	scale: number;
 }
 
-export function decimal(text: string): Decimal {
+function decimal(text: string): Decimal {
 	// A JsonNumber's text is in JSON's grammar.
 	const [, int = "", frac = "", exp = "0"] =
 		/^(-?\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(text) as RegExpExecArray;
@@ -241,15 +245,23 @@ function isMultiple(a: Decimal, m: Decimal): boolean {
 	return y <= 0n || x % y === 0n;
 }
 
-export const isWhole = (d: Decimal): boolean =>
-	d.digits % 10n ** BigInt(d.scale) === 0n;
+/**
+ * How many items a schema's `contains` asks to match: from `minContains` (1 if not given)
+ * to `maxContains` (no bound if not given).
+ */
+export function containsBounds(s: JsonObject): {
+	min: number;
+	max: number | undefined;
+} {
+	return { min: count(s, "minContains") ?? 1, max: count(s, "maxContains") };
+}
 
 /** A count keyword (`minItems`, `maxItems`): a non-negative integer, or undefined. */
 export function count(v: JsonObject, key: string): number | undefined {
 	const n = v.get(key);
 	// Whole by its exact value (`1e-400` is not), and one a JavaScript number holds.
 	const value =
-		n instanceof JsonNumber && isWhole(decimal(n.text))
+		n instanceof JsonNumber && isWholeText(n.text)
 			? Number(n.text)
 			: Number.NaN;
 	return Number.isInteger(value) && value >= 0 ? value : undefined;

@@ -11,6 +11,14 @@ import {
 	type Value,
 } from "./json.ts";
 import type { View } from "./ty.ts";
+import {
+	DATA,
+	NAME_MAPS,
+	NOT_IN_30,
+	REFS,
+	refsAndAnnotations,
+	SUBSCHEMAS_30,
+} from "./vocab.ts";
 
 /**
  * A problem at a location in the input: a JSON Pointer (`#/paths/~1users/get`), after
@@ -39,64 +47,8 @@ export class DiagError extends GenerateError {
 /** The base URI of the document itself: a placeholder no `$id` can collide with by accident. */
 const DOCUMENT = "https://kanagata.invalid/document";
 
-/** Keywords whose values are data. */
-const DATA = new Set(["example", "examples", "default", "const", "enum"]);
-
-/** Keywords whose values map names to schemas or other objects, so their keys are names. */
-const NAME_MAPS = new Set([
-	"properties",
-	"patternProperties",
-	"$defs",
-	"definitions",
-	"dependentSchemas",
-	"schemas",
-	"paths",
-	"webhooks",
-]);
-
-/**
- * The keywords kanagata reads for what they say that an OpenAPI 3.0 Schema Object does not
- * define (OAS 3.0.4, Schema Object): JSON Schema keywords 3.0 leaves unsupported. In a 3.0
- * document they say nothing, as a keyword kanagata does not know says nothing. No other
- * 3.0 object has a field of these names.
- */
-const NOT_IN_30 = new Set([
-	"const",
-	"if",
-	"then",
-	"else",
-	"prefixItems",
-	"contains",
-	"minContains",
-	"maxContains",
-	"unevaluatedItems",
-	"patternProperties",
-	"unevaluatedProperties",
-	"propertyNames",
-	"dependentRequired",
-	"dependentSchemas",
-	"$id",
-	"$anchor",
-	"$dynamicRef",
-	"$dynamicAnchor",
-	"$schema",
-	"$defs",
-	"definitions",
-	"contentMediaType",
-	"contentEncoding",
-	"contentSchema",
-]);
-
-/** The keywords of a 3.0 Schema Object that hold schemas: one, a list, or a map from names. */
-const SUBSCHEMAS_30 = new Map<string, "schema" | "list" | "map">([
-	["allOf", "list"],
-	["oneOf", "list"],
-	["anyOf", "list"],
-	["not", "schema"],
-	["items", "schema"],
-	["properties", "map"],
-	["additionalProperties", "schema"],
-]);
+/** Keywords and fields whose values map names to schemas or other objects, so their keys are names. */
+const NAMES = new Set([...NAME_MAPS, "schemas", "paths", "webhooks"]);
 
 function withoutFragment(url: URL): string {
 	return url.href.slice(0, url.href.length - url.hash.length).replace(/#$/, "");
@@ -175,7 +127,7 @@ function indexIds(
 		if (v.get("$dynamicRef") !== undefined) index.dynamicRefs = true;
 		for (const [k, x] of v.entries) {
 			if (!names && DATA.has(k)) continue;
-			walk(x, here, !names && NAME_MAPS.has(k));
+			walk(x, here, !names && NAMES.has(k));
 		}
 	};
 	walk(doc, base, false);
@@ -212,7 +164,7 @@ export function child(at: string, token: string): string {
 }
 
 /** Where the document is, and how to load another document a `$ref` points to. */
-export interface Location {
+interface Location {
 	/** The document's absolute URL; relative `$ref`s resolve against it. */
 	url: string;
 	/** The parsed document at an absolute URL (no fragment). Throws GenerateError for a document that does not parse, any other error when it cannot be read. */
@@ -238,8 +190,11 @@ const NO_KEYS: ReadonlySet<string> = new Set();
 /** What a schema without a reference reaches. */
 const NONE: readonly Located[] = [];
 
+/** What a reader reads through a schema without a reference (see `Ctx.eachTarget`). */
+const NO_RESULTS: readonly never[] = Object.freeze([]);
+
 /** Schema keywords a component may have next to `$ref` and still be another name for its target. */
-const ALIAS_KEYS = new Set(["$ref", "$dynamicRef", "description", "title"]);
+const ALIAS_KEYS = new Set([...REFS, "description", "title"]);
 
 /** Where bytes are bytes: a raw body, a multipart body (whose properties are its parts), a part. */
 export type RawPosition = "body" | "parts" | "part";
@@ -658,22 +613,14 @@ export class Ctx {
 		return this.#ids().dynamic.has(uri);
 	}
 
-	/**
-	 * The base URI inside a schema with `$id`: its `$id` resolved against the schemas
-	 * around it, wherever the schema is reached from. undefined for a schema without
-	 * one, or whose `$id` is not a URI.
-	 */
-	resourceOf(v: Value): string | undefined {
-		return this.#ids().resources.get(v);
-	}
-
 	// How a schema is looked through to the schemas it applies to the same value. Every
 	// reader of a schema goes through these, so that they all reach the same schemas.
 	// They are read for nearly every schema, most of which have no `$id` and no reference,
 	// so that case allocates nothing.
 
 	/**
-	 * The resource a schema is read in, its own (`$id`, 3.1 and 3.2), where it is one;
+	 * The resource a schema is read in, its own (`$id`, 3.1 and 3.2), where it is one: its
+	 * `$id` resolved against the schemas around it, wherever the schema is reached from.
 	 * undefined otherwise. Reading it inside it already changes nothing (`inOwnResource`).
 	 */
 	ownResource(v: Value): string | undefined {
@@ -705,11 +652,8 @@ export class Ctx {
 	 * conversion reports one that is not.
 	 */
 	reached(s: Value): readonly Located[] {
-		return s instanceof JsonObject ? this.reachedBy(s, s.str("$ref")) : NONE;
-	}
-
-	/** `reached` for a reader that has read the schema's `$ref` (`r`, where it is a string) already. */
-	reachedBy(s: JsonObject, r: string | undefined): readonly Located[] {
+		if (!(s instanceof JsonObject)) return NONE;
+		const r = s.str("$ref");
 		// Without a $dynamicRef in the documents, only the $ref counts.
 		if (!this.#ids().dynamicRefs) {
 			const target = r === undefined ? undefined : this.tryLocate(r);
@@ -725,6 +669,82 @@ export class Ctx {
 			targets.push(outer === undefined ? found : this.locate(outer, ""));
 		}
 		return targets;
+	}
+
+	/**
+	 * What a schema that is only a reference reaches: one `$ref` or `$dynamicRef`, with
+	 * annotations at most (anything next to a 3.0 `$ref`, which is ignored). undefined for
+	 * any other schema.
+	 */
+	onlyTarget(s: Value): Located | undefined {
+		const targets = this.reached(s);
+		// Only an object reaches a target.
+		return targets.length === 1 &&
+			(!this.readsSiblings(s) || refsAndAnnotations(s as JsonObject))
+			? targets[0]
+			: undefined;
+	}
+
+	// Looking through a schema's references to the schemas they reach, each read where it is
+	// (`inTarget`), as a reader that reads them as the same value does. A reader stops at a
+	// schema it reached already in one of two ways: `eachTarget` reads each schema once in a
+	// reading, wherever it is reached again; `pathTargets` stops only at one reached again
+	// inside itself (on the way to it), which reads as nothing or as `again`.
+
+	/**
+	 * `f` of each schema `s`'s references reach, read where it is, but one already in
+	 * `seen`, which this adds each to.
+	 */
+	eachTarget<T>(
+		s: Value,
+		seen: Set<string>,
+		f: (target: Located) => T,
+	): readonly T[] {
+		const targets = this.reached(s);
+		if (targets.length === 0) return NO_RESULTS;
+		const out: T[] = [];
+		for (const target of targets) {
+			if (seen.has(target.uri)) continue;
+			seen.add(target.uri);
+			out.push(this.inTarget(target, () => f(target)));
+		}
+		return out;
+	}
+
+	/**
+	 * `f` of each schema `s`'s references reach, read where it is, with the schemas on the
+	 * way to it (`seen`, and it) for `f` to pass on; for one on the way already, `again`,
+	 * or nothing without it.
+	 */
+	pathTargets<T>(
+		s: Value,
+		seen: ReadonlySet<string>,
+		f: (target: Located, seen: ReadonlySet<string>) => T,
+	): readonly T[];
+	pathTargets<T, A>(
+		s: Value,
+		seen: ReadonlySet<string>,
+		f: (target: Located, seen: ReadonlySet<string>) => T,
+		again: A,
+	): readonly (T | A)[];
+	pathTargets<T, A>(
+		s: Value,
+		seen: ReadonlySet<string>,
+		f: (target: Located, seen: ReadonlySet<string>) => T,
+		...again: [A] | []
+	): readonly (T | A)[] {
+		const targets = this.reached(s);
+		if (targets.length === 0) return NO_RESULTS;
+		const out: (T | A)[] = [];
+		for (const target of targets)
+			if (!seen.has(target.uri))
+				out.push(
+					this.inTarget(target, () =>
+						f(target, new Set([...seen, target.uri])),
+					),
+				);
+			else if (again.length > 0) out.push(again[0] as A);
+		return out;
 	}
 
 	/** Reads a schema a reference reaches where it is: in the resource it is in, and its own. */

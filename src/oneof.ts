@@ -5,10 +5,19 @@
 // `null` two members list (`shared`), and among members that ask only for keys, the
 // objects with all of another's (`exclusive`).
 
-import { JsonObject, type Value } from "./json.ts";
-import type { Ctx, Located } from "./pointer.ts";
-import { isAnnotation, literal, onlyTarget, REFS } from "./schema.ts";
-import { inter, NEVER, type Prop, type Ty, UNKNOWN, union } from "./ty.ts";
+import { JsonObject, stringsIn, type Value } from "./json.ts";
+import type { Ctx } from "./pointer.ts";
+import {
+	absent,
+	inter,
+	literal,
+	NEVER,
+	type Prop,
+	type Ty,
+	UNKNOWN,
+	union,
+} from "./ty.ts";
+import { isAnnotation, REFS, refsAndAnnotations } from "./vocab.ts";
 
 /**
  * oneOf admits a value only one member admits, so a literal or `null` two members
@@ -84,9 +93,7 @@ export function exclusive(
 			// It lacks one of them already where it lacks a key alone.
 			if (m.some((k) => others.get(k) === NEVER)) continue;
 			for (const k of m) if (!others.has(k)) others.set(k, UNKNOWN);
-			either.push(
-				union(m.map((k) => ({ kind: "object", props: [without(k, NEVER)] }))),
-			);
+			either.push(union(m.map(absent)));
 		}
 		if (others.size === 0) return t;
 		const props = [...others].map(([k, ty]) => without(k, ty));
@@ -99,7 +106,7 @@ export function exclusive(
  * for an empty one), `type: object` and properties that admit any value, with
  * annotations, an object with one of them at least (none where `required` is absent);
  * a `$ref` or `$dynamicRef`, with annotations at most, to such a schema (see
- * `onlyTarget`); or in 3.1 and 3.2, such keywords next to references to such schemas,
+ * `Ctx.onlyTarget`); or in 3.1 and 3.2, such keywords next to references to such schemas,
  * which require their keys too. One reached again on the way (`seen`), which is an
  * error, is none.
  */
@@ -109,22 +116,19 @@ function keysOnly(
 	seen: ReadonlySet<string> = new Set(),
 ): string[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	// The keys each reference's target requires; undefined where one requires more.
-	const reached = (targets: readonly Located[]): string[] | undefined => {
-		const keys: string[] = [];
-		for (const target of targets) {
-			if (seen.has(target.uri)) return undefined;
-			const inner = cx.inTarget(target, () =>
-				keysOnly(cx, target.value, new Set([...seen, target.uri])),
-			);
-			if (inner === undefined) return undefined;
-			keys.push(...inner);
-		}
-		return keys;
+	// The keys each reference's target requires; undefined where one requires more, or is
+	// reached again on the way.
+	const reached = (): string[] | undefined => {
+		const each = cx.pathTargets(
+			s,
+			seen,
+			(t, path) => keysOnly(cx, t.value, path),
+			undefined,
+		);
+		return each.includes(undefined) ? undefined : (each as string[][]).flat();
 	};
 	// In 3.0 the keywords next to $ref are ignored.
-	const only = onlyTarget(cx, s);
-	if (only !== undefined) return reached([only]);
+	if (cx.onlyTarget(s) !== undefined) return reached();
 	const allowed = s.entries.every(
 		([k, x]) =>
 			REFS.has(k) ||
@@ -135,17 +139,13 @@ function keysOnly(
 				x instanceof JsonObject &&
 				x.entries.every(([, ps]) => admitsAnyValue(cx, ps))),
 	);
-	const targets = cx.reached(s);
-	const keys = allowed ? reached(targets) : undefined;
+	const keys = allowed ? reached() : undefined;
 	// Annotations alone admit every value, not only objects.
 	const object =
-		targets.length > 0 ||
+		cx.reached(s).length > 0 ||
 		["required", "type", "properties"].some((k) => s.get(k) !== undefined);
 	if (keys === undefined || !object) return undefined;
-	const req = s.get("required");
-	const own = (Array.isArray(req) ? req : []).filter(
-		(n): n is string => typeof n === "string",
-	);
+	const own = stringsIn(s.get("required"));
 	// A key the target and the keywords next to it both require is one key.
 	return [...new Set([...keys, ...own])];
 }
@@ -162,18 +162,8 @@ function admitsAnyValue(
 ): boolean {
 	if (s === true) return true;
 	if (!(s instanceof JsonObject)) return false;
-	if (
-		cx.readsSiblings(s) &&
-		!s.entries.every(([k]) => REFS.has(k) || isAnnotation(k))
-	)
-		return false;
+	if (cx.readsSiblings(s) && !refsAndAnnotations(s)) return false;
 	return cx
-		.reached(s)
-		.every(
-			(target) =>
-				!seen.has(target.uri) &&
-				cx.inTarget(target, () =>
-					admitsAnyValue(cx, target.value, new Set([...seen, target.uri])),
-				),
-		);
+		.pathTargets(s, seen, (t, path) => admitsAnyValue(cx, t.value, path), false)
+		.every(Boolean);
 }

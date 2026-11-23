@@ -45,9 +45,10 @@ pnpm build      # dist/
 | `src/index.ts`                               | `generate`: parse, convert both views, reject cycles TypeScript rejects, read references' kinds, name, render  |
 | `src/json.ts`                                | JSON parser keeping key order and number notation, rejecting repeated keys; JSON Pointer helpers               |
 | `src/yaml.ts`                                | YAML 1.2 → the same values (via `yaml`)                                                                        |
-| `src/pointer.ts`                             | `Ctx`: `$ref` / `$dynamicRef` resolution, base URI, read/write view, hoisting, component aliasing, warnings    |
+| `src/pointer.ts`                             | `Ctx`: `$ref` / `$dynamicRef` resolution and look-through, base URI, view, hoisting, aliasing, warnings        |
+| `src/vocab.ts`                               | the schema keywords kanagata reads, each classified once; the lists readers ask for derive from it             |
 | `src/schema.ts`                              | JSON Schema → `Ty`: entry points, the parts of a schema, references, the type of each kind                     |
-| `src/kinds.ts`                               | which kinds of value a schema is; how values of the other kinds pass a member of some kinds only               |
+| `src/kinds.ts`                               | which kinds of value a schema is, the values of a kind its keywords say; how other kinds pass a member         |
 | `src/object.ts`                              | object types: properties, index signatures, the keys `propertyNames` admits, property counts                   |
 | `src/keys.ts`                                | the keys schemas name, require or close; the keys a view leaves out (readOnly / writeOnly)                     |
 | `src/not.ts`                                 | `not` and `if`: the values a schema leaves out, where TypeScript can say them; whether it admits a literal     |
