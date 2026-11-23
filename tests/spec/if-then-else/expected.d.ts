@@ -39,29 +39,22 @@ export type ByKey = {
 };
 
 /** Object keywords alone, dependentRequired among them, let the strings type names pass. */
-export type ByKeyOrString = ({
-  a?: string;
-  b?: string;
-} | string) & (({
-  a: {} | null;
-} | string) & ({
-  a?: never;
+export type ByKeyOrString = {
+  a: string;
+  b: string;
 } | {
-  b: {} | null;
-} | string) | {
   a?: never;
-});
+  b?: string;
+} | string;
 
 /** The strings that pass then are those its string keywords admit. */
-export type ByKeyOrEmpty = ({
-  a?: string;
-  b?: string;
-} | string) & ({
-  a: {} | null;
-  b: {} | null;
-} | "" | {
+export type ByKeyOrEmpty = {
+  a: string;
+  b: string;
+} | {
   a?: never;
-});
+  b?: string;
+} | "";
 
 /** Each member's if reads the values the schema declares, through a $ref too. */
 export type InAllOf = {
@@ -71,13 +64,11 @@ export type InAllOf = {
 };
 
 /** if: { type } fails for the other kinds, and a property's type for its others. */
-export type ByType = ({
-  n?: number | string;
-} | string | null) & ("s" | null | {
+export type ByType = {
   n?: 1;
 } | {
-  n: string | boolean | null | unknown[] | Record<string, unknown>;
-});
+  n: string;
+} | "s" | null;
 
 /** if without then and else asks nothing. */
 export type Nothing = Record<string, unknown>;

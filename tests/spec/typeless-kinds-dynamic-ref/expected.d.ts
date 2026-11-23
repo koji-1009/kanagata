@@ -24,7 +24,7 @@ export type Keyed = {
 };
 
 /** The member asks a key of objects only, through $dynamicRef: null passes it. */
-export type Passed = (Keyed | null) & (Record<string, unknown> | null);
+export type Passed = Keyed & Record<string, unknown> | null;
 
 export type Obj = Record<string, unknown>;
 
@@ -43,7 +43,7 @@ export type KeyedInner = {
 export type KeyedHolder = KeyedInner;
 
 /** The same through a $ref that resolves against its target's own $id. */
-export type PassedById = (KeyedHolder | null) & (Record<string, unknown> | null);
+export type PassedById = KeyedHolder & Record<string, unknown> | null;
 
 export type ObjInner = Record<string, unknown>;
 

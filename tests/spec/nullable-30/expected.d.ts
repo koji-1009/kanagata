@@ -43,6 +43,6 @@ export type NotNull = string;
 export type MaybeNotNull = NotNull;
 
 /** null must also pass allOf. */
-export type StillNotNull = NotNull & (string | null);
+export type StillNotNull = NotNull & string;
 
 export type MaybePoint = Point & (Record<string, unknown> | null);

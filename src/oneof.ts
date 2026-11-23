@@ -6,7 +6,7 @@
 // objects with all of another's (`exclusive`).
 
 import { JsonObject, type Value } from "./json.ts";
-import type { Ctx } from "./pointer.ts";
+import type { Ctx, Located } from "./pointer.ts";
 import { isAnnotation, literal, onlyTarget, REFS } from "./schema.ts";
 import { inter, NEVER, type Prop, type Ty, UNKNOWN, union } from "./ty.ts";
 
@@ -72,19 +72,20 @@ export function exclusive(
 		// Each key another member requires: never here, or unknown where only one of several must lack.
 		const others = new Map<string, Ty>();
 		const either: Ty[] = [];
-		for (const [j, other] of keys.entries()) {
-			if (j === i || other === undefined) continue;
-			const missing = other.filter((k) => !own.includes(k));
-			if (missing.length === 0) return NEVER;
-			if (missing.length === 1) {
-				others.set(missing[0] as string, NEVER);
-				continue;
-			}
-			for (const k of missing) if (!others.has(k)) others.set(k, UNKNOWN);
+		const missing = keys.flatMap((other, j) =>
+			j === i || other === undefined
+				? []
+				: [other.filter((k) => !own.includes(k))],
+		);
+		if (missing.some((m) => m.length === 0)) return NEVER;
+		for (const m of missing)
+			if (m.length === 1) others.set(m[0] as string, NEVER);
+		for (const m of missing) {
+			// It lacks one of them already where it lacks a key alone.
+			if (m.some((k) => others.get(k) === NEVER)) continue;
+			for (const k of m) if (!others.has(k)) others.set(k, UNKNOWN);
 			either.push(
-				union(
-					missing.map((k) => ({ kind: "object", props: [without(k, NEVER)] })),
-				),
+				union(m.map((k) => ({ kind: "object", props: [without(k, NEVER)] }))),
 			);
 		}
 		if (others.size === 0) return t;
@@ -94,25 +95,39 @@ export function exclusive(
 }
 
 /**
- * The keys a schema requires, when that is all it asks of an object: a non-empty
- * `required`, with at most `type: object`, properties that admit any value and
- * annotations; or a `$ref` or `$dynamicRef`, with annotations at most, to such a schema
- * (see `onlyTarget`). One reached again on the way (`seen`), which is an error, is none.
+ * The keys a schema requires, when that is all it asks of an object: `required` (none
+ * for an empty one), `type: object` and properties that admit any value, with
+ * annotations, an object with one of them at least (none where `required` is absent);
+ * a `$ref` or `$dynamicRef`, with annotations at most, to such a schema (see
+ * `onlyTarget`); or in 3.1 and 3.2, such keywords next to references to such schemas,
+ * which require their keys too. One reached again on the way (`seen`), which is an
+ * error, is none.
  */
 function keysOnly(
 	cx: Ctx,
 	s: Value,
-	seen = new Set<string>(),
+	seen: ReadonlySet<string> = new Set(),
 ): string[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const target = onlyTarget(cx, s);
-	if (target !== undefined) {
-		if (seen.has(target.uri)) return undefined;
-		seen.add(target.uri);
-		return cx.inTarget(target, () => keysOnly(cx, target.value, seen));
-	}
+	// The keys each reference's target requires; undefined where one requires more.
+	const reached = (targets: readonly Located[]): string[] | undefined => {
+		const keys: string[] = [];
+		for (const target of targets) {
+			if (seen.has(target.uri)) return undefined;
+			const inner = cx.inTarget(target, () =>
+				keysOnly(cx, target.value, new Set([...seen, target.uri])),
+			);
+			if (inner === undefined) return undefined;
+			keys.push(...inner);
+		}
+		return keys;
+	};
+	// In 3.0 the keywords next to $ref are ignored.
+	const only = onlyTarget(cx, s);
+	if (only !== undefined) return reached([only]);
 	const allowed = s.entries.every(
 		([k, x]) =>
+			REFS.has(k) ||
 			k === "required" ||
 			isAnnotation(k) ||
 			(k === "type" && x === "object") ||
@@ -120,10 +135,19 @@ function keysOnly(
 				x instanceof JsonObject &&
 				x.entries.every(([, ps]) => admitsAnyValue(cx, ps))),
 	);
+	const targets = cx.reached(s);
+	const keys = allowed ? reached(targets) : undefined;
+	// Annotations alone admit every value, not only objects.
+	const object =
+		targets.length > 0 ||
+		["required", "type", "properties"].some((k) => s.get(k) !== undefined);
+	if (keys === undefined || !object) return undefined;
 	const req = s.get("required");
-	return allowed && Array.isArray(req) && req.length > 0
-		? req.filter((n): n is string => typeof n === "string")
-		: undefined;
+	const own = (Array.isArray(req) ? req : []).filter(
+		(n): n is string => typeof n === "string",
+	);
+	// A key the target and the keywords next to it both require is one key.
+	return [...new Set([...keys, ...own])];
 }
 
 /**

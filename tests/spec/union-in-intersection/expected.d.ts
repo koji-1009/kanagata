@@ -10,6 +10,7 @@ export interface schemas {
   Mixed: Mixed;
   Tagged: Tagged;
   List: List;
+  Both: Both;
 }
 
 export type Base = {
@@ -20,7 +21,7 @@ export type Extra = {
   note?: string;
 };
 
-export type Mixed = Base & (Extra | string);
+export type Mixed = Base & Extra;
 
 export type Tagged = {
   name: string;
@@ -30,4 +31,7 @@ export type Tagged = {
   kind?: "b";
 };
 
-export type List = ((Base | string) & Extra)[];
+export type List = (Base & Extra)[];
+
+/** References are of their targets' kinds, and meet the other members kind by kind. */
+export type Both = Base & Extra | "";

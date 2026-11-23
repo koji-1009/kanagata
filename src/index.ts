@@ -11,13 +11,18 @@ import {
 	admitsAny,
 	bareRefs,
 	equal,
+	kindsWith,
 	type Prop,
 	presentKeys,
 	prop,
+	type RefTy,
 	ref,
 	refs,
+	refsMet,
 	type Ty,
+	type ValueKind,
 	type View,
+	withRefKinds,
 } from "./ty.ts";
 import { parseYaml } from "./yaml.ts";
 
@@ -95,45 +100,50 @@ export function generate(
 	if (cx.refSiblings && dialect !== undefined)
 		readDialect("#/jsonSchemaDialect", dialect);
 
-	const p = paths(cx, root);
+	// Whether what is built meets a reference in an intersection (see `refKinds`).
+	const meeting = <T>(build: () => T): [T, boolean] => {
+		const before = refsMet();
+		const built = build();
+		return [built, refsMet() !== before];
+	};
+	const [p, pathsMet] = meeting(() => paths(cx, root));
 
 	// Every component schema, then every schema from another file that got a key (the
 	// list grows as they are converted), named, in both views; the write view gets its
 	// own declaration only where the two differ (readOnly / writeOnly here or in a reference).
 	const converted: Converted[] = schemas.map(([key, value]) => {
 		const at = child("#/components/schemas", key);
-		return {
-			key,
-			value,
-			at,
-			read: cx.inMode("read", () => schema(cx, value, at)),
-			write: cx.inMode("write", () => schema(cx, value, at)),
-		};
+		const [[read, write], met] = meeting(() => [
+			cx.inMode("read", () => schema(cx, value, at)),
+			cx.inMode("write", () => schema(cx, value, at)),
+		]);
+		return { key, value, at, read, write, met };
 	});
 	for (let i = 0; i < cx.hoisted.length; i++) {
 		const { key, value, base, where } = cx.hoisted[i] as Hoisted;
 		const view = (mode: View) =>
 			cx.withBase(base, () => cx.inMode(mode, () => schema(cx, value, where)));
-		converted.push({
-			key,
-			value,
-			at: where,
-			read: view("read"),
-			write: view("write"),
-		});
+		const [[read, write], met] = meeting(() => [view("read"), view("write")]);
+		converted.push({ key, value, at: where, read, write, met });
 	}
 	rejectBareCycles(converted);
+	// Which kinds a reference admits is its component's type's, known once all of them
+	// are converted: what those kinds rule out is left out of the intersections that met
+	// it, in the types built with one.
+	const kinds = refKinds(converted);
+	const kinded = (t: Ty) => (pathsMet ? kinds(t) : t);
 	const names = typeNames(converted.map((c) => c.key));
 	// typeNames gives one name per key, in order
 	const components: Component[] = converted.map((c, i) => ({
 		...c,
+		...(c.met ? { read: kinds(c.read), write: kinds(c.write) } : {}),
 		name: names[i] as string,
 	}));
 	const differing = differingViews(components);
 	// An operation reached again is declared once, so its types must be declared alike:
 	// a reference to either view of a schema without a second type is the same name.
 	for (const a of p.again)
-		if (!equal(a.first.ty, a.ty, differing))
+		if (!equal(kinded(a.first.ty), kinded(a.ty), differing))
 			throw new DiagError(
 				a.at,
 				`operation ${JSON.stringify(a.id)} is also ${a.first.at}, where its type differs; operations[${JSON.stringify(a.id)}] has one type`,
@@ -165,7 +175,8 @@ export function generate(
 		const w = writeName.get(c.key);
 		if (w !== undefined) decls.push(decl(w, present(c.write)));
 	}
-	const props = (ps: Prop[]) => ps.map((q) => ({ ...q, ty: present(q.ty) }));
+	const props = (ps: Prop[]) =>
+		ps.map((q) => ({ ...q, ty: present(kinded(q.ty)) }));
 	const ops = {
 		paths: props(p.paths),
 		operations: props(p.operations),
@@ -198,6 +209,8 @@ interface Converted {
 	at: string;
 	read: Ty;
 	write: Ty;
+	/** Whether its views met a reference in an intersection (`refsMet`). */
+	met: boolean;
 }
 
 interface Component extends Converted {
@@ -237,6 +250,27 @@ function rejectBareCycles(converted: readonly Converted[]): void {
 	};
 	for (const c of converted) visit(c.key, "read");
 	for (const c of converted) visit(c.key, "write");
+}
+
+/**
+ * `withRefKinds`, each reference's component its type in the reference's view, of the
+ * kinds read with those of the references in it (`kindsWith`). A component reaches none
+ * of them again through unions, intersections and references alone (`rejectBareCycles`).
+ */
+function refKinds(converted: readonly Converted[]): (t: Ty) => Ty {
+	const byKey = new Map(converted.map((c) => [c.key, c]));
+	const type = ({ schema, view }: RefTy): Ty =>
+		(byKey.get(schema) as Converted)[view];
+	const known = new Map<string, ValueKind[] | undefined>();
+	const of = (r: RefTy): ValueKind[] | undefined => {
+		const id = `${r.view} ${r.schema}`;
+		if (known.has(id)) return known.get(id);
+		const kinds = kindsWith(type(r), of);
+		known.set(id, kinds);
+		return kinds;
+	};
+	const done = [new Map<Ty, Ty>(), new Map<Ty, Ty>()] as const;
+	return (t) => withRefKinds(t, { kinds: of, type }, done);
 }
 
 /** `presentKeys`, with references resolved to the components' types in their view. */

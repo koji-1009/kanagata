@@ -11,18 +11,17 @@ export interface schemas {
 }
 
 /** In 3.0, nullable adds null to type, and null passes members without type. */
-export type Pages = ({
+export type Pages = {
   build_type?: string;
+  source: string;
+} | {
+  build_type: string;
   source?: string;
-} | null) & ({
-  source: {} | null;
-} | null | {
-  build_type: {} | null;
-});
+} | null;
 
 export type Keyed = {
   a: {} | null;
 };
 
 /** null passes a $ref to such a member; the keywords next to it are ignored. */
-export type RefMember = (Keyed | null) & (Record<string, unknown> | null);
+export type RefMember = Keyed & Record<string, unknown> | null;

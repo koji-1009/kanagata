@@ -11,7 +11,10 @@ export interface schemas {
   ByC: ByC;
   Pair: Pair;
   Mixed: Mixed;
+  RefRequired: RefRequired;
   Alone: Alone;
+  AnyObject: AnyObject;
+  Declared: Declared;
   Either: Either;
 }
 
@@ -70,6 +73,7 @@ export type Mixed = {
 } | {
   c: {} | null;
   a?: never;
+  h?: never;
 } | {
   b: number;
 } | {
@@ -79,11 +83,36 @@ export type Mixed = {
   g: {} | null;
 } | {
   e: {} | null;
-} | null | ByC & {
+} | null;
+
+/** Keywords next to a $ref apply too: it requires its target's keys and its own. */
+export type RefRequired = ByC & {
   h: {} | null;
+  a?: never;
+} | {
+  a: {} | null;
+  c?: never;
+  h?: unknown;
+} | {
+  a: {} | null;
+  c?: unknown;
+  h?: never;
 };
 
-export type Alone = Record<string, unknown>;
+export type Alone = {
+  a?: never;
+};
+
+/** type: object requires no key either: an object with a matches both. */
+export type AnyObject = {
+  a?: never;
+};
+
+/** Nor do properties that admit any value. */
+export type Declared = {
+  a?: unknown;
+  b?: never;
+};
 
 export type Either = {
   a: {} | null;

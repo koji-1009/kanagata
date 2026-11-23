@@ -39,8 +39,20 @@
           false
         ]
       },
+      "RefRequired": {
+        "description": "Keywords next to a $ref apply too: it requires its target's keys and its own.",
+        "oneOf": [{ "$ref": "#/components/schemas/ByC", "required": ["h"] }, { "required": ["a"] }]
+      },
       "Alone": {
         "oneOf": [{ "required": [] }, { "required": ["a"] }]
+      },
+      "AnyObject": {
+        "description": "type: object requires no key either: an object with a matches both.",
+        "oneOf": [{ "type": "object" }, { "required": ["a"] }]
+      },
+      "Declared": {
+        "description": "Nor do properties that admit any value.",
+        "oneOf": [{ "properties": { "a": {} } }, { "required": ["b"] }]
       },
       "Either": {
         "anyOf": [{ "required": ["a"] }, { "required": ["b"] }]

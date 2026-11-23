@@ -126,7 +126,7 @@ export type Keyed = {
 };
 
 /** null passes a member that is a $ref to a schema without type, whatever type is next to it. */
-export type MaybeKeyed = (Keyed | null) & (Record<string, unknown> | null);
+export type MaybeKeyed = Keyed & Record<string, unknown> | null;
 
 /** Nor does type next to it keep the arrays of a member that requires a key the closed object forbids. */
 export type ClosedKeyed = null;

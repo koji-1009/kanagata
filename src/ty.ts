@@ -60,8 +60,11 @@ export type Ty =
 	 * its segments, which say which strings it admits (see `inTemplate`).
 	 */
 	| { kind: "template"; text: string; seq: Segment[] }
-	/** A component schema, by its key in `components.schemas`; named when emitted. */
-	| { kind: "ref"; schema: string; view: View }
+	/**
+	 * A component schema, by its key in `components.schemas`; named when emitted. `kinds`
+	 * are those of its type, once all components are converted (see `withRefKinds`).
+	 */
+	| { kind: "ref"; schema: string; view: View; kinds?: ValueKind[] }
 	/** `operations[id]` */
 	| { kind: "opRef"; id: string }
 	| { kind: "array"; elem: Ty }
@@ -326,6 +329,155 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
 	}
 	return out;
 }
+
+/** What a reference's component is: its type and the kinds of value it admits, in the reference's view. */
+export interface Components {
+	kinds: (r: RefTy) => ValueKind[] | undefined;
+	type: (r: RefTy) => Ty;
+}
+
+/**
+ * The type with each reference an intersection meets of the kinds of its component's
+ * type, and those intersections and the unions around them built again, which leave
+ * out what those kinds rule out: `(Base | string) & Extra` is `Base & Extra` where `Extra`
+ * is an object type. Elsewhere a reference's kinds change nothing (a union reads none),
+ * so it stays as it is. A reference that a part of another kind would meet as TypeScript
+ * does not read it is written out there (`writtenOut`). `met` says whether `t` is met
+ * there, through unions and intersections; `done` holds the types gone through already,
+ * outside an intersection and in one, so that each is gone through once. A type nothing
+ * in changes is itself.
+ */
+export function withRefKinds(
+	t: Ty,
+	components: Components,
+	done: readonly [Map<Ty, Ty>, Map<Ty, Ty>],
+	met = false,
+): Ty {
+	if (t.kind === "ref") {
+		const kinds = met ? components.kinds(t) : undefined;
+		return kinds === undefined ? t : { ...t, kinds };
+	}
+	// Most types are of no parts, which nothing changes.
+	if (!PARTED.has(t.kind)) return t;
+	const seen = done[met ? 1 : 0];
+	const known = seen.get(t);
+	if (known !== undefined) return known;
+	let changed = false;
+	const go = (u: Ty, inside = false) => {
+		const out = withRefKinds(u, components, done, inside);
+		if (out !== u) changed = true;
+		return out;
+	};
+	const props = (ps: Prop[]) =>
+		ps.map((p) => {
+			const ty = go(p.ty);
+			return ty === p.ty ? p : { ...p, ty };
+		});
+	let out: Ty = t;
+	switch (t.kind) {
+		case "array": {
+			const elem = go(t.elem);
+			if (changed) out = { kind: "array", elem };
+			break;
+		}
+		case "tuple": {
+			const items = t.items.map((u) => go(u));
+			const rest = t.rest === undefined ? undefined : go(t.rest);
+			if (changed)
+				out =
+					rest === undefined
+						? { kind: "tuple", items, min: t.min }
+						: { kind: "tuple", items, min: t.min, rest };
+			break;
+		}
+		case "object": {
+			const ps = props(t.props);
+			if (changed) out = { kind: "object", props: ps };
+			break;
+		}
+		case "map": {
+			const ps = props(t.props);
+			const keyed = t.keyed?.map((k) => ({ key: k.key, ty: go(k.ty) }));
+			const index = t.index === undefined ? undefined : go(t.index);
+			if (changed)
+				out = {
+					kind: "map",
+					props: ps,
+					...(keyed === undefined ? {} : { keyed }),
+					...(index === undefined ? {} : { index }),
+				};
+			break;
+		}
+		case "union": {
+			const items = t.items.map((u) => go(u, met));
+			if (changed) out = union(items);
+			break;
+		}
+		case "inter": {
+			let items = t.items.map((u) => go(u, true));
+			// What a reference written out is made of may be written out in turn.
+			for (
+				let written = writtenOut(items, components);
+				written !== undefined;
+				written = writtenOut(items, components)
+			) {
+				items = written.map((u) => go(u, true));
+				changed = true;
+			}
+			if (changed) out = inter(items);
+			break;
+		}
+	}
+	seen.set(t, out);
+	return out;
+}
+
+/**
+ * The parts of an intersection with each reference of several kinds written out (its
+ * component's type) where another part has a kind that meets one of them as TypeScript
+ * does not read it: an object type and a value of another kind than `null`. TypeScript
+ * meets each member of the reference's type with the other parts on its own, and
+ * `string & { y?: string }` admits every string, so `Value & { y?: string }` with `Value`
+ * being `{ x?: number } | string` is `{ x?: number; y?: string }`. It reads `null` met
+ * with an object type, and two other kinds, as `never`. undefined where none is.
+ */
+function writtenOut(items: Ty[], components: Components): Ty[] | undefined {
+	const rows = items.map((t) => (t.kind === "union" ? t.items : [t]));
+	const kinds = rows.map((ms) => ms.flatMap((m) => memberKinds(m) ?? []));
+	const apart = (k: ValueKind, o: ValueKind) =>
+		(k === "object" && o !== "object" && o !== "null") ||
+		(o === "object" && k !== "object" && k !== "null");
+	let written = false;
+	const out = items.map((t, i) => {
+		const others = kinds.flatMap((ks, j) => (j === i ? [] : ks));
+		let own = false;
+		const ms = (rows[i] as Ty[]).map((m) => {
+			const ks = m.kind === "ref" ? m.kinds : undefined;
+			if (
+				ks === undefined ||
+				ks.length < 2 ||
+				!ks.some((k) => others.some((o) => apart(k, o)))
+			)
+				return m;
+			own = true;
+			return components.type(m as RefTy);
+		});
+		if (!own) return t;
+		written = true;
+		return union(ms);
+	});
+	return written ? out : undefined;
+}
+
+/** The kinds of type made of other types. */
+const PARTED = new Set<Ty["kind"]>([
+	"array",
+	"tuple",
+	"object",
+	"map",
+	"union",
+	"inter",
+]);
 
 /**
  * Collects distinct members: literals by their text through a Set (enums can have
@@ -615,41 +767,62 @@ export function inter(items: Ty[]): Ty {
 	)
 		return NEVER;
 	if (out.length === 0) return UNKNOWN;
+	if (out.some(holdsRef)) metRefs++;
 	return { kind: "inter", items: out };
 }
 
 /**
- * Unions whose members are each of one kind, no two of the same, meet kind by kind:
- * `({ a: A } | "") & ("" | Record<string, unknown>)` is `{ a: A } | ""`. undefined where
- * a member is no such union or type of one kind, or none is a union.
+ * How many intersections have met a reference whose kinds are not known yet, as a part
+ * or a member of one: a type built while it stays the same has none for `withRefKinds`
+ * to build again.
+ */
+let metRefs = 0;
+
+/** `metRefs`, read before and after a type is built. */
+export const refsMet = (): number => metRefs;
+
+const unkinded = (t: Ty): boolean => t.kind === "ref" && t.kinds === undefined;
+
+const holdsRef = (t: Ty): boolean =>
+	unkinded(t) || (t.kind === "union" && t.items.some(unkinded));
+
+/**
+ * Unions whose members are each of one kind meet kind by kind, the members of a kind
+ * those of the others that it meets: `({ a?: A } | string) & ({ a: A } | { a?: never } | "")`
+ * is `{ a: A } | { a?: never } | ""`. TypeScript does not read every type met with one of
+ * another kind as `never`: `string & { a?: never }` admits every string. undefined where a
+ * member is of no one kind, or none is a union.
  */
 function meetByKind(items: Ty[]): Ty | undefined {
 	if (!items.some((t) => t.kind === "union")) return undefined;
-	const rows: { kind: ValueKind; ty: Ty }[][] = [];
+	// Each type's members, by kind in the order they come.
+	const rows: Map<ValueKind, Ty[]>[] = [];
 	for (const t of items) {
-		const members = t.kind === "union" ? t.items : [t];
-		if (members.length > 7) return undefined;
-		const row: { kind: ValueKind; ty: Ty }[] = [];
-		for (const m of members) {
+		const row = new Map<ValueKind, Ty[]>();
+		for (const m of t.kind === "union" ? t.items : [t]) {
 			const k = memberKinds(m);
 			if (k?.length !== 1) return undefined;
 			const kind = k[0] as ValueKind;
-			if (row.some((r) => meets(r.kind, kind))) return undefined;
-			row.push({ kind, ty: m });
+			const same = row.get(kind);
+			if (same === undefined) row.set(kind, [m]);
+			else same.push(m);
 		}
 		rows.push(row);
 	}
+	// Of kinds that all meet, each type is met as a whole.
+	const kinds = new Set(rows.flatMap((row) => [...row.keys()]));
+	if ([...kinds].every((a) => [...kinds].every((b) => meets(a, b))))
+		return undefined;
 	const [first, ...rest] = rows as [
-		{ kind: ValueKind; ty: Ty }[],
-		...{ kind: ValueKind; ty: Ty }[][],
+		Map<ValueKind, Ty[]>,
+		...Map<ValueKind, Ty[]>[],
 	];
-	// `prune` has left in each union only the kinds every other one has.
+	// `integer` meets `number`: the whole numbers of a type of numbers.
+	const meeting = (row: Map<ValueKind, Ty[]>, kind: ValueKind): Ty =>
+		union([...row].flatMap(([k, ms]) => (meets(k, kind) ? ms : [])));
 	return union(
-		first.map(({ kind, ty }) =>
-			inter([
-				ty,
-				...rest.map((row) => row.find((r) => meets(r.kind, kind))?.ty as Ty),
-			]),
+		[...first].map(([kind, ms]) =>
+			inter([union(ms), ...rest.map((row) => meeting(row, kind))]),
 		),
 	);
 }
@@ -729,7 +902,7 @@ function meetArrays(arrays: ArrayTy[]): Ty {
 }
 
 /** A kind of JSON value; `integer` is the whole numbers among `number`. */
-type ValueKind =
+export type ValueKind =
 	| "string"
 	| "number"
 	| "integer"
@@ -909,28 +1082,49 @@ function admitsString(t: Ty, m: Ty): boolean {
 	);
 }
 
-/** The kinds of value a type admits, where its form says so: `{ a: A }` objects, `string | A[]` strings and arrays. */
-const kindSet = remembered((t: Ty): ValueKind[] | undefined => {
+/** A reference to a component schema. */
+export type RefTy = Extract<Ty, { kind: "ref" }>;
+
+/**
+ * The kinds of value a type admits, where its form says so: `{ a: A }` objects,
+ * `string | A[]` strings and arrays, a reference those `ref` gives it. `of` reads the
+ * members of an intersection or union (`kindSet` remembers them).
+ */
+export function kindsWith(
+	t: Ty,
+	ref: (r: RefTy) => ValueKind[] | undefined,
+	of: (u: Ty) => ValueKind[] | undefined = (u) => kindsWith(u, ref, of),
+): ValueKind[] | undefined {
 	if (t.kind === "inter") {
 		// The kinds every member it says them of allows.
-		const sets = t.items.map(kindSet).filter((s) => s !== undefined);
+		const sets = t.items.map(of).filter((s) => s !== undefined);
 		return sets.length === 0
 			? undefined
 			: sets.reduce((a, b) => a.filter((k) => b.some((o) => meets(k, o))));
 	}
+	if (t.kind === "ref") return ref(t);
 	if (t.kind !== "union") return memberKinds(t);
 	const kinds: ValueKind[] = [];
 	for (const m of t.items) {
-		const k = memberKinds(m);
+		const k = of(m);
 		if (k === undefined) return undefined;
 		kinds.push(...k);
 	}
 	return kinds;
-});
+}
+
+/** `kindsWith`, a reference of the kinds it has (`withRefKinds`). */
+const kindSet: (t: Ty) => ValueKind[] | undefined = remembered((t: Ty) =>
+	kindsWith(
+		t,
+		(r) => r.kinds,
+		(u) => kindSet(u),
+	),
+);
 
 /** `kindSet` of a type that is no union. */
 function memberKinds(m: Ty): ValueKind[] | undefined {
-	if (m.kind === "inter") return kindSet(m);
+	if (m.kind === "inter" || m.kind === "ref") return kindSet(m);
 	const k =
 		kindsOf(m)?.[0] ??
 		valueKind(m) ??
