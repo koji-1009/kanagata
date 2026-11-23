@@ -54,6 +54,35 @@
         "description": "Nor do properties that admit any value.",
         "oneOf": [{ "properties": { "a": {} } }, { "required": ["b"] }]
       },
+      "Restated": {
+        "description": "A member property that restates the declaration of the property beside the oneOf, apart from annotations, asks nothing more.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "oneOf": [{ "required": ["a"], "properties": { "a": { "type": "string", "format": "uuid" } } }, { "required": ["b"] }]
+      },
+      "RestatedType": {
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "oneOf": [{ "required": ["a"], "properties": { "a": { "type": "string" } } }, { "required": ["b"] }]
+      },
+      "Narrower": {
+        "description": "One that asks more is not counted: an object with a and b may match both.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "oneOf": [{ "required": ["a"], "properties": { "a": { "type": "string", "minLength": 1 } } }, { "required": ["b"] }]
+      },
+      "Fewer": {
+        "description": "Nor is one that leaves out keywords of the declaration: without properties, additionalProperties: false rejects x.",
+        "type": "object",
+        "properties": {
+          "a": { "type": "object", "properties": { "x": {} }, "additionalProperties": false },
+          "b": { "type": "string" }
+        },
+        "oneOf": [
+          { "required": ["a"], "properties": { "a": { "type": "object", "additionalProperties": false } } },
+          { "required": ["b"] }
+        ]
+      },
       "Either": {
         "anyOf": [{ "required": ["a"] }, { "required": ["b"] }]
       }
