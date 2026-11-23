@@ -3,22 +3,20 @@
 // The schemas that apply to the same value are one object: a closed one admits no key the
 // others name (`closedKeys`, `outsideKeys`, `closedAmong`). A readOnly property is not
 // sent and a writeOnly one is not returned (`isLeftOut`): a key one schema leaves out of a
-// view stays out where another requires it (`leftOutKeys`, `leftOutTarget`).
+// view stays out where another requires it (`leftOutKeys`, `leftOutGroup`).
 
-import { get, JsonObject, type Value } from "./json.ts";
+import { get, JsonObject, stringsIn, type Value } from "./json.ts";
 import type { Ctx } from "./pointer.ts";
-import { onlyTarget, schema } from "./schema.ts";
-import { inter, NEVER, type Prop, type Ty } from "./ty.ts";
-import { unevaluated } from "./unevaluated.ts";
+import { inter, neverProp, type Ty } from "./ty.ts";
+import { additional } from "./unevaluated.ts";
+import { branches, members } from "./vocab.ts";
 
 /**
  * The keys a closed object admits (`additionalProperties: false`, no
  * `patternProperties`): its declared properties. undefined when it is not closed.
  */
 export function closedKeys(v: JsonObject): Set<string> | undefined {
-	const ap =
-		v.get("additionalProperties") ?? unevaluated(v, "unevaluatedProperties");
-	if (ap !== false) return undefined;
+	if (additional(v)?.value !== false) return undefined;
 	if (v.get("patternProperties") !== undefined) return undefined;
 	const props = v.get("properties");
 	return new Set(
@@ -63,10 +61,9 @@ function keysOf(
 	properties: boolean,
 	everywhere = false,
 ): string[] {
-	const uri = cx.ownResource(s);
-	return uri === undefined
-		? ownKeysOf(cx, s, seen, properties, everywhere)
-		: cx.inResource(uri, () => ownKeysOf(cx, s, seen, properties, everywhere));
+	return cx.inOwnResource(s, () =>
+		ownKeysOf(cx, s, seen, properties, everywhere),
+	);
 }
 
 function ownKeysOf(
@@ -76,43 +73,33 @@ function ownKeysOf(
 	properties: boolean,
 	everywhere: boolean,
 ): string[] {
-	const req = get(s, "required");
-	const keys = Array.isArray(req)
-		? req.filter((n): n is string => typeof n === "string")
-		: [];
-	const props = get(s, "properties");
-	if (properties && props instanceof JsonObject)
-		keys.push(...props.entries.map(([k]) => k));
-	const allOf = get(s, "allOf");
-	const members = everywhere ? applied(s) : Array.isArray(allOf) ? allOf : [];
-	for (const m of members)
-		keys.push(...keysOf(cx, m, seen, properties, everywhere));
-	for (const target of cx.reached(s)) {
-		if (seen.has(target.uri)) continue;
-		seen.add(target.uri);
-		keys.push(
-			...cx.inTarget(target, () =>
-				keysOf(cx, target.value, seen, properties, everywhere),
-			),
-		);
+	const keys: string[] = [];
+	// In 3.0 the keywords next to $ref are ignored; only the target counts.
+	if (cx.readsSiblings(s)) {
+		keys.push(...stringsIn(get(s, "required")));
+		const props = get(s, "properties");
+		if (properties && props instanceof JsonObject)
+			keys.push(...props.entries.map(([k]) => k));
+		const allOf = get(s, "allOf");
+		const members = everywhere ? applied(s) : Array.isArray(allOf) ? allOf : [];
+		for (const m of members)
+			keys.push(...keysOf(cx, m, seen, properties, everywhere));
 	}
+	for (const reached of cx.eachTarget(s, seen, (t) =>
+		keysOf(cx, t.value, seen, properties, everywhere),
+	))
+		keys.push(...reached);
 	return keys;
 }
 
 /** The schemas that apply to the same value as a schema where they match: its members, `if` / `then` / `else` and dependent schemas. */
 function applied(s: Value): Value[] {
-	const out: Value[] = [];
-	for (const key of ["allOf", "oneOf", "anyOf"]) {
-		const members = get(s, key);
-		if (Array.isArray(members)) out.push(...members);
-	}
-	for (const key of ["if", "then", "else"]) {
-		const branch = get(s, key);
-		if (branch !== undefined) out.push(branch);
-	}
 	const ds = get(s, "dependentSchemas");
-	if (ds instanceof JsonObject) out.push(...ds.entries.map(([, d]) => d));
-	return out;
+	return [
+		...members(s),
+		...branches(s),
+		...(ds instanceof JsonObject ? ds.entries.map(([, d]) => d) : []),
+	];
 }
 
 /**
@@ -128,14 +115,22 @@ export function outsideKeys(
 	return [...new Set(valueKeys(cx, v))].filter((k) => !closed.has(k));
 }
 
-/** The keys a closed member admits: its own, or those of the closed schema its `$ref` or `$dynamicRef` alone reaches. */
-function closedMember(cx: Ctx, s: Value): Set<string> | undefined {
+/**
+ * The keys a closed member admits: its own, or those of the closed schema its `$ref` or
+ * `$dynamicRef` alone reaches (see `Ctx.onlyTarget`), through any number of them. One reached
+ * again on the way (`seen`), which is an error, is not closed.
+ */
+function closedMember(
+	cx: Ctx,
+	s: Value,
+	seen = new Set<string>(),
+): Set<string> | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	const target = onlyTarget(cx, s);
+	const target = cx.onlyTarget(s);
 	if (target === undefined) return closedKeys(s);
-	return target.value instanceof JsonObject
-		? closedKeys(target.value)
-		: undefined;
+	if (seen.has(target.uri)) return undefined;
+	seen.add(target.uri);
+	return cx.inTarget(target, () => closedMember(cx, target.value, seen));
 }
 
 /** `dependentRequired`: each key and the keys it requires. */
@@ -143,37 +138,8 @@ export function dependencies(v: JsonObject): [string, string[]][] {
 	const dr = v.get("dependentRequired");
 	return (dr instanceof JsonObject ? dr.entries : []).map(([key, deps]) => [
 		key,
-		Array.isArray(deps)
-			? deps.filter((d): d is string => typeof d === "string")
-			: [],
+		stringsIn(deps),
 	]);
-}
-
-/**
- * A `$ref`'s or `$dynamicRef`'s target written out without the keys the group leaves out
- * of this view, where it names one that it does not leave out itself: the reference's own
- * view would have it. Undefined where the reference stays.
- */
-export function leftOutTarget(
-	cx: Ctx,
-	r: string,
-	at: string,
-	group: ReadonlySet<string>,
-): Ty | undefined {
-	if (group.size === 0) return undefined;
-	const target = cx.locate(r, at);
-	const { value, uri, where } = target;
-	const named = cx.inTarget(target, () => namedKeys(cx, value));
-	const own = cx.inTarget(target, () => leftOutKeys(cx, value));
-	if (!named.some((k) => group.has(k) && !own.has(k)) || !cx.enter(uri))
-		return undefined;
-	try {
-		return cx.inTarget(target, () =>
-			cx.withLeftOut([value], group, () => schema(cx, value, where)),
-		);
-	} finally {
-		cx.leave();
-	}
 }
 
 /** A closed oneOf / anyOf member admits no key another member names. */
@@ -193,7 +159,7 @@ export function closedAmong(cx: Ctx, members: Value[], tys: Ty[]): Ty[] {
 /** `t` without these keys: `k?: never`, in its own object type where it is one. */
 export function forbid(t: Ty, keys: string[]): Ty {
 	if (keys.length === 0) return t;
-	const props: Prop[] = keys.map((key) => ({ key, ty: NEVER, optional: true }));
+	const props = keys.map(neverProp);
 	if (t.kind !== "object") return inter([t, { kind: "object", props }]);
 	const have = new Set(t.props.map((p) => p.key));
 	return {
@@ -209,36 +175,41 @@ export function forbid(t: Ty, keys: string[]): Ty {
  */
 function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
 	if (!(s instanceof JsonObject)) return false;
-	const uri = cx.ownResource(s);
-	return uri === undefined
-		? leftOutHere(cx, s, seen)
-		: cx.inResource(uri, () => leftOutHere(cx, s, seen));
+	return cx.inOwnResource(s, () => leftOutHere(cx, s, seen));
 }
 
 function leftOutHere(cx: Ctx, s: JsonObject, seen: Set<string>): boolean {
 	// In 3.0 the keywords next to $ref are ignored; only the target counts.
-	const ref = s.get("$ref");
-	const siblings = ref === undefined || cx.refSiblings;
+	const siblings = cx.readsSiblings(s);
 	if (
 		siblings &&
 		s.get(cx.mode === "write" ? "readOnly" : "writeOnly") === true
 	)
 		return true;
-	for (const target of cx.reachedBy(
-		s,
-		typeof ref === "string" ? ref : undefined,
-	)) {
-		if (seen.has(target.uri)) continue;
-		seen.add(target.uri);
-		if (cx.inTarget(target, () => isLeftOut(cx, target.value, seen)))
-			return true;
-	}
+	if (cx.eachTarget(s, seen, (t) => isLeftOut(cx, t.value, seen)).some(Boolean))
+		return true;
 	const allOf = s.get("allOf");
 	return (
 		siblings &&
 		Array.isArray(allOf) &&
 		allOf.some((m) => isLeftOut(cx, m, seen))
 	);
+}
+
+/**
+ * The properties left out of this view of the value a schema is: its own (`leftOutKeys`,
+ * through its references unless `throughRef` is false), and those the other members of the
+ * `allOf` it is in leave out (`Ctx.leftOutIn`). Every member is the same object: a property
+ * one leaves out stays out where another lists it as required.
+ */
+export function leftOutGroup(
+	cx: Ctx,
+	v: Value,
+	throughRef = true,
+): Set<string> {
+	const keys = leftOutKeys(cx, v, new Set(), throughRef);
+	for (const k of cx.leftOutIn(v)) keys.add(k);
+	return keys;
 }
 
 /**
@@ -252,10 +223,7 @@ export function leftOutKeys(
 	seen = new Set<string>(),
 	throughRef = true,
 ): Set<string> {
-	const uri = cx.ownResource(v);
-	return uri === undefined
-		? leftOutKeysHere(cx, v, seen, throughRef)
-		: cx.inResource(uri, () => leftOutKeysHere(cx, v, seen, throughRef));
+	return cx.inOwnResource(v, () => leftOutKeysHere(cx, v, seen, throughRef));
 }
 
 function leftOutKeysHere(
@@ -267,8 +235,7 @@ function leftOutKeysHere(
 	const keys = new Set<string>();
 	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
 	// are one schema.
-	const ref = get(v, "$ref");
-	if (ref === undefined || cx.refSiblings) {
+	if (cx.readsSiblings(v)) {
 		const props = get(v, "properties");
 		if (props instanceof JsonObject)
 			for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
@@ -276,18 +243,10 @@ function leftOutKeysHere(
 		for (const m of Array.isArray(allOf) ? allOf : [])
 			for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
 	}
-	// Only an object has a reference.
-	if (!throughRef || !(v instanceof JsonObject)) return keys;
-	for (const target of cx.reachedBy(
-		v,
-		typeof ref === "string" ? ref : undefined,
-	)) {
-		if (seen.has(target.uri)) continue;
-		seen.add(target.uri);
-		for (const k of cx.inTarget(target, () =>
-			leftOutKeys(cx, target.value, seen),
-		))
-			keys.add(k);
-	}
+	if (!throughRef) return keys;
+	for (const reached of cx.eachTarget(v, seen, (t) =>
+		leftOutKeys(cx, t.value, seen),
+	))
+		for (const k of reached) keys.add(k);
 	return keys;
 }

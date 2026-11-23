@@ -1,0 +1,46 @@
+{
+  "openapi": "3.0.3",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Code": { "description": "A 3.0 Schema Object has no const: it says nothing.", "type": "string", "const": "a" },
+      "Holder": {
+        "description": "A schema with keywords 3.0 does not define is still the one a $ref reaches: code is Code.",
+        "type": "object",
+        "properties": { "code": { "$ref": "#/components/schemas/Code" }, "kind": { "type": "string", "const": "x" } },
+        "unevaluatedProperties": false
+      },
+      "Kind": { "description": "A $ref into it reaches the schema in it as 3.0 reads it.", "$ref": "#/components/schemas/Holder/properties/kind" },
+      "Either": {
+        "description": "Nor in members.",
+        "oneOf": [{ "type": "string", "const": "a" }, { "type": "integer", "if": { "minimum": 1 }, "then": { "maximum": 9 }, "else": false }]
+      },
+      "Nothing": { "description": "not: { const } is not: {}, which admits no value.", "not": { "const": "x" } },
+      "List": {
+        "description": "Nor do the array keywords 3.0 does not define.",
+        "type": "array",
+        "items": { "type": "string" },
+        "prefixItems": [{ "type": "integer" }],
+        "contains": { "const": "a" },
+        "minContains": 2,
+        "unevaluatedItems": false
+      },
+      "Map": {
+        "description": "Nor the object keywords.",
+        "type": "object",
+        "properties": { "id": { "type": "string" } },
+        "patternProperties": { "^x-": { "type": "integer" } },
+        "propertyNames": { "maxLength": 1 },
+        "dependentRequired": { "id": ["name"] },
+        "dependentSchemas": { "id": false }
+      },
+      "Ided": {
+        "description": "Nor $id: the $ref inside resolves against the document.",
+        "$id": "https://example.com/ided",
+        "type": "object",
+        "properties": { "code": { "$ref": "#/components/schemas/Code" } }
+      },
+      "Thing": { "description": "Nor in another file.", "$ref": "thing.json" }
+    }
+  }
+}

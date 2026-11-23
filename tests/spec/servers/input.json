@@ -39,6 +39,14 @@
       "delete": {
         "responses": { "204": { "description": "ok" } }
       }
+    },
+    "/inherited": {
+      "servers": [{ "url": "https://inherited.example.com" }],
+      "get": {
+        "description": "An empty servers leaves the path item's to apply.",
+        "servers": [],
+        "responses": { "204": { "description": "ok" } }
+      }
     }
   },
   "webhooks": {

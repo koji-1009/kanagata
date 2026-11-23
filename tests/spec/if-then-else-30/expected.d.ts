@@ -8,11 +8,8 @@ export interface schemas {
   Delivery: Delivery;
 }
 
-/** Without nullable, type names no null: null passes no part of if and then. */
+/** A 3.0 Schema Object has no if / then / else: they say nothing, so address is never required. */
 export type Delivery = {
-  method?: "ship";
-  address: string;
-} | {
-  method: "pickup";
+  method?: "ship" | "pickup";
   address?: string;
 };

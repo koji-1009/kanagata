@@ -1,0 +1,7 @@
+{
+  "$id": "https://example.com/thing",
+  "$defs": {
+    "name": { "$anchor": "name", "type": "object", "properties": { "tag": { "$ref": "tag" } } },
+    "tag": { "$id": "tag", "type": "boolean" }
+  }
+}

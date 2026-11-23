@@ -4,6 +4,8 @@
     "/pets": {
       "$ref": "#/components/pathItems/Pets",
       "description": "A field next to $ref is read with those of the Path Item it refers to.",
+      "summary": "Pets, here and in the target: summary is not one that conflicts.",
+      "x-owner": "So are extensions.",
       "parameters": [
         { "name": "X-Trace", "in": "header", "description": "Next to $ref, so it applies to the referenced get too.", "schema": { "type": "string" } }
       ],
@@ -18,6 +20,8 @@
     "pathItems": {
       "Pets": {
         "description": "description is in both, and kanagata does not read it.",
+        "summary": "Pets",
+        "x-owner": "pets-team",
         "get": {
           "operationId": "listPets",
           "responses": { "200": { "description": "The pets.", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } } } } } }

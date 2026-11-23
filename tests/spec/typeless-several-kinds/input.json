@@ -64,8 +64,8 @@
         "minItems": 1,
         "allOf": [{ "allOf": [{ "dependentRequired": { "a": ["b"] } }] }]
       },
-      "OneOfKind": {
-        "description": "So do anyOf and oneOf members: each constrains its own kind, and the schema's other kinds pass it.",
+      "AnyOfKind": {
+        "description": "So do anyOf members: each constrains its own kind, and the schema's other kinds pass it.",
         "anyOf": [{ "required": ["a"] }, { "minItems": 1 }]
       },
       "MemberDependentOrItems": {

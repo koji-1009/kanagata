@@ -8,9 +8,8 @@
         "contains": true,
         "minContains": 0
       },
-      "NoneAsked": {
-        "description": "No item needs to match and any number may: contains asks nothing.",
-        "type": "array",
+      "Unasked": {
+        "description": "No item needs to match and any number may: contains asks nothing, so without type any value passes.",
         "contains": { "type": "string" },
         "minContains": 0
       },

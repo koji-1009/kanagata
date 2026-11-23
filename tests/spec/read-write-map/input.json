@@ -1,0 +1,22 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/labels": {
+      "post": {
+        "operationId": "putLabels",
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Labels" } } } },
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Labels" } } } } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Labels": {
+        "description": "An object with an index signature whose views differ in a property: two types.",
+        "type": "object",
+        "properties": { "id": { "type": "string", "readOnly": true } },
+        "additionalProperties": { "type": "string" }
+      }
+    }
+  }
+}

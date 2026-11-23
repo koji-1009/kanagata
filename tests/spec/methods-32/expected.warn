@@ -1,0 +1,3 @@
+#/paths/~1r/get/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/additionalOperations/LINK/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/additionalOperations/Patch/responses: OpenAPI requires at least one response code in responses; none is typed

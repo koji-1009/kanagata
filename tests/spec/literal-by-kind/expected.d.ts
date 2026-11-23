@@ -5,7 +5,6 @@ export interface paths {}
 export interface operations {}
 
 export interface schemas {
-  Overlap: Overlap;
   FalseTwice: FalseTwice;
   TrueTwice: TrueTwice;
   ZeroTwice: ZeroTwice;
@@ -14,9 +13,6 @@ export interface schemas {
   Off: Off;
   NonZero: NonZero;
 }
-
-/** Every literal two oneOf members list is in neither. */
-export type Overlap = "a" | "d";
 
 /** number does not admit false by its kind, so false, which two members list, is left out. */
 export type FalseTwice = number | "none" | "off";

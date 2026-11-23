@@ -19,8 +19,9 @@
           "thing": { "$ref": "#/components/schemas/Thing" },
           "sibling": { "$ref": "#/components/schemas/ViaRefSibling" },
           "member": { "$ref": "#/components/schemas/MemberSiblings" },
-          "either": { "$ref": "#/components/schemas/OneOfRequired" },
-          "other": { "$ref": "#/components/schemas/Other" }
+          "either": { "$ref": "#/components/schemas/AnyOfRequired" },
+          "other": { "$ref": "#/components/schemas/Other" },
+          "one": { "$ref": "#/components/schemas/OneOfRequired" }
         }
       },
       "Base": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string" }, "name": { "type": "string" } } },
@@ -44,11 +45,17 @@
         "description": "A referenced member without the key stays a reference.",
         "allOf": [{ "$ref": "#/components/schemas/Named" }, { "properties": { "id": { "type": "string", "readOnly": true } } }]
       },
-      "OneOfRequired": {
-        "description": "Nor a oneOf member's required.",
+      "AnyOfRequired": {
+        "description": "Nor an anyOf member's required.",
         "type": "object",
         "properties": { "id": { "type": "string", "readOnly": true }, "name": { "type": "string" } },
         "anyOf": [{ "required": ["id"] }, { "required": ["name"] }]
+      },
+      "OneOfRequired": {
+        "description": "Nor a oneOf member's: what is sent, the member that requires id requires nothing, so it admits every object, and one with name matches both.",
+        "type": "object",
+        "properties": { "id": { "type": "string", "readOnly": true }, "name": { "type": "string" } },
+        "oneOf": [{ "required": ["id"] }, { "required": ["name"] }]
       }
     }
   }

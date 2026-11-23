@@ -28,6 +28,7 @@ export interface schemas {
   Keyed: Keyed;
   RefInMember: RefInMember;
   RefMember: RefMember;
+  RefBeside: RefBeside;
   RefTyped: RefTyped;
   TrueInMember: TrueInMember;
   FalseInMember: FalseInMember;
@@ -39,14 +40,13 @@ export interface schemas {
 }
 
 /** Members without type constrain only the objects; null, which type admits, passes them. */
-export type Pages = ({
+export type Pages = {
   build_type?: string;
+  source: string;
+} | {
+  build_type: string;
   source?: string;
-} | null) & ({
-  source: {} | null;
-} | null | {
-  build_type: {} | null;
-});
+} | null;
 
 /** So do strings. */
 export type StringOrObject = {
@@ -137,7 +137,7 @@ export type IfInMember = {
 } | "";
 
 /** Every string has the keys if asks of objects only, so no else holds for it. */
-export type IfElseInMember = ({
+export type IfElseInMember = {
   a: {} | null;
   b: {} | null;
   c: {} | null;
@@ -147,7 +147,7 @@ export type IfElseInMember = ({
 } | {
   a: {} | null;
   c?: never;
-} | string) & (Record<string, unknown> | string);
+} | string;
 
 export type Keys = unknown;
 
@@ -161,10 +161,13 @@ export type RefInMember = Keys & {
 } | null;
 
 /** So is a $ref member. */
-export type RefMember = (Keyed | null) & (Record<string, unknown> | null);
+export type RefMember = Keyed & Record<string, unknown> | null;
+
+/** And a $ref next to type, whose target applies as a member does. */
+export type RefBeside = Keyed & Record<string, unknown> | null;
 
 /** A $ref to a schema with a type constrains every value. */
-export type RefTyped = Cat & (Record<string, unknown> | null);
+export type RefTyped = Cat & Record<string, unknown>;
 
 /** true admits every value. */
 export type TrueInMember = {
@@ -176,20 +179,16 @@ export type FalseInMember = never;
 
 /** dependentRequired, dependentSchemas and propertyNames constrain only the objects. */
 export type PairOrNull = ({
-  a?: never;
-} | {
-  b: {} | null;
-} | null) & ({
   b?: never;
 } | {
   a: {} | null;
-} | null) & ({
-  a?: unknown;
-  b?: unknown;
-} | null) & ({
-  a?: string;
+}) & ({
+  a?: never;
   b?: string;
-} | null);
+} | {
+  a?: string;
+  b: string;
+}) | null;
 
 /** A member with a type of its own constrains every value. */
 export type Typed = {

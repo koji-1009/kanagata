@@ -11,6 +11,14 @@ import {
 	type Value,
 } from "./json.ts";
 import type { View } from "./ty.ts";
+import {
+	DATA,
+	NAME_MAPS,
+	NOT_IN_30,
+	REFS,
+	refsAndAnnotations,
+	SUBSCHEMAS_30,
+} from "./vocab.ts";
 
 /**
  * A problem at a location in the input: a JSON Pointer (`#/paths/~1users/get`), after
@@ -20,6 +28,12 @@ export interface Diag {
 	at: string;
 	msg: string;
 }
+
+/** The warnings on an `if` TypeScript cannot say the values it does not admit of (see `Ctx.ifIgnored`). */
+const IF_IGNORED =
+	"if / then / else cannot be expressed in TypeScript; ignored";
+const THEN_READ =
+	"if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates";
 
 /** A fatal problem at a location in the document. */
 export class DiagError extends GenerateError {
@@ -33,20 +47,8 @@ export class DiagError extends GenerateError {
 /** The base URI of the document itself: a placeholder no `$id` can collide with by accident. */
 const DOCUMENT = "https://kanagata.invalid/document";
 
-/** Keywords whose values are data. */
-const DATA = new Set(["example", "examples", "default", "const", "enum"]);
-
-/** Keywords whose values map names to schemas or other objects, so their keys are names. */
-const NAME_MAPS = new Set([
-	"properties",
-	"patternProperties",
-	"$defs",
-	"definitions",
-	"dependentSchemas",
-	"schemas",
-	"paths",
-	"webhooks",
-]);
+/** Keywords and fields whose values map names to schemas or other objects, so their keys are names. */
+const NAMES = new Set([...NAME_MAPS, "schemas", "paths", "webhooks"]);
 
 function withoutFragment(url: URL): string {
 	return url.href.slice(0, url.href.length - url.hash.length).replace(/#$/, "");
@@ -57,7 +59,28 @@ function decodePath(segment: string): string {
 	return decodeURIComponent(segment);
 }
 
+/**
+ * Why a `$ref`, `$id` or `$self` is no URI reference: a URL does not parse from it (against
+ * `base`), or its percent-encoding does not decode, as UTF-8, to the file path or JSON
+ * Pointer it spells (`%zz`, `%FF`). undefined for a URI reference.
+ */
+function notUriReference(s: string, base: string): string | undefined {
+	if (!URL.canParse(s, base)) return "is not a URI reference";
+	return decodes(s) ? undefined : "has a malformed percent-encoding";
+}
+
+/** Whether a URI's percent-encoding decodes, as UTF-8. */
+export function decodes(uri: string): boolean {
+	try {
+		decodeURIComponent(uri);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 interface Index {
+	/** The document's schema resources (`$id`); another file's are known inside it alone (`Ctx.#idsIn`). */
 	ids: Map<string, Value>;
 	anchors: Map<string, Value>;
 	/** The `$dynamicAnchor`s, by resource and name (`https://example.com/tree#node`). */
@@ -69,11 +92,16 @@ interface Index {
 }
 
 /**
- * Adds the schema resources (`$id`) and `$anchor`s in `doc` to the index, by absolute
- * URI. Values of `example`, `default`, `const` and `enum` are data, not schemas, unless
- * the key names a property (in `properties`, `$defs`, …).
+ * Adds the schema resources (`$id`) in `doc` to `ids` and its `$anchor`s to the index, by
+ * absolute URI. Values of `example`, `default`, `const` and `enum` are data, not schemas,
+ * unless the key names a property (in `properties`, `$defs`, …).
  */
-function indexIds(index: Index, doc: Value, base: string): void {
+function indexIds(
+	index: Index,
+	ids: Map<string, Value>,
+	doc: Value,
+	base: string,
+): void {
 	const walk = (v: Value, base: string, names: boolean): void => {
 		if (Array.isArray(v)) {
 			for (const x of v) walk(x, base, false);
@@ -83,9 +111,9 @@ function indexIds(index: Index, doc: Value, base: string): void {
 		let here = base;
 		const id = v.str("$id");
 		// An $id that is not a URI cannot be referred to.
-		if (id !== undefined && URL.canParse(id, base)) {
+		if (id !== undefined && notUriReference(id, base) === undefined) {
 			here = withoutFragment(new URL(id, base));
-			if (!index.ids.has(here)) index.ids.set(here, v);
+			if (!ids.has(here)) ids.set(here, v);
 			if (!index.resources.has(v)) index.resources.set(v, here);
 		}
 		// A $dynamicAnchor is a plain-name fragment too (JSON Schema 2020-12, 8.2.2).
@@ -99,10 +127,35 @@ function indexIds(index: Index, doc: Value, base: string): void {
 		if (v.get("$dynamicRef") !== undefined) index.dynamicRefs = true;
 		for (const [k, x] of v.entries) {
 			if (!names && DATA.has(k)) continue;
-			walk(x, here, !names && NAME_MAPS.has(k));
+			walk(x, here, !names && NAMES.has(k));
 		}
 	};
 	walk(doc, base, false);
+}
+
+/**
+ * Runs `f` with each of `keys` mapped to `value` in `map`, then restores what each was. A
+ * schema can be read again while it is read (a YAML alias is one object wherever it is,
+ * and a `$ref` can reach a schema being read), and the inner reading leaves the outer
+ * one's entry as it found it.
+ */
+function withEntries<K, V, T>(
+	map: Map<K, V>,
+	keys: readonly K[],
+	value: V,
+	f: () => T,
+): T {
+	const saved = keys.map((k) => map.get(k));
+	for (const k of keys) map.set(k, value);
+	try {
+		return f();
+	} finally {
+		keys.forEach((k, i) => {
+			const old = saved[i];
+			if (old === undefined) map.delete(k);
+			else map.set(k, old);
+		});
+	}
 }
 
 /** Appends a token to a JSON Pointer. */
@@ -111,7 +164,7 @@ export function child(at: string, token: string): string {
 }
 
 /** Where the document is, and how to load another document a `$ref` points to. */
-export interface Location {
+interface Location {
 	/** The document's absolute URL; relative `$ref`s resolve against it. */
 	url: string;
 	/** The parsed document at an absolute URL (no fragment). Throws GenerateError for a document that does not parse, any other error when it cannot be read. */
@@ -137,8 +190,11 @@ const NO_KEYS: ReadonlySet<string> = new Set();
 /** What a schema without a reference reaches. */
 const NONE: readonly Located[] = [];
 
+/** What a reader reads through a schema without a reference (see `Ctx.eachTarget`). */
+const NO_RESULTS: readonly never[] = Object.freeze([]);
+
 /** Schema keywords a component may have next to `$ref` and still be another name for its target. */
-const ALIAS_KEYS = new Set(["$ref", "$dynamicRef", "description", "title"]);
+const ALIAS_KEYS = new Set([...REFS, "description", "title"]);
 
 /** Where bytes are bytes: a raw body, a multipart body (whose properties are its parts), a part. */
 export type RawPosition = "body" | "parts" | "part";
@@ -169,19 +225,24 @@ export class Ctx {
 	readonly schemas: ReadonlySet<string>;
 	/** Warnings in the order first raised; the same schema converted for both views warns once. */
 	readonly #warnings = new Map<string, Diag>();
+	/** The `if`s (`…/if`) whose `then` an `unevaluated*` reads for what it evaluates (`thenRead`). */
+	readonly #thenRead = new Set<string>();
 	/**
 	 * Which view a schema is converted for: `read` (responses) leaves out writeOnly
 	 * properties, `write` (request bodies, parameters) leaves out readOnly ones.
 	 */
 	mode: View = "read";
-	/** Whether keywords next to `$ref` apply (OpenAPI 3.1) or are ignored (3.0). */
+	/** Whether keywords next to `$ref` apply (OpenAPI 3.1) or are ignored (3.0); see `readsSiblings`. */
 	readonly refSiblings: boolean;
 	/** Whether 3.0 `nullable: true` means "this schema or null" instead of adding `null` to `type`. */
 	readonly looseNullable: boolean;
 	/** Schemas from other files that got a key, in the order they were first referred to. */
 	readonly hoisted: Hoisted[] = [];
-	/** Hoisted keys by the URI of the schema. */
-	readonly #hoistedKeys = new Map<string, string>();
+	/**
+	 * Hoisted keys by the schema, whichever URI reaches it (a pointer into its file, or the
+	 * file's `$id`).
+	 */
+	readonly #hoistedKeys = new Map<Value, string>();
 	readonly #hoistedNames = new Set<string>();
 
 	/**
@@ -193,8 +254,7 @@ export class Ctx {
 		value: Value,
 		target: { base: string; uri: string; where: string },
 	): string {
-		// By location, not by value: two equal `true` schemas are two schemas.
-		const known = this.#hoistedKeys.get(target.uri);
+		const known = this.#hoistedKeys.get(value);
 		if (known !== undefined) return known;
 		const url = new URL(target.uri);
 		const fragment = url.hash.slice(1);
@@ -208,7 +268,7 @@ export class Ctx {
 			this.schemas.has(k) || this.#hoistedNames.has(k);
 		let key = name;
 		for (let n = 2; taken(key); n++) key = `${name}${n}`;
-		this.#hoistedKeys.set(target.uri, key);
+		this.#hoistedKeys.set(value, key);
 		this.#hoistedNames.add(key);
 		this.hoisted.push({ key, value, base: target.base, where: target.where });
 		return key;
@@ -234,7 +294,8 @@ export class Ctx {
 		const self = this.v32 ? get(root, "$self") : undefined;
 		if (
 			self !== undefined &&
-			(typeof self !== "string" || !URL.canParse(self, this.documentUrl))
+			(typeof self !== "string" ||
+				notUriReference(self, this.documentUrl) !== undefined)
 		)
 			throw new DiagError("#/$self", "$self must be a URI reference");
 		this.documentBase =
@@ -244,13 +305,88 @@ export class Ctx {
 		this.base = this.documentBase;
 	}
 
+	/**
+	 * Whether a schema's keywords apply: everywhere in 3.1 and 3.2, and in 3.0 where it has
+	 * no `$ref`, next to which they are ignored (but `description`; see `schemaDoc`). Every
+	 * reader of a schema's keywords asks this, and then reads its `$ref` target alone.
+	 */
+	readsSiblings(s: Value): boolean {
+		return this.refSiblings || get(s, "$ref") === undefined;
+	}
+
+	/** Each schema `schemaObject` read in a 3.0 document, and each it gave, to what it gives. */
+	readonly #read30 = new Map<Value, Value>();
+
+	/**
+	 * A Schema Object as the document's version defines it: in 3.1 and 3.2 as written; in
+	 * 3.0 without the keywords a 3.0 Schema Object does not define (`NOT_IN_30`), in it and
+	 * in the schemas it holds, so that no reader sees them. A schema without them is itself,
+	 * and one with them always gives the same schema, so schemas stay matched by identity
+	 * (`componentKey`). Every schema is read through this: the document's (`schema`), the
+	 * components (`componentKey`), and every `$ref` target.
+	 */
+	schemaObject(v: Value): Value {
+		if (this.refSiblings || !(v instanceof JsonObject)) return v;
+		const known = this.#read30.get(v);
+		if (known !== undefined) return known;
+		let changed = false;
+		const entries: [string, Value][] = [];
+		for (const [k, x] of v.entries) {
+			const read = NOT_IN_30.has(k) ? undefined : this.#held(k, x);
+			if (read !== x) changed = true;
+			if (read !== undefined) entries.push([k, read]);
+		}
+		const out = changed ? new JsonObject(entries) : v;
+		this.#read30.set(v, out);
+		this.#read30.set(out, out);
+		return out;
+	}
+
+	/** The value of a 3.0 schema's keyword `k`, the schemas it holds read by `schemaObject`. */
+	#held(k: string, x: Value): Value {
+		const holds = SUBSCHEMAS_30.get(k);
+		if (holds === "schema") return this.schemaObject(x);
+		if (holds === "list" && Array.isArray(x)) {
+			const out = x.map((s) => this.schemaObject(s));
+			return out.every((s, i) => s === x[i]) ? x : out;
+		}
+		if (holds === "map" && x instanceof JsonObject) {
+			const out = x.entries.map(([name, s]): [string, Value] => [
+				name,
+				this.schemaObject(s),
+			]);
+			return out.every(([, s], i) => s === (x.entries[i] as [string, Value])[1])
+				? x
+				: new JsonObject(out);
+		}
+		return x;
+	}
+
 	warn(at: string, msg: string): void {
 		const key = `${at}\n${msg}`;
 		if (!this.#warnings.has(key)) this.#warnings.set(key, { at, msg });
 	}
 
+	/**
+	 * Warns that the `if` / `then` / `else` whose `if` is at `at` is ignored: TypeScript has
+	 * no type for the values `if` does not admit. Where an `unevaluated*` reads its `then`
+	 * for what it evaluates (`thenRead`), the warning says that `then` is read for that only.
+	 */
+	ifIgnored(at: string): void {
+		this.warn(at, IF_IGNORED);
+	}
+
+	/** Records that an `unevaluated*` reads the `then` of the `if` at `at` for what it evaluates (see `ifIgnored`). */
+	thenRead(at: string): void {
+		this.#thenRead.add(at);
+	}
+
 	get warnings(): Diag[] {
-		return [...this.#warnings.values()];
+		return [...this.#warnings.values()].map((w) =>
+			w.msg === IF_IGNORED && this.#thenRead.has(w.at)
+				? { at: w.at, msg: THEN_READ }
+				: w,
+		);
 	}
 
 	/**
@@ -282,10 +418,14 @@ export class Ctx {
 	/** What `around` is for the schema converted next. */
 	#nextAround: readonly JsonObject[] | undefined;
 
-	/** Converts with `parent` around the schema converted next, then restores. */
-	withAround<T>(parent: JsonObject, f: () => T): T {
+	/**
+	 * Converts with `parent` (none if undefined) around the schema converted next, after
+	 * the schemas around the one being converted, then restores.
+	 */
+	withAround<T>(parent: JsonObject | undefined, f: () => T): T {
 		const saved = this.#nextAround;
-		this.#nextAround = [...this.around, parent];
+		this.#nextAround =
+			parent === undefined ? this.around : [...this.around, parent];
 		try {
 			return f();
 		} finally {
@@ -309,7 +449,7 @@ export class Ctx {
 	 * The `propertyNames` schemas being read for the strings they admit, which are an
 	 * object's keys: their references are written out rather than named.
 	 */
-	readonly #keysRead = new Set<Value>();
+	readonly #keysRead = new Map<Value, true>();
 
 	/** Whether a `propertyNames` is being read for its keys. */
 	get readingKeys(): boolean {
@@ -323,12 +463,7 @@ export class Ctx {
 
 	/** Reads a `propertyNames` for its keys, then restores. */
 	withKeysRead<T>(names: Value, f: () => T): T {
-		this.#keysRead.add(names);
-		try {
-			return f();
-		} finally {
-			this.#keysRead.delete(names);
-		}
+		return withEntries(this.#keysRead, [names], true, f);
 	}
 
 	/** Properties left out of the current view by the other members of the `allOf` a schema is in. */
@@ -344,12 +479,7 @@ export class Ctx {
 		keys: ReadonlySet<string>,
 		f: () => T,
 	): T {
-		for (const m of members) this.#leftOut.set(m, keys);
-		try {
-			return f();
-		} finally {
-			for (const m of members) this.#leftOut.delete(m);
-		}
+		return withEntries(this.#leftOut, members, keys, f);
 	}
 
 	/**
@@ -371,12 +501,7 @@ export class Ctx {
 		holders: () => ReadonlySet<JsonObject>,
 		f: () => T,
 	): T {
-		this.#said.set(s, holders);
-		try {
-			return f();
-		} finally {
-			this.#said.delete(s);
-		}
+		return withEntries(this.#said, [s], holders, f);
 	}
 
 	/** Converts in the given view, then restores the previous one. */
@@ -488,26 +613,18 @@ export class Ctx {
 		return this.#ids().dynamic.has(uri);
 	}
 
-	/**
-	 * The base URI inside a schema with `$id`: its `$id` resolved against the schemas
-	 * around it, wherever the schema is reached from. undefined for a schema without
-	 * one, or whose `$id` is not a URI.
-	 */
-	resourceOf(v: Value): string | undefined {
-		return this.#ids().resources.get(v);
-	}
-
 	// How a schema is looked through to the schemas it applies to the same value. Every
 	// reader of a schema goes through these, so that they all reach the same schemas.
 	// They are read for nearly every schema, most of which have no `$id` and no reference,
 	// so that case allocates nothing.
 
 	/**
-	 * The resource a schema is read in, its own (`$id`, 3.1 and 3.2), where it is one;
+	 * The resource a schema is read in, its own (`$id`, 3.1 and 3.2), where it is one: its
+	 * `$id` resolved against the schemas around it, wherever the schema is reached from.
 	 * undefined otherwise. Reading it inside it already changes nothing (`inOwnResource`).
 	 */
 	ownResource(v: Value): string | undefined {
-		return this.refSiblings ? this.#ids().resources.get(v) : undefined;
+		return this.#ids().resources.get(v);
 	}
 
 	/**
@@ -535,11 +652,8 @@ export class Ctx {
 	 * conversion reports one that is not.
 	 */
 	reached(s: Value): readonly Located[] {
-		return s instanceof JsonObject ? this.reachedBy(s, s.str("$ref")) : NONE;
-	}
-
-	/** `reached` for a reader that has read the schema's `$ref` (`r`, where it is a string) already. */
-	reachedBy(s: JsonObject, r: string | undefined): readonly Located[] {
+		if (!(s instanceof JsonObject)) return NONE;
+		const r = s.str("$ref");
 		// Without a $dynamicRef in the documents, only the $ref counts.
 		if (!this.#ids().dynamicRefs) {
 			const target = r === undefined ? undefined : this.tryLocate(r);
@@ -557,6 +671,82 @@ export class Ctx {
 		return targets;
 	}
 
+	/**
+	 * What a schema that is only a reference reaches: one `$ref` or `$dynamicRef`, with
+	 * annotations at most (anything next to a 3.0 `$ref`, which is ignored). undefined for
+	 * any other schema.
+	 */
+	onlyTarget(s: Value): Located | undefined {
+		const targets = this.reached(s);
+		// Only an object reaches a target.
+		return targets.length === 1 &&
+			(!this.readsSiblings(s) || refsAndAnnotations(s as JsonObject))
+			? targets[0]
+			: undefined;
+	}
+
+	// Looking through a schema's references to the schemas they reach, each read where it is
+	// (`inTarget`), as a reader that reads them as the same value does. A reader stops at a
+	// schema it reached already in one of two ways: `eachTarget` reads each schema once in a
+	// reading, wherever it is reached again; `pathTargets` stops only at one reached again
+	// inside itself (on the way to it), which reads as nothing or as `again`.
+
+	/**
+	 * `f` of each schema `s`'s references reach, read where it is, but one already in
+	 * `seen`, which this adds each to.
+	 */
+	eachTarget<T>(
+		s: Value,
+		seen: Set<string>,
+		f: (target: Located) => T,
+	): readonly T[] {
+		const targets = this.reached(s);
+		if (targets.length === 0) return NO_RESULTS;
+		const out: T[] = [];
+		for (const target of targets) {
+			if (seen.has(target.uri)) continue;
+			seen.add(target.uri);
+			out.push(this.inTarget(target, () => f(target)));
+		}
+		return out;
+	}
+
+	/**
+	 * `f` of each schema `s`'s references reach, read where it is, with the schemas on the
+	 * way to it (`seen`, and it) for `f` to pass on; for one on the way already, `again`,
+	 * or nothing without it.
+	 */
+	pathTargets<T>(
+		s: Value,
+		seen: ReadonlySet<string>,
+		f: (target: Located, seen: ReadonlySet<string>) => T,
+	): readonly T[];
+	pathTargets<T, A>(
+		s: Value,
+		seen: ReadonlySet<string>,
+		f: (target: Located, seen: ReadonlySet<string>) => T,
+		again: A,
+	): readonly (T | A)[];
+	pathTargets<T, A>(
+		s: Value,
+		seen: ReadonlySet<string>,
+		f: (target: Located, seen: ReadonlySet<string>) => T,
+		...again: [A] | []
+	): readonly (T | A)[] {
+		const targets = this.reached(s);
+		if (targets.length === 0) return NO_RESULTS;
+		const out: (T | A)[] = [];
+		for (const target of targets)
+			if (!seen.has(target.uri))
+				out.push(
+					this.inTarget(target, () =>
+						f(target, new Set([...seen, target.uri])),
+					),
+				);
+			else if (again.length > 0) out.push(again[0] as A);
+		return out;
+	}
+
 	/** Reads a schema a reference reaches where it is: in the resource it is in, and its own. */
 	inTarget<T>(target: Located, f: () => T): T {
 		const own = this.ownResource(target.value);
@@ -572,41 +762,67 @@ export class Ctx {
 	 * the base URI it lives under, and where it is, for messages.
 	 */
 	locate(r: string, at: string): Located {
+		const found = this.#found(r, at);
+		if (found instanceof GenerateError) throw found;
+		return found;
+	}
+
+	/** `locate`, or undefined where the document keeps it from finding the target (the conversion reports why, where it is). */
+	tryLocate(r: string): Located | undefined {
+		const found = this.#found(r, "");
+		return found instanceof GenerateError ? undefined : found;
+	}
+
+	/**
+	 * What a `$ref` reaches, or the document's error that keeps it from being found, located
+	 * at `at`; any other error is kanagata's, and is thrown.
+	 */
+	#found(r: string, at: string): Located | GenerateError {
 		// What a $ref reaches from a base never changes: it is found once.
 		const key = `${this.base} ${r}`;
-		let found = this.#located.get(key);
-		if (found === undefined) {
-			found = this.#find(r, at);
-			this.#located.set(key, found);
-		}
+		const known = this.#located.get(key);
+		if (known !== undefined) return known;
+		const found = this.#find(r, at);
+		if (!(found instanceof GenerateError)) this.#located.set(key, found);
 		return found;
 	}
 
 	readonly #located = new Map<string, Located>();
 
-	#find(r: string, at: string): Located {
+	#find(r: string, at: string): Located | GenerateError {
+		const why = notUriReference(r, this.base);
+		if (why !== undefined) return new DiagError(at, `$ref ${why}: ${r}`);
 		const url = new URL(r, this.base);
 		const fragment = url.hash.slice(1);
 		// A reference by the URL the document was read from still means the document.
 		const named = withoutFragment(url);
 		const resource = named === this.documentUrl ? this.documentBase : named;
 		const index = this.#ids();
+		// The file the $ref is in declares the resource, or the document does, or it is a file.
 		const doc =
 			resource === this.documentBase
 				? this.root
-				: (index.ids.get(resource) ?? this.#read(resource, r, at));
-		const value =
-			fragment === "" || fragment.startsWith("/")
-				? pointer(doc, `#${fragment}`)
-				: index.anchors.get(`${resource}#${fragment}`);
+				: (this.#idsIn.get(this.base)?.get(resource) ??
+					index.ids.get(resource) ??
+					this.#files.get(resource) ??
+					this.#read(resource, r, at));
+		if (doc instanceof GenerateError) return doc;
+		// A plain name is an $anchor in the resource the document is: a file whose root has an
+		// $id is that resource (3.1, 3.2), so its $refs resolve against the $id.
+		const anchored = fragment !== "" && !fragment.startsWith("/");
+		const scope = anchored ? (this.ownResource(doc) ?? resource) : resource;
+		const value = anchored
+			? index.anchors.get(`${scope}#${fragment}`)
+			: pointer(doc, `#${fragment}`);
 		if (value === undefined)
-			throw new DiagError(at, `$ref target not found: ${r}`);
+			return new DiagError(at, `$ref target not found: ${r}`);
 		return {
-			value,
+			// A schema as its version defines it; no other object has the keywords it leaves out.
+			value: this.schemaObject(value),
 			base: fragment.startsWith("/")
 				? this.#within(doc, fragment, resource)
-				: resource,
-			uri: `${resource}#${fragment}`,
+				: scope,
+			uri: `${scope}#${fragment}`,
 			where: this.where(resource, fragment),
 		};
 	}
@@ -622,7 +838,7 @@ export class Ctx {
 		// The pointer resolved, so every token names a member or an index.
 		for (const raw of fragment.slice(1).split("/")) {
 			const id = str(cur, "$id");
-			if (id !== undefined && URL.canParse(id, base))
+			if (id !== undefined && notUriReference(id, base) === undefined)
 				base = withoutFragment(new URL(id, base));
 			const token = unescapeToken(raw);
 			cur = Array.isArray(cur) ? cur[Number(token)] : get(cur, token);
@@ -630,18 +846,20 @@ export class Ctx {
 		return base;
 	}
 
-	/** Whether a schema is hoisted, by its URI. */
-	isHoisted(uri: string): boolean {
-		return this.#hoistedKeys.has(uri);
+	/** Whether a schema a reference reaches is hoisted. */
+	isHoisted(target: { value: Value }): boolean {
+		return this.#hoistedKeys.has(target.value);
 	}
 
 	/**
 	 * Loads another document, once, and indexes its `$id`s and `$anchor`s. It is known by
-	 * the URL it is read from: kanagata reads files, so another document's `$self` is not read.
+	 * the URL it is read from: kanagata reads files, so another document's `$self` is not
+	 * read, and its `$id`s are known inside it alone, whatever files were read before.
+	 * The error where it cannot be read or parsed.
 	 */
-	#read(resource: string, r: string, at: string): Value {
+	#read(resource: string, r: string, at: string): Value | GenerateError {
 		if (this.#load === undefined)
-			throw new DiagError(
+			return new DiagError(
 				at,
 				`external $ref, but the document's location is unknown: ${r}`,
 			);
@@ -649,38 +867,37 @@ export class Ctx {
 		try {
 			doc = this.#load(resource);
 		} catch (e) {
-			if (e instanceof GenerateError) throw e;
-			throw new DiagError(
+			if (e instanceof GenerateError) return e;
+			return new DiagError(
 				at,
 				`cannot read ${this.where(resource)}: ${(e as Error).message}`,
 			);
 		}
-		const index = this.#ids();
-		index.ids.set(resource, doc);
-		indexIds(index, doc, resource);
-		this.#files.add(resource);
+		const ids = new Map<string, Value>();
+		if (this.refSiblings) indexIds(this.#ids(), ids, doc, resource);
+		for (const uri of [resource, ...ids.keys()])
+			if (!this.#idsIn.has(uri)) this.#idsIn.set(uri, ids);
+		this.#files.set(resource, doc);
 		return doc;
 	}
 
-	readonly #files = new Set<string>();
+	/** Other files, by the URL each is read from. */
+	readonly #files = new Map<string, Value>();
 
-	/** Whether a base URI is another file (not the document, nor an `$id` resource). */
+	/** The schema resources (`$id`) of the file each base URI in another file is in: its URL, or a resource it declares. */
+	readonly #idsIn = new Map<string, Map<string, Value>>();
+
+	/** Whether a base URI is in another file: its URL, or a schema resource (`$id`) it declares. */
 	isFile(base: string): boolean {
-		return this.#files.has(base);
-	}
-
-	/** `locate`, or undefined where it would fail (the conversion reports the failure). */
-	tryLocate(r: string): Located | undefined {
-		try {
-			return this.locate(r, "");
-		} catch {
-			return undefined;
-		}
+		return this.#idsIn.has(base);
 	}
 
 	#index?: Index;
 
-	/** Every schema resource (`$id`) and `$anchor` in the document, by absolute URI, found on first use; other documents add theirs as they load. */
+	/**
+	 * Every schema resource (`$id`) and `$anchor` in the document, by absolute URI, found on
+	 * first use; other files add their `$anchor`s as they load, and keep their `$id`s apart.
+	 */
 	#ids(): Index {
 		if (this.#index !== undefined) return this.#index;
 		const index: Index = {
@@ -690,7 +907,9 @@ export class Ctx {
 			resources: new Map(),
 			dynamicRefs: false,
 		};
-		indexIds(index, this.root, this.documentBase);
+		// A 3.0 Schema Object has none of them (`NOT_IN_30`).
+		if (this.refSiblings)
+			indexIds(index, index.ids, this.root, this.documentBase);
 		this.#index = index;
 		return index;
 	}
@@ -701,17 +920,19 @@ export class Ctx {
 	/**
 	 * The key in `components.schemas` of a schema object, so references to it stay
 	 * named: the component itself, or the target of a component that is only a `$ref` or a
-	 * `$dynamicRef`, as read from the document (with at most `title` and `description`; a
-	 * schema kept in another file, `User: { $ref: schemas/User.yaml }`). Schemas are
-	 * matched by identity.
+	 * `$dynamicRef`, as read from the document (with at most `title` and `description`, or
+	 * anything next to a 3.0 `$ref`, which is ignored; a schema kept in another file,
+	 * `User: { $ref: schemas/User.yaml }`). Schemas are matched by identity.
 	 */
 	componentKey(v: Value): string | undefined {
 		if (this.#own === undefined) {
 			const schemas = get(get(this.root, "components"), "schemas");
 			const entries = schemas instanceof JsonObject ? schemas.entries : [];
 			this.#own = new Map();
-			for (const [key, s] of entries)
+			for (const [key, raw] of entries) {
+				const s = this.schemaObject(raw);
 				if (!this.#own.has(s)) this.#own.set(s, key);
+			}
 		}
 		const own = this.#own.get(v);
 		if (own !== undefined) return own;
@@ -724,7 +945,8 @@ export class Ctx {
 				for (const [s, key] of this.#own) {
 					if (
 						!(s instanceof JsonObject) ||
-						!s.entries.every(([k]) => ALIAS_KEYS.has(k))
+						(this.readsSiblings(s) &&
+							!s.entries.every(([k]) => ALIAS_KEYS.has(k)))
 					)
 						continue;
 					// A target that does not resolve is reported where the component is converted.

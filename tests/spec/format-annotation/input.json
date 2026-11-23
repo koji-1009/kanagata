@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "KeysOnly": {
+        "description": "format admits every value, so a oneOf member whose property has only it asks only for keys.",
+        "oneOf": [{ "required": ["a"], "properties": { "a": { "format": "uuid" } } }, { "required": ["b"] }]
+      }
+    }
+  }
+}

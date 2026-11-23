@@ -5,13 +5,9 @@ export interface paths {}
 export interface operations {}
 
 export interface schemas {
-  Integer: Integer;
   Decimal: Decimal;
   Any: Any;
 }
-
-/** A member's bounds list the integers between them where the schema it is a member of is an integer, as next to type. */
-export type Integer = 1 | 2 | 3;
 
 /** Numbers between bounds are no union. */
 export type Decimal = number;

@@ -38,6 +38,7 @@ export interface schemas {
   ContainsNoShort: ContainsNoShort;
   ContainsNoObject: ContainsNoObject;
   ContainsPastPrefix: ContainsPastPrefix;
+  DepReq: DepReq;
   NoDeps: NoDeps;
   OrNull: OrNull;
 }
@@ -154,6 +155,15 @@ export type ContainsNoObject = "a"[];
 
 /** Past prefixItems, whose items items does not list, the items are those it lists that contains rejects. */
 export type ContainsPastPrefix = [string?, ..."b"[]];
+
+/** dependentRequired: without a, or with b, as the properties type them. */
+export type DepReq = {
+  a?: never;
+  b?: string;
+} | {
+  a?: string;
+  b: string;
+};
 
 /** dependentRequired with no keys asks nothing. */
 export type NoDeps = Record<string, unknown>;

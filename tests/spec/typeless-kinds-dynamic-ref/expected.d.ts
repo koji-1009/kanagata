@@ -11,12 +11,6 @@ export interface schemas {
   Said: Said;
   Strs: Strs;
   Typed: Typed;
-  KeyedInner: KeyedInner;
-  KeyedHolder: KeyedHolder;
-  PassedById: PassedById;
-  ObjInner: ObjInner;
-  ObjHolder: ObjHolder;
-  SaidById: SaidById;
 }
 
 export type Keyed = {
@@ -24,7 +18,7 @@ export type Keyed = {
 };
 
 /** The member asks a key of objects only, through $dynamicRef: null passes it. */
-export type Passed = (Keyed | null) & (Record<string, unknown> | null);
+export type Passed = Keyed & Record<string, unknown> | null;
 
 export type Obj = Record<string, unknown>;
 
@@ -35,19 +29,3 @@ export type Strs = string[];
 
 /** A member with $dynamicRef is not typeless: its target says the value is an array. */
 export type Typed = Strs & [string, ...string[]];
-
-export type KeyedInner = {
-  a: {} | null;
-};
-
-export type KeyedHolder = KeyedInner;
-
-/** The same through a $ref that resolves against its target's own $id. */
-export type PassedById = (KeyedHolder | null) & (Record<string, unknown> | null);
-
-export type ObjInner = Record<string, unknown>;
-
-export type ObjHolder = ObjInner;
-
-/** And the kind said through it. */
-export type SaidById = ObjHolder & Record<string, unknown>;

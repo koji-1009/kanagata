@@ -8,34 +8,25 @@
 // it can say which items match a `contains` beside it, and then how many (`saying`).
 
 import { JsonObject, type Value } from "./json.ts";
-import { dependencies, leftOutKeys, namedKeys, requiredKeys } from "./keys.ts";
+import { dependencies, leftOutGroup, namedKeys, requiredKeys } from "./keys.ts";
 import { orOther } from "./kinds.ts";
 import { accepts, listed, negation, refuted } from "./not.ts";
-import { count, matches } from "./number.ts";
+import { containsBounds, count, matches } from "./number.ts";
 import { keyLiterals, propertyKeys } from "./object.ts";
 import { type Ctx, child, type Place } from "./pointer.ts";
-import { isAnnotation, membersIn, schema } from "./schema.ts";
+import { membersIn, schema } from "./schema.ts";
 import { MAX_UNION } from "./template.ts";
 import {
 	array as arrayTy,
 	equal,
 	inter,
 	NEVER,
+	present,
 	type Ty,
 	UNKNOWN,
 	union,
 } from "./ty.ts";
-
-/** Keywords that apply subschemas to the same value: they decide what `unevaluated*` see. */
-const APPLICATORS = [
-	"allOf",
-	"oneOf",
-	"anyOf",
-	"$ref",
-	"$dynamicRef",
-	"if",
-	"dependentSchemas",
-];
+import { EVALUATING, isAnnotation } from "./vocab.ts";
 
 /**
  * `unevaluatedProperties` / `unevaluatedItems` where nothing next to them evaluates: then
@@ -44,13 +35,28 @@ const APPLICATORS = [
 export function unevaluated(v: JsonObject, key: string): Value | undefined {
 	const x = v.get(key);
 	if (x === undefined) return undefined;
-	const evaluating =
-		key === "unevaluatedItems" ? ITEM_APPLICATORS : APPLICATORS;
+	const evaluating = key === "unevaluatedItems" ? EVALUATING_ITEMS : EVALUATING;
 	return evaluating.every((k) => v.get(k) === undefined) ? x : undefined;
 }
 
+/**
+ * What the keys without a property schema are, and the keyword that says it:
+ * `additionalProperties`, or else `unevaluatedProperties` where it is that (`unevaluated`);
+ * undefined without either.
+ */
+export function additional(
+	v: JsonObject,
+): { key: string; value: Value } | undefined {
+	const ap = v.get("additionalProperties");
+	if (ap !== undefined) return { key: "additionalProperties", value: ap };
+	const up = unevaluated(v, "unevaluatedProperties");
+	return up === undefined
+		? undefined
+		: { key: "unevaluatedProperties", value: up };
+}
+
 /** The keywords next to `unevaluatedItems` that evaluate for it: `contains` evaluates the items it matches. */
-const ITEM_APPLICATORS = [...APPLICATORS, "contains"];
+const EVALUATING_ITEMS = [...EVALUATING, "contains"];
 
 /**
  * The most cases of what evaluates the items (`itemCases`) read where branches have
@@ -113,6 +119,19 @@ function evaluateBoth(a: Evaluated, b: Evaluated): void {
 	a.branches.push(...b.branches);
 }
 
+/** Whether a schema evaluates a property or an item somewhere, itself or where a branch matches. */
+function evaluatesAny(e: Evaluated): boolean {
+	return (
+		e.names.size > 0 ||
+		e.patterns.length > 0 ||
+		e.all ||
+		e.length > 0 ||
+		e.rest ||
+		e.contained.length > 0 ||
+		e.branches.length > 0
+	);
+}
+
 /** `f`, run where it is read now (see `Ctx.place`) when first asked, and remembered. */
 function later<T>(cx: Ctx, f: () => T): () => T {
 	const place = cx.place;
@@ -124,34 +143,67 @@ function later<T>(cx: Ctx, f: () => T): () => T {
 }
 
 /**
- * What a schema evaluates (see `Evaluated`); its own `unevaluated*` too unless `top`, the
- * schema they are read for. The conditions are converted when asked for.
+ * What a schema evaluates for its own `unevaluated*` (`evaluates`) and the cases of what
+ * evaluates its items (`itemCases`), each read once, when first asked: its type's parts and
+ * the schemas with `contains` it says both read them.
+ */
+export interface Evaluation {
+	readonly evaluated: () => Evaluated;
+	readonly cases: () => ReturnType<typeof itemCases>;
+}
+
+/** The keys the conversion of a schema reads for its parts (see `Reading` in schema.ts). */
+interface Keys {
+	readonly left: () => ReadonlySet<string>;
+	readonly keys: () => Ty | undefined;
+}
+
+/** `Evaluation` of the schema `v` at `at`, whose conversion reads `own`. */
+export function evaluation(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	own: Keys,
+): Evaluation {
+	let ev: Evaluated | undefined;
+	let cases: { read: ReturnType<typeof itemCases> } | undefined;
+	const evaluated = () => {
+		ev ??= evaluates(cx, v, at, own, new Set());
+		return ev;
+	};
+	return {
+		evaluated,
+		cases: () => {
+			cases ??= { read: itemCases(evaluated()) };
+			return cases.read;
+		},
+	};
+}
+
+/**
+ * What a schema evaluates (see `Evaluated`); its own `unevaluated*` too unless it is the
+ * schema they are read for, whose conversion reads its keys (`own`). The conditions are
+ * converted when asked for.
  */
 function evaluates(
 	cx: Ctx,
 	s: Value,
 	at: string,
-	top: boolean,
-	seen: Set<string>,
+	own: Keys | undefined,
+	seen: ReadonlySet<string>,
 ): Evaluated {
+	const top = own !== undefined;
 	const ev = nothingEvaluated();
 	if (!(s instanceof JsonObject)) return ev;
-	// What a schema in its own resource evaluates, a member or the target of a reference.
+	// What a member evaluates, in its own resource.
 	const inner = (m: Value, where: string) =>
-		cx.inOwnResource(m, () => evaluates(cx, m, where, false, seen));
+		cx.inOwnResource(m, () => evaluates(cx, m, where, undefined, seen));
 	// A schema reached again inside itself evaluates nothing more; reached again
 	// elsewhere, in another member, it evaluates there too.
-	for (const target of cx.reached(s)) {
-		if (seen.has(target.uri)) continue;
-		seen.add(target.uri);
-		evaluateBoth(
-			ev,
-			cx.inTarget(target, () => inner(target.value, target.where)),
-		);
-		seen.delete(target.uri);
-	}
-	// In 3.0 the keywords next to $ref are ignored.
-	if (s.get("$ref") !== undefined && !cx.refSiblings) return ev;
+	for (const e of cx.pathTargets(s, seen, (t, path) =>
+		evaluates(cx, t.value, t.where, undefined, path),
+	))
+		evaluateBoth(ev, e);
 	const props = s.get("properties");
 	for (const [k] of props instanceof JsonObject ? props.entries : []) {
 		ev.names.add(k);
@@ -176,9 +228,9 @@ function evaluates(
 		ev.keys.add(k);
 		for (const n of names) ev.keys.add(n);
 	}
-	for (const k of keyLiterals(propertyKeys(cx, s, at))) ev.keys.add(k);
-	const group = leftOutKeys(cx, s);
-	for (const k of cx.leftOutIn(s)) group.add(k);
+	const keys = own === undefined ? propertyKeys(cx, s, at) : own.keys();
+	for (const k of keyLiterals(keys)) ev.keys.add(k);
+	const group = own === undefined ? leftOutGroup(cx, s) : own.left();
 	const allOf = s.get("allOf");
 	// Members are the same value: the schema's keywords apply to it too.
 	const member = (m: Value, where: string) =>
@@ -208,6 +260,7 @@ function evaluates(
 	if (cond !== undefined) {
 		const then = s.get("then") ?? true;
 		const otherwise = s.get("else") ?? true;
+		const not = refuted(cx, cond, [s, ...cx.around]);
 		const tys = later(
 			cx,
 			() =>
@@ -219,22 +272,24 @@ function evaluates(
 		);
 		// if and then evaluate where if admits the value; else where it does not.
 		const both = member(cond, child(at, "if"));
-		evaluateBoth(both, member(then, child(at, "then")));
+		const thenEv = member(then, child(at, "then"));
+		evaluateBoth(both, thenEv);
 		branch(() => inter([tys()[0], tys()[1]]), both);
-		const not = refuted(cx, cond, [s, ...cx.around]);
-		if (not === undefined) ev.undecided ||= otherwise !== true;
-		else
+		if (not !== undefined)
 			branch(
 				() => inter([not, tys()[2]]),
 				member(otherwise, child(at, "else")),
 			);
+		else if (otherwise !== true) ev.undecided = true;
+		// Without else, then is read where it evaluates, though no type says where if fails.
+		else if (evaluatesAny(thenEv)) cx.thenRead(child(at, "if"));
 	}
 	const ds = s.get("dependentSchemas");
 	for (const [k, d] of ds instanceof JsonObject ? ds.entries : [])
 		branch(
 			() => ({
 				kind: "object",
-				props: [{ key: k, ty: UNKNOWN, optional: false, present: true }],
+				props: [present(k, UNKNOWN)],
 			}),
 			member(d, child(child(at, "dependentSchemas"), k)),
 		);
@@ -362,8 +417,10 @@ const isHolder = (c: ItemsEvaluated, h: JsonObject): boolean =>
 	c.contained.some((x) => x.schema === h);
 
 /** Whether `contains` asks no more than one matching item, so a value fails it only where none matches. */
-const asksOne = (h: JsonObject): boolean =>
-	(count(h, "minContains") ?? 1) <= 1 && count(h, "maxContains") === undefined;
+function asksOne(h: JsonObject): boolean {
+	const { min, max } = containsBounds(h);
+	return min <= 1 && max === undefined;
+}
 
 /**
  * The schemas with `contains` whose matching items the type of `v` says, its
@@ -373,10 +430,11 @@ export function saying(
 	cx: Ctx,
 	v: JsonObject,
 	at: string,
+	e: Evaluation,
 ): (() => ReadonlySet<JsonObject>) | undefined {
 	if (v.get("unevaluatedItems") !== false) return undefined;
-	const ev = evaluates(cx, v, at, true, new Set());
-	const read = ev.undecided || ev.rest ? undefined : itemCases(ev);
+	const ev = e.evaluated();
+	const read = ev.undecided || ev.rest ? undefined : e.cases();
 	if (read === undefined) return undefined;
 	return later(cx, () => saidHolders(cx, v, at, ev, read.branches, read.cases));
 }
@@ -412,7 +470,8 @@ function saidHolders(
 	const without = (c: ItemsCase, h: JsonObject): boolean => {
 		const parts = c.parts.filter((p) => !isHolder(p, h));
 		const length = Math.max(ev.length, ...parts.map((p) => p.length));
-		const rest = ev.rest || parts.some((p) => p.rest);
+		// Not every item by the value itself (ev.rest), whose cases are read only then.
+		const rest = parts.some((p) => p.rest);
 		if (length !== c.length || rest !== c.rest) return false;
 		const other = soleHolder({
 			length,
@@ -527,7 +586,12 @@ function containsTy(cx: Ctx, h: Holder): Ty {
  * names that nothing evaluates wherever it is present is absent or as the keyword says,
  * and items past those evaluated are as it says (none for `false`).
  */
-export function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
+export function unevaluatedParts(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	e: Evaluation,
+): Ty[] {
 	// Where nothing next to them evaluates, they are additionalProperties / items (`unevaluated`).
 	const next = (key: string) =>
 		unevaluated(v, key) === undefined ? v.get(key) : undefined;
@@ -535,7 +599,7 @@ export function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 	const ui = next("unevaluatedItems");
 	const asked = (x: Value | undefined) => x !== undefined && x !== true;
 	if (!asked(up) && !asked(ui)) return [];
-	const ev = evaluates(cx, v, at, true, new Set());
+	const ev = e.evaluated();
 	const warn = (key: string, x: Value | undefined) => {
 		if (asked(x))
 			cx.warn(
@@ -552,8 +616,9 @@ export function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 	if (asked(up) && !ev.all) {
 		const ty = schema(cx, up as Value, child(at, "unevaluatedProperties"));
 		// The schemas this one is a member of name keys of the same object, which it does not evaluate.
-		for (const s of cx.around) for (const k of namedKeys(cx, s)) ev.keys.add(k);
-		for (const key of ev.keys) {
+		const keys = new Set(ev.keys);
+		for (const s of cx.around) for (const k of namedKeys(cx, s)) keys.add(k);
+		for (const key of keys) {
 			if (ev.names.has(key) || ev.patterns.some((p) => matches(p, key)))
 				continue;
 			parts.push(
@@ -569,7 +634,7 @@ export function unevaluatedParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 			);
 		}
 	}
-	const read = asked(ui) && !ev.rest ? itemCases(ev) : undefined;
+	const read = asked(ui) && !ev.rest ? e.cases() : undefined;
 	if (asked(ui) && !ev.rest && read === undefined) warn("unevaluatedItems", ui);
 	if (read !== undefined) {
 		const ty = schema(cx, ui as Value, child(at, "unevaluatedItems"));
@@ -613,8 +678,7 @@ function unevaluatedItems(
 	const marks =
 		sole === undefined ? undefined : prefixMarks(cx, v, at, sole, c.length);
 	if (sole !== undefined && marks !== undefined) {
-		const min = count(sole.schema, "minContains") ?? 1;
-		const max = count(sole.schema, "maxContains");
+		const { min, max } = containsBounds(sole.schema);
 		if (max !== undefined && max < min) return NEVER;
 		return containsCount(containsTy(cx, sole), marks, min, max);
 	}

@@ -39,13 +39,12 @@ export type Required = {
 };
 
 /** Its schema can type keys too, and other kinds the type names pass. */
-export type Typed = ({
-  card?: string;
-} | null) & ({
+export type Typed = {
   card?: never;
 } | {
+  card?: string;
   billing: string;
-} | null);
+} | null;
 
 /** A schema no object with the key matches leaves the key out. */
 export type Closed = {

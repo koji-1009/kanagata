@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Order": {
+        "type": "object",
+        "if": { "allOf": [{ "$ref": "#/components/schemas/Shipped" }] },
+        "then": { "required": ["tracking"] }
+      }
+    }
+  }
+}

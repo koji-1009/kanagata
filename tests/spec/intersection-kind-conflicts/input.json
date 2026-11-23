@@ -1,6 +1,19 @@
 {
   "openapi": "3.1.0",
-  "paths": {},
+  "paths": {
+    "/owned": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "allOf": [{ "anyOf": [{ "$ref": "#/components/schemas/Named" }, { "type": "string" }] }, { "$ref": "#/components/schemas/Owned" }] }
+            }
+          }
+        },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
   "components": {
     "schemas": {
       "Named": { "type": "object", "properties": { "name": { "type": "string" } } },
@@ -14,6 +27,30 @@
           { "anyOf": [{ "allOf": [{ "$ref": "#/components/schemas/Named" }, { "$ref": "#/components/schemas/Dated" }] }, { "type": "string" }] },
           { "$ref": "#/components/schemas/Owned" }
         ]
+      },
+      "MapOf": {
+        "description": "References are read for their kinds in index signatures too.",
+        "type": "object",
+        "additionalProperties": { "allOf": [{ "anyOf": [{ "$ref": "#/components/schemas/Named" }, { "type": "string" }] }, { "$ref": "#/components/schemas/Owned" }] }
+      },
+      "KeyedMap": {
+        "description": "And in those keyed by a pattern.",
+        "type": "object",
+        "patternProperties": { "^x-": { "allOf": [{ "anyOf": [{ "$ref": "#/components/schemas/Named" }, { "type": "string" }] }, { "$ref": "#/components/schemas/Owned" }] } },
+        "additionalProperties": false
+      },
+      "OnePair": {
+        "description": "And in tuples.",
+        "type": "array",
+        "prefixItems": [{ "allOf": [{ "anyOf": [{ "$ref": "#/components/schemas/Named" }, { "type": "string" }] }, { "$ref": "#/components/schemas/Owned" }] }],
+        "minItems": 1,
+        "maxItems": 1
+      },
+      "PairThenAny": {
+        "description": "Open ones too.",
+        "type": "array",
+        "prefixItems": [{ "allOf": [{ "anyOf": [{ "$ref": "#/components/schemas/Named" }, { "type": "string" }] }, { "$ref": "#/components/schemas/Owned" }] }],
+        "minItems": 1
       },
       "StringsAmongArrays": {
         "description": "Members that can be strings or arrays meet a string: they have strings in common.",

@@ -71,12 +71,10 @@ export type Undecided = {
 };
 
 /** Numbers, which type names beside objects, pass if and then, which have object keywords only. */
-export type Amount = ({
-  unit?: "fixed" | "percent";
-  currency?: string;
-} | number) & ({
+export type Amount = {
   unit?: "fixed";
-  currency: {} | null;
-} | number | {
+  currency: string;
+} | {
   unit: "percent";
-});
+  currency?: string;
+} | number;

@@ -31,6 +31,26 @@
         },
         "responses": { "204": { "description": "Received." } }
       }
+    },
+    "petUpdated": {
+      "post": {
+        "parameters": [
+          { "name": "X-Pet", "in": "header", "description": "Parameters are the read view.", "schema": { "$ref": "#/components/schemas/Pet" } },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "A parameter defined by content is typed as a path's is: string for JSON.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A form the receiver sends back is its schema too.",
+            "headers": { "X-Echo": { "description": "Response headers are the write view.", "schema": { "$ref": "#/components/schemas/Pet" } } },
+            "content": { "application/x-www-form-urlencoded": { "schema": { "$ref": "#/components/schemas/Pet" } } }
+          }
+        }
+      }
     }
   },
   "components": {

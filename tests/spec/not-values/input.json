@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Present": {
+        "description": "Values no member admits by its kind (null and false, for a string) are left out without a warning.",
+        "type": ["string", "null"],
+        "not": { "enum": [null, false] }
+      }
+    }
+  }
+}

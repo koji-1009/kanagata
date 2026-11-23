@@ -1,18 +1,20 @@
 // Intermediate representation of TypeScript types, and its normalization.
 
+import { type JsonNumber, JsonObject, toJson, type Value } from "./json.ts";
+
 export interface Prop {
-	key: string;
-	ty: Ty;
-	optional: boolean;
-	doc?: string;
+	readonly key: string;
+	readonly ty: Ty;
+	readonly optional: boolean;
+	readonly doc?: string;
 	/** A key a JSON object must have: its value is a JSON value, never `undefined` (see `presentKeys`). */
-	present?: true;
+	readonly present?: true;
 }
 
 /** An index signature by a template literal type: `[key: `x-${string}`]: ty`. */
 export interface Keyed {
-	key: Ty;
-	ty: Ty;
+	readonly key: Ty;
+	readonly ty: Ty;
 }
 
 /** Which view of a component schema a reference means: as returned, or as sent. */
@@ -39,49 +41,71 @@ export function inTemplate(seq: Segment[], s: string, i = 0, at = 0): boolean {
 }
 
 export type Ty =
-	| { kind: "unknown" }
+	| { readonly kind: "unknown" }
 	/** `{}`: any value but `null` and `undefined`. */
-	| { kind: "nonNullish" }
-	| { kind: "never" }
-	| { kind: "null" }
-	| { kind: "undefined" }
-	| { kind: "string" }
-	| { kind: "number" }
+	| { readonly kind: "nonNullish" }
+	| { readonly kind: "never" }
+	| { readonly kind: "null" }
+	| { readonly kind: "undefined" }
+	| { readonly kind: "string" }
+	| { readonly kind: "number" }
 	/** A whole number; printed as `number`, but it narrows `enum` / `const` values to whole ones. */
-	| { kind: "integer" }
-	| { kind: "boolean" }
-	| { kind: "blob" }
+	| { readonly kind: "integer" }
+	| { readonly kind: "boolean" }
+	| { readonly kind: "blob" }
 	/** `Record<string, unknown>`: any object. */
-	| { kind: "record" }
+	| { readonly kind: "record" }
 	/** Literal in JSON notation: `"admin"` with quotes, `1`, `true`. */
-	| { kind: "lit"; text: string }
+	| { readonly kind: "lit"; readonly text: string }
 	/**
 	 * A template literal type, as printed: `` `https://${"us" | "eu"}.example.com` ``, and
 	 * its segments, which say which strings it admits (see `inTemplate`).
 	 */
-	| { kind: "template"; text: string; seq: Segment[] }
-	/** A component schema, by its key in `components.schemas`; named when emitted. */
-	| { kind: "ref"; schema: string; view: View }
+	| {
+			readonly kind: "template";
+			readonly text: string;
+			readonly seq: Segment[];
+	  }
+	/**
+	 * A component schema, by its key in `components.schemas`; named when emitted. `kinds`
+	 * are those of its type, once all components are converted (see `withRefKinds`).
+	 */
+	| {
+			readonly kind: "ref";
+			readonly schema: string;
+			readonly view: View;
+			readonly kinds?: ValueKind[];
+	  }
 	/** `operations[id]` */
-	| { kind: "opRef"; id: string }
-	| { kind: "array"; elem: Ty }
+	| { readonly kind: "opRef"; readonly id: string }
+	| { readonly kind: "array"; readonly elem: Ty }
 	/**
 	 * `[A, B?, ...R[]]`: the first `min` items are required, the rest optional,
 	 * followed by any number of `rest` items when given.
 	 */
-	| { kind: "tuple"; items: Ty[]; min: number; rest?: Ty }
+	| {
+			readonly kind: "tuple";
+			readonly items: Ty[];
+			readonly min: number;
+			readonly rest?: Ty;
+	  }
 	/** Object literal; `{}` when empty. */
-	| { kind: "object"; props: Prop[] }
+	| { readonly kind: "object"; readonly props: Prop[] }
 	/**
 	 * Object literal with index signatures: `{ a: A; [key: `x-${string}`]: K; [key: string]: T }`,
 	 * `keyed` by template literal types, `index` by any string.
 	 */
-	| { kind: "map"; props: Prop[]; index?: Ty; keyed?: Keyed[] }
-	| { kind: "union"; items: Ty[] }
-	| { kind: "inter"; items: Ty[] };
+	| {
+			readonly kind: "map";
+			readonly props: Prop[];
+			readonly index?: Ty;
+			readonly keyed?: Keyed[];
+	  }
+	| { readonly kind: "union"; readonly items: Ty[] }
+	| { readonly kind: "inter"; readonly items: Ty[] };
 
 export const UNKNOWN: Ty = { kind: "unknown" };
-export const NON_NULLISH: Ty = { kind: "nonNullish" };
+const NON_NULLISH: Ty = { kind: "nonNullish" };
 export const NEVER: Ty = { kind: "never" };
 export const NULL: Ty = { kind: "null" };
 export const UNDEFINED: Ty = { kind: "undefined" };
@@ -92,7 +116,7 @@ export const BOOLEAN: Ty = { kind: "boolean" };
 export const BLOB: Ty = { kind: "blob" };
 export const RECORD: Ty = { kind: "record" };
 /** `{} | null`: any JSON value. */
-export const ANY_JSON: Ty = { kind: "union", items: [NON_NULLISH, NULL] };
+const ANY_JSON: Ty = { kind: "union", items: [NON_NULLISH, NULL] };
 
 export const lit = (text: string): Ty => ({ kind: "lit", text });
 export const ref = (schema: string, view: View = "read"): Ty => ({
@@ -116,6 +140,27 @@ export const prop = (key: string, ty: Ty): Prop => ({
 	key,
 	ty,
 	optional: false,
+});
+
+/** A key a JSON object must have, of this type (see `Prop.present`). */
+export const present = (key: string, ty: Ty): Prop => ({
+	key,
+	ty,
+	optional: false,
+	present: true,
+});
+
+/** A key an object does not have: `key?: never`. */
+export const neverProp = (key: string): Prop => ({
+	key,
+	ty: NEVER,
+	optional: true,
+});
+
+/** The objects without this key: `{ key?: never }`. */
+export const absent = (key: string): Ty => ({
+	kind: "object",
+	props: [neverProp(key)],
 });
 
 /**
@@ -326,6 +371,155 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
 	}
 	return out;
 }
+
+/** What a reference's component is: its type and the kinds of value it admits, in the reference's view. */
+interface Components {
+	kinds: (r: RefTy) => ValueKind[] | undefined;
+	type: (r: RefTy) => Ty;
+}
+
+/**
+ * The type with each reference an intersection meets of the kinds of its component's
+ * type, and those intersections and the unions around them built again, which leave
+ * out what those kinds rule out: `(Base | string) & Extra` is `Base & Extra` where `Extra`
+ * is an object type. Elsewhere a reference's kinds change nothing (a union reads none),
+ * so it stays as it is. A reference that a part of another kind would meet as TypeScript
+ * does not read it is written out there (`writtenOut`). `met` says whether `t` is met
+ * there, through unions and intersections; `done` holds the types gone through already,
+ * outside an intersection and in one, so that each is gone through once. A type nothing
+ * in changes is itself.
+ */
+export function withRefKinds(
+	t: Ty,
+	components: Components,
+	done: readonly [Map<Ty, Ty>, Map<Ty, Ty>],
+	met = false,
+): Ty {
+	if (t.kind === "ref") {
+		const kinds = met ? components.kinds(t) : undefined;
+		return kinds === undefined ? t : { ...t, kinds };
+	}
+	// Most types are of no parts, which nothing changes.
+	if (!PARTED.has(t.kind)) return t;
+	const seen = done[met ? 1 : 0];
+	const known = seen.get(t);
+	if (known !== undefined) return known;
+	let changed = false;
+	const go = (u: Ty, inside = false) => {
+		const out = withRefKinds(u, components, done, inside);
+		if (out !== u) changed = true;
+		return out;
+	};
+	const props = (ps: Prop[]) =>
+		ps.map((p) => {
+			const ty = go(p.ty);
+			return ty === p.ty ? p : { ...p, ty };
+		});
+	let out: Ty = t;
+	switch (t.kind) {
+		case "array": {
+			const elem = go(t.elem);
+			if (changed) out = { kind: "array", elem };
+			break;
+		}
+		case "tuple": {
+			const items = t.items.map((u) => go(u));
+			const rest = t.rest === undefined ? undefined : go(t.rest);
+			if (changed)
+				out =
+					rest === undefined
+						? { kind: "tuple", items, min: t.min }
+						: { kind: "tuple", items, min: t.min, rest };
+			break;
+		}
+		case "object": {
+			const ps = props(t.props);
+			if (changed) out = { kind: "object", props: ps };
+			break;
+		}
+		case "map": {
+			const ps = props(t.props);
+			const keyed = t.keyed?.map((k) => ({ key: k.key, ty: go(k.ty) }));
+			const index = t.index === undefined ? undefined : go(t.index);
+			if (changed)
+				out = {
+					kind: "map",
+					props: ps,
+					...(keyed === undefined ? {} : { keyed }),
+					...(index === undefined ? {} : { index }),
+				};
+			break;
+		}
+		case "union": {
+			const items = t.items.map((u) => go(u, met));
+			if (changed) out = union(items);
+			break;
+		}
+		case "inter": {
+			let items = t.items.map((u) => go(u, true));
+			// What a reference written out is made of may be written out in turn.
+			for (
+				let written = writtenOut(items, components);
+				written !== undefined;
+				written = writtenOut(items, components)
+			) {
+				items = written.map((u) => go(u, true));
+				changed = true;
+			}
+			if (changed) out = inter(items);
+			break;
+		}
+	}
+	seen.set(t, out);
+	return out;
+}
+
+/**
+ * The parts of an intersection with each reference of several kinds written out (its
+ * component's type) where another part has a kind that meets one of them as TypeScript
+ * does not read it: an object type and a value of another kind than `null`. TypeScript
+ * meets each member of the reference's type with the other parts on its own, and
+ * `string & { y?: string }` admits every string, so `Value & { y?: string }` with `Value`
+ * being `{ x?: number } | string` is `{ x?: number; y?: string }`. It reads `null` met
+ * with an object type, and two other kinds, as `never`. undefined where none is.
+ */
+function writtenOut(items: Ty[], components: Components): Ty[] | undefined {
+	const rows = items.map((t) => (t.kind === "union" ? t.items : [t]));
+	const kinds = rows.map((ms) => ms.flatMap((m) => memberKinds(m) ?? []));
+	const apart = (k: ValueKind, o: ValueKind) =>
+		(k === "object" && o !== "object" && o !== "null") ||
+		(o === "object" && k !== "object" && k !== "null");
+	let written = false;
+	const out = items.map((t, i) => {
+		const others = kinds.flatMap((ks, j) => (j === i ? [] : ks));
+		let own = false;
+		const ms = (rows[i] as Ty[]).map((m) => {
+			const ks = m.kind === "ref" ? m.kinds : undefined;
+			if (
+				ks === undefined ||
+				ks.length < 2 ||
+				!ks.some((k) => others.some((o) => apart(k, o)))
+			)
+				return m;
+			own = true;
+			return components.type(m as RefTy);
+		});
+		if (!own) return t;
+		written = true;
+		return union(ms);
+	});
+	return written ? out : undefined;
+}
+
+/** The kinds of type made of other types. */
+const PARTED = new Set<Ty["kind"]>([
+	"array",
+	"tuple",
+	"object",
+	"map",
+	"union",
+	"inter",
+]);
 
 /**
  * Collects distinct members: literals by their text through a Set (enums can have
@@ -538,7 +732,7 @@ export function union(items: Ty[]): Ty {
 						: t.kind === "tuple" ||
 								(t.kind === "array" && t.elem.kind !== "unknown")
 							? !kinds.includes("array")
-							: t.kind !== "lit" || !admits(kinds, t),
+							: t.kind !== "lit" || !ofKinds(kinds, t),
 		);
 	if (out.length === 0) return NEVER;
 	const [only] = out;
@@ -615,41 +809,62 @@ export function inter(items: Ty[]): Ty {
 	)
 		return NEVER;
 	if (out.length === 0) return UNKNOWN;
+	if (out.some(holdsRef)) metRefs++;
 	return { kind: "inter", items: out };
 }
 
 /**
- * Unions whose members are each of one kind, no two of the same, meet kind by kind:
- * `({ a: A } | "") & ("" | Record<string, unknown>)` is `{ a: A } | ""`. undefined where
- * a member is no such union or type of one kind, or none is a union.
+ * How many intersections have met a reference whose kinds are not known yet, as a part
+ * or a member of one: a type built while it stays the same has none for `withRefKinds`
+ * to build again.
+ */
+let metRefs = 0;
+
+/** `metRefs`, read before and after a type is built. */
+export const refsMet = (): number => metRefs;
+
+const unkinded = (t: Ty): boolean => t.kind === "ref" && t.kinds === undefined;
+
+const holdsRef = (t: Ty): boolean =>
+	unkinded(t) || (t.kind === "union" && t.items.some(unkinded));
+
+/**
+ * Unions whose members are each of one kind meet kind by kind, the members of a kind
+ * those of the others that it meets: `({ a?: A } | string) & ({ a: A } | { a?: never } | "")`
+ * is `{ a: A } | { a?: never } | ""`. TypeScript does not read every type met with one of
+ * another kind as `never`: `string & { a?: never }` admits every string. undefined where a
+ * member is of no one kind, or none is a union.
  */
 function meetByKind(items: Ty[]): Ty | undefined {
 	if (!items.some((t) => t.kind === "union")) return undefined;
-	const rows: { kind: ValueKind; ty: Ty }[][] = [];
+	// Each type's members, by kind in the order they come.
+	const rows: Map<ValueKind, Ty[]>[] = [];
 	for (const t of items) {
-		const members = t.kind === "union" ? t.items : [t];
-		if (members.length > 7) return undefined;
-		const row: { kind: ValueKind; ty: Ty }[] = [];
-		for (const m of members) {
+		const row = new Map<ValueKind, Ty[]>();
+		for (const m of t.kind === "union" ? t.items : [t]) {
 			const k = memberKinds(m);
 			if (k?.length !== 1) return undefined;
 			const kind = k[0] as ValueKind;
-			if (row.some((r) => meets(r.kind, kind))) return undefined;
-			row.push({ kind, ty: m });
+			const same = row.get(kind);
+			if (same === undefined) row.set(kind, [m]);
+			else same.push(m);
 		}
 		rows.push(row);
 	}
+	// Of kinds that all meet, each type is met as a whole.
+	const kinds = new Set(rows.flatMap((row) => [...row.keys()]));
+	if ([...kinds].every((a) => [...kinds].every((b) => meets(a, b))))
+		return undefined;
 	const [first, ...rest] = rows as [
-		{ kind: ValueKind; ty: Ty }[],
-		...{ kind: ValueKind; ty: Ty }[][],
+		Map<ValueKind, Ty[]>,
+		...Map<ValueKind, Ty[]>[],
 	];
-	// `prune` has left in each union only the kinds every other one has.
+	// `integer` meets `number`: the whole numbers of a type of numbers.
+	const meeting = (row: Map<ValueKind, Ty[]>, kind: ValueKind): Ty =>
+		union([...row].flatMap(([k, ms]) => (meets(k, kind) ? ms : [])));
 	return union(
-		first.map(({ kind, ty }) =>
-			inter([
-				ty,
-				...rest.map((row) => row.find((r) => meets(r.kind, kind))?.ty as Ty),
-			]),
+		[...first].map(([kind, ms]) =>
+			inter([union(ms), ...rest.map((row) => meeting(row, kind))]),
 		),
 	);
 }
@@ -683,14 +898,13 @@ function mergeObjects(items: Ty[]): Ty[] {
 				props.push(p);
 				continue;
 			}
-			const met: Prop = {
+			props[i] = {
 				...q,
 				ty: inter([q.ty, p.ty]),
 				optional: q.optional && p.optional,
+				...(p.present ? { present: true } : {}),
+				...(q.doc === undefined && p.doc !== undefined ? { doc: p.doc } : {}),
 			};
-			if (p.present) met.present = true;
-			if (met.doc === undefined && p.doc !== undefined) met.doc = p.doc;
-			props[i] = met;
 		}
 	if (props.some((p) => !p.optional && p.ty.kind === "never")) return [NEVER];
 	return [
@@ -729,7 +943,7 @@ function meetArrays(arrays: ArrayTy[]): Ty {
 }
 
 /** A kind of JSON value; `integer` is the whole numbers among `number`. */
-type ValueKind =
+export type ValueKind =
 	| "string"
 	| "number"
 	| "integer"
@@ -805,7 +1019,7 @@ const ONE_KIND: Record<ValueKind, ValueKind[]> = {
  * tuple as an array, any object or map type as an object (not only those from
  * const / enum, so `type: string` with `properties` meets as `never`).
  */
-function valueKind(t: Ty): ValueKind | undefined {
+export function valueKind(t: Ty): ValueKind | undefined {
 	if (t.kind === "lit")
 		return t.text.startsWith('"')
 			? "string"
@@ -842,9 +1056,11 @@ function narrow(items: Ty[]): Ty[] {
 		.filter(isLiterals)
 		.map((v) => new Set(v.map(valueKey)));
 	const keep = (m: Ty) =>
-		(kinds === undefined || admits(kinds, m)) &&
+		(kinds === undefined || ofKinds(kinds, m)) &&
 		(!isLiteral(m) || literalSets.every((s) => s.has(valueKey(m)))) &&
-		templates.every((t) => admitsString(t, m));
+		templates.every((t) =>
+			admitsText(t, JSON.parse((m as { text: string }).text)),
+		);
 	const hasValues = valueSets.some((v) => v !== undefined);
 	let changed = false;
 	let literalsSeen = false;
@@ -898,39 +1114,59 @@ function isStrings(t: Ty): boolean {
 	);
 }
 
-/** Whether a type of some strings admits a string literal: a template by its segments, a literal by its text. */
-function admitsString(t: Ty, m: Ty): boolean {
-	const text = (m as { text: string }).text;
-	const s = JSON.parse(text) as string;
+/** Whether a type of some strings admits a string: a template by its segments, a literal by its text. */
+export function admitsText(t: Ty, s: string): boolean {
+	const text = JSON.stringify(s);
 	return (t.kind === "union" ? t.items : [t]).some((x) =>
 		x.kind === "template"
 			? inTemplate(x.seq, s)
-			: (x as { text: string }).text === text,
+			: x.kind === "lit" && x.text === text,
 	);
 }
 
-/** The kinds of value a type admits, where its form says so: `{ a: A }` objects, `string | A[]` strings and arrays. */
-const kindSet = remembered((t: Ty): ValueKind[] | undefined => {
+/** A reference to a component schema. */
+export type RefTy = Extract<Ty, { kind: "ref" }>;
+
+/**
+ * The kinds of value a type admits, where its form says so: `{ a: A }` objects,
+ * `string | A[]` strings and arrays, a reference those `ref` gives it. `of` reads the
+ * members of an intersection or union (`kindSet` remembers them).
+ */
+export function kindsWith(
+	t: Ty,
+	ref: (r: RefTy) => ValueKind[] | undefined,
+	of: (u: Ty) => ValueKind[] | undefined = (u) => kindsWith(u, ref, of),
+): ValueKind[] | undefined {
 	if (t.kind === "inter") {
 		// The kinds every member it says them of allows.
-		const sets = t.items.map(kindSet).filter((s) => s !== undefined);
+		const sets = t.items.map(of).filter((s) => s !== undefined);
 		return sets.length === 0
 			? undefined
 			: sets.reduce((a, b) => a.filter((k) => b.some((o) => meets(k, o))));
 	}
+	if (t.kind === "ref") return ref(t);
 	if (t.kind !== "union") return memberKinds(t);
 	const kinds: ValueKind[] = [];
 	for (const m of t.items) {
-		const k = memberKinds(m);
+		const k = of(m);
 		if (k === undefined) return undefined;
 		kinds.push(...k);
 	}
 	return kinds;
-});
+}
+
+/** `kindsWith`, a reference of the kinds it has (`withRefKinds`). */
+const kindSet: (t: Ty) => ValueKind[] | undefined = remembered((t: Ty) =>
+	kindsWith(
+		t,
+		(r) => r.kinds,
+		(u) => kindSet(u),
+	),
+);
 
 /** `kindSet` of a type that is no union. */
 function memberKinds(m: Ty): ValueKind[] | undefined {
-	if (m.kind === "inter") return kindSet(m);
+	if (m.kind === "inter" || m.kind === "ref") return kindSet(m);
 	const k =
 		kindsOf(m)?.[0] ??
 		valueKind(m) ??
@@ -990,8 +1226,8 @@ const isLiteral = (m: Ty): boolean => m.kind === "lit" || m.kind === "null";
 const isLiterals = (v: Ty[] | undefined): v is Ty[] =>
 	v?.every(isLiteral) === true;
 
-/** The type for each kind of value. */
-const KIND_TY: Record<ValueKind, Ty> = {
+/** The type for each kind of value, which `type` names. */
+export const KIND_TY: Readonly<Record<ValueKind, Ty>> = {
 	string: STRING,
 	number: NUMBER,
 	integer: INTEGER,
@@ -1000,6 +1236,10 @@ const KIND_TY: Record<ValueKind, Ty> = {
 	object: RECORD,
 	array: { kind: "array", elem: UNKNOWN },
 };
+
+/** Whether a `type` names a kind of value JSON Schema has. */
+export const isValueKind = (k: unknown): k is ValueKind =>
+	typeof k === "string" && Object.hasOwn(KIND_TY, k);
 
 /** The kinds both sets allow; `integer` is within `number`. */
 function meet(a: ValueKind[], b: ValueKind[]): ValueKind[] {
@@ -1048,8 +1288,26 @@ export function equalValues(a: Ty, b: Ty): boolean {
 		: equal(a, b);
 }
 
-/** Whether a value (`"a"`, `1.5`, `null`, an exact object) is of one of these kinds. */
-function admits(kinds: ValueKind[], m: Ty): boolean {
+/** The exact type of a JSON value: objects become object types with every key required, arrays become closed tuples. */
+export function literal(v: Value): Ty {
+	if (v === null) return NULL;
+	if (Array.isArray(v)) return tuple(v.map(literal));
+	if (v instanceof JsonObject) {
+		// `{}` would admit any non-nullish value; an empty const object admits no keys.
+		if (v.entries.length === 0) return { kind: "map", props: [], index: NEVER };
+		return {
+			kind: "object",
+			props: v.entries.map(([k, x]) => prop(k, literal(x))),
+		};
+	}
+	return lit(toJson(v as string | boolean | JsonNumber));
+}
+
+/**
+ * Whether a value (`"a"`, `1.5`, `null`, an exact object) is of one of these kinds: a
+ * whole number of `integer` too.
+ */
+export function ofKinds(kinds: readonly ValueKind[], m: Ty): boolean {
 	const kind = m.kind === "null" ? "null" : valueKind(m);
 	if (
 		kind === "number" &&
@@ -1062,6 +1320,6 @@ function admits(kinds: ValueKind[], m: Ty): boolean {
 }
 
 /** Whether a number's text is a whole number by its exact value (`1e400` is, `1e-400` is not). */
-function isWholeText(text: string): boolean {
+export function isWholeText(text: string): boolean {
 	return !numberKey(text).includes("e-");
 }

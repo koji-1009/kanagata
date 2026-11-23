@@ -35,7 +35,8 @@
           "200": {
             "description": "ok",
             "headers": {
-              "X-Page": { "content": { "application/json": { "schema": { "type": "object", "properties": { "next": { "type": "string" } } } } } }
+              "X-Page": { "content": { "application/json": { "schema": { "type": "object", "properties": { "next": { "type": "string" } } } } } },
+              "X-Count": { "description": "A response header keeps its schema for any media type.", "content": { "text/plain": { "schema": { "type": "integer" } } } }
             }
           }
         }

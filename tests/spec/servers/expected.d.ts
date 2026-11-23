@@ -38,6 +38,15 @@ export interface paths {
       };
     };
   };
+  "/inherited": {
+    /** An empty servers leaves the path item's to apply. */
+    get: {
+      servers: ["https://inherited.example.com"];
+      responses: {
+        204: {};
+      };
+    };
+  };
 }
 
 export interface webhooks {

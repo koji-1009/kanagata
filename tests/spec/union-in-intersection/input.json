@@ -18,7 +18,14 @@
           { "properties": { "kind": { "enum": ["b"] } } }
         ]
       },
-      "List": { "type": "array", "items": { "allOf": [{ "oneOf": [{ "$ref": "#/components/schemas/Base" }, { "type": "string" }] }, { "$ref": "#/components/schemas/Extra" }] } }
+      "List": { "type": "array", "items": { "allOf": [{ "oneOf": [{ "$ref": "#/components/schemas/Base" }, { "type": "string" }] }, { "$ref": "#/components/schemas/Extra" }] } },
+      "Both": {
+        "description": "References are of their targets' kinds, and meet the other members kind by kind.",
+        "allOf": [
+          { "anyOf": [{ "$ref": "#/components/schemas/Base" }, { "type": "string" }] },
+          { "anyOf": [{ "$ref": "#/components/schemas/Extra" }, { "enum": [""] }] }
+        ]
+      }
     }
   }
 }

@@ -9,13 +9,12 @@ export interface schemas {
   Extended: Extended;
 }
 
-/** unevaluatedProperties without an applicator is additionalProperties. */
+/** A 3.0 Schema Object has no unevaluatedProperties: it says nothing, even without an applicator next to it. */
 export type Base = {
   a?: string;
-  [key: string]: string | undefined;
 };
 
-/** A member's $ref target evaluates every key with its own unevaluatedProperties. */
+/** Nor next to a member's $ref: c is required as required says. */
 export type Extended = Base & {
   c: {} | null;
 };

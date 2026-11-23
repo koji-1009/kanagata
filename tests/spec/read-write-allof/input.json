@@ -26,6 +26,15 @@
           { "$ref": "#/components/schemas/Stamped" }
         ],
         "required": ["name", "stamp"]
+      },
+      "StampedBase": { "allOf": [{ "$ref": "#/components/schemas/Stamped" }] },
+      "RequiredInMember": {
+        "description": "required in another member does not bring back what a referenced member leaves out, through its own allOf too.",
+        "allOf": [{ "$ref": "#/components/schemas/StampedBase" }, { "type": "object", "required": ["stamp"] }]
+      },
+      "RequiredInNestedMember": {
+        "description": "Nor required in a member's allOf.",
+        "allOf": [{ "$ref": "#/components/schemas/StampedBase" }, { "allOf": [{ "type": "object", "required": ["stamp"] }] }]
       }
     }
   }

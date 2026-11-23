@@ -1,0 +1,11 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "A": {
+        "oneOf": [{ "$ref": "http://[bad/x" }, { "type": "object", "required": ["b"] }]
+      }
+    }
+  }
+}

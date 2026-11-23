@@ -794,10 +794,7 @@ function formFields(
 ): void {
 	const one = (name: string, value: unknown) => {
 		if (value == null) return;
-		if (value instanceof Blob) add(name, value);
-		else if (typeof value === "object" && !(value instanceof Date))
-			add(name, JSON.stringify(value));
-		else add(name, scalar(value));
+		add(name, value instanceof Blob ? value : scalar(value));
 	};
 	for (const [name, value] of Object.entries(body as Record<string, unknown>)) {
 		if (Array.isArray(value)) for (const item of value) one(name, item);
@@ -897,8 +894,7 @@ function essence(mediaType: string): string {
 }
 
 function isJsonMedia(mediaType: string): boolean {
-	const mt = essence(mediaType);
-	return mt === "application/json" || mt.endsWith("+json");
+	return jsonEssence(essence(mediaType));
 }
 
 /**
@@ -908,14 +904,13 @@ function isJsonMedia(mediaType: string): boolean {
  */
 export function isBinaryMedia(mediaType: string): boolean {
 	const mt = essence(mediaType);
-	if (
+	return !(
 		mt === "*/*" ||
 		mt === "application/*" ||
-		isJsonMedia(mt) ||
-		isTextMedia(mt)
-	)
-		return false;
-	return !isFormMedia(mt);
+		jsonEssence(mt) ||
+		textEssence(mt) ||
+		formEssence(mt)
+	);
 }
 
 /**
@@ -924,10 +919,7 @@ export function isBinaryMedia(mediaType: string): boolean {
  * responses as `string` by this rule.
  */
 export function isFormMedia(mediaType: string): boolean {
-	const mt = essence(mediaType);
-	return (
-		mt.startsWith("multipart/") || mt === "application/x-www-form-urlencoded"
-	);
+	return formEssence(essence(mediaType));
 }
 
 /**
@@ -935,8 +927,16 @@ export function isFormMedia(mediaType: string): boolean {
  * `text/*` and XML. The generator types such content as `string` by this rule.
  */
 export function isTextMedia(mediaType: string): boolean {
-	const mt = essence(mediaType);
-	return (
-		mt.startsWith("text/") || mt === "application/xml" || mt.endsWith("+xml")
-	);
+	return textEssence(essence(mediaType));
 }
+
+// The rules above, on a media type's essence (`essence`).
+
+const jsonEssence = (mt: string): boolean =>
+	mt === "application/json" || mt.endsWith("+json");
+
+const formEssence = (mt: string): boolean =>
+	mt.startsWith("multipart/") || mt === "application/x-www-form-urlencoded";
+
+const textEssence = (mt: string): boolean =>
+	mt.startsWith("text/") || mt === "application/xml" || mt.endsWith("+xml");

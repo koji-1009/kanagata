@@ -113,6 +113,11 @@
         "type": ["object", "null"],
         "allOf": [{ "$ref": "#/components/schemas/Keyed" }]
       },
+      "RefBeside": {
+        "description": "And a $ref next to type, whose target applies as a member does.",
+        "type": ["object", "null"],
+        "$ref": "#/components/schemas/Keyed"
+      },
       "RefTyped": {
         "description": "A $ref to a schema with a type constrains every value.",
         "type": ["object", "null"],

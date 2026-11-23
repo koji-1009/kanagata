@@ -1,0 +1,10 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "A": { "$ref": "a.json" },
+      "B": { "$ref": "b.json" }
+    }
+  }
+}

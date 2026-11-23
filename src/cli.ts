@@ -81,7 +81,7 @@ export function run(args: readonly string[], io: Io): number {
 				out(`kanagata ${version(io)}\n`);
 				return 0;
 			case undefined:
-				throw new Failure(HELP);
+				throw new Failure(HELP.trimEnd());
 			default:
 				throw new Failure(`unknown command: ${args[0]} (see kanagata --help)`);
 		}

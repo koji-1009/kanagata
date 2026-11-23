@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Name": {
+        "type": "string",
+        "not": { "$dynamicRef": "#/components/schemas/Reserved" }
+      }
+    }
+  }
+}

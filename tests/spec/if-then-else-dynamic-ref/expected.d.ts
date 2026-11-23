@@ -27,7 +27,7 @@ export type Kind = {
 export type Declared = Kind & ({
   kind?: "a";
   x: {} | null;
-} | string | number | boolean | null | unknown[] | {
+} | {
   kind: "b";
   y: {} | null;
 });
@@ -53,7 +53,7 @@ export type KindHolder = KindInner;
 export type DeclaredById = KindHolder & ({
   kind?: "a";
   x: {} | null;
-} | string | number | boolean | null | unknown[] | {
+} | {
   kind: "b";
   y: {} | null;
 });

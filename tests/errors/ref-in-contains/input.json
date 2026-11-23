@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Cart": {
+        "type": "array",
+        "contains": { "$ref": "#/components/schemas/Gift" }
+      }
+    }
+  }
+}

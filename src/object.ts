@@ -6,16 +6,17 @@
 // by the strings it admits (`propertyKeys`); `minProperties` / `maxProperties` count the
 // properties of a closed object (`counted`).
 
-import { JsonObject, type Value } from "./json.ts";
-import { closedKeys, forbid, leftOutKeys, valueKeys } from "./keys.ts";
+import { JsonObject, stringsIn, type Value } from "./json.ts";
+import { closedKeys, forbid, valueKeys } from "./keys.ts";
+import { widen } from "./kinds.ts";
 import { accepts } from "./not.ts";
 import { count, matches } from "./number.ts";
 import { type Ctx, child } from "./pointer.ts";
-import { schema, schemaDoc } from "./schema.ts";
+import { type Reading, schema, schemaDoc } from "./schema.ts";
 import {
 	admits,
 	includes,
-	matching,
+	matchesAll,
 	meet,
 	patternType,
 	strings,
@@ -23,11 +24,13 @@ import {
 	templates,
 } from "./template.ts";
 import {
+	admitsText,
 	inter,
 	type Keyed,
 	NEVER,
+	neverProp,
 	type Prop,
-	prop,
+	present,
 	RECORD,
 	STRING,
 	type Ty,
@@ -35,7 +38,7 @@ import {
 	UNKNOWN,
 	union,
 } from "./ty.ts";
-import { unevaluated } from "./unevaluated.ts";
+import { additional as additionalKeys } from "./unevaluated.ts";
 
 /**
  * The keys an object's `propertyNames` admits: every key is a string it must admit, so
@@ -59,6 +62,53 @@ export function propertyKeys(
 		cx.withRaw(undefined, () => schema(cx, names, child(at, "propertyNames"))),
 	);
 	return meetKeys(inter([STRING, values]));
+}
+
+/**
+ * What `propertyNames` says that TypeScript can, as parts of the schema beside its object
+ * type, which reads its keys (`keys`, from `propertyKeys`): `false` admits no key; a
+ * warning where it says more than its keys' type does.
+ */
+export function propertyNamesParts(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	keys: () => Ty | undefined,
+): Ty[] {
+	const names = v.get("propertyNames");
+	if (names === false)
+		return [widen(cx, v, ["object"], { kind: "map", props: [], index: NEVER })];
+	// Reached again while it is read, it asks nothing more there (see `propertyKeys`): the
+	// outer reading warns of what it cannot say.
+	if (names === undefined || cx.readsKeysOf(names)) return [];
+	// The keys are the strings it admits; a type of strings says the lengths only by the
+	// keys it names (and `""`), not by templates or `string`, nor a pattern no template
+	// says (one every string matches is `string`, and asks nothing).
+	const read = keys();
+	// `true` has no keywords.
+	const s = names instanceof JsonObject ? names : new JsonObject();
+	const lengths = [
+		...((count(s, "minLength") ?? 0) > 0 ? ["minLength"] : []),
+		...(count(s, "maxLength") !== undefined ? ["maxLength"] : []),
+	];
+	const pattern = s.str("pattern");
+	if (
+		read === undefined ||
+		(read.kind === "string" &&
+			(lengths.length > 0 ||
+				(pattern !== undefined && patternType(pattern) === undefined)))
+	)
+		cx.warn(
+			child(at, "propertyNames"),
+			"propertyNames cannot be expressed in TypeScript; ignored",
+		);
+	else if (keyTerms(read).some((k) => k.kind === "template"))
+		for (const key of lengths)
+			cx.warn(
+				child(child(at, "propertyNames"), key),
+				`${key} cannot be expressed in TypeScript; ignored`,
+			);
+	return [];
 }
 
 /**
@@ -106,17 +156,12 @@ export function keyLiterals(keys: Ty | undefined): string[] {
 
 /**
  * Whether a `propertyNames` admits a key: as its keywords decide for the string, or, where
- * they say what that cannot decide, as the type of its keys says (a literal by its text, a
- * template as `admits` reads it).
+ * they say what that cannot decide, as the type of its keys says (`admitsText`).
  */
 function keyAdmits(cx: Ctx, names: Value, keys: Ty): (key: string) => boolean {
 	return (key) =>
 		(names instanceof JsonObject ? accepts(cx, names, key) : undefined) ??
-		keyTerms(keys).some((k) =>
-			k.kind === "lit"
-				? k.text === JSON.stringify(key)
-				: admits(templateOf(k as Extract<Ty, { kind: "template" }>), key),
-		);
+		admitsText(keys, key);
 }
 
 /** The template a template literal type of keys is, as `object` compares templates: its segments. */
@@ -124,38 +169,63 @@ function templateOf(t: Extract<Ty, { kind: "template" }>): Template {
 	return { seq: t.seq, key: t };
 }
 
-/** Whether `propertyNames` says which keys the object has, as the object type reads it. */
-export function readsKeys(cx: Ctx, v: JsonObject, at: string): boolean {
-	const keys = propertyKeys(cx, v, at);
+/** Whether the keys `propertyNames` admits (`propertyKeys`) say which keys the object has, as the object type reads them. */
+export function readsKeys(keys: Ty | undefined): boolean {
 	return keys !== undefined && keys.kind !== "string";
 }
 
-export function object(cx: Ctx, v: JsonObject, at: string): Ty {
+/** A property being built, which `object` narrows before the type is made. */
+type PropDraft = { -readonly [K in keyof Prop]: Prop[K] };
+
+/** A pattern whose keys template literal types say, by one of its templates (`all`). */
+interface KeyedPattern {
+	readonly pattern: string;
+	readonly all: readonly Template[];
+	readonly t: Template;
+	readonly ty: Ty;
+}
+
+/**
+ * An object type being built (see `object`): its properties so far, which its steps add to
+ * and narrow, and what the keys without a property schema are.
+ */
+interface Draft {
+	readonly cx: Ctx;
+	readonly v: JsonObject;
+	/** The keys left out of this view (`leftOutGroup`). */
+	readonly left: ReadonlySet<string>;
+	readonly props: PropDraft[];
+	/** The type of the other keys: `additionalProperties`, or the patterns' every key matches. */
+	additional: Ty | undefined;
+	/** Each `patternProperties` pattern, with its type. */
+	readonly patterns: readonly (readonly [string, Ty])[];
+	/**
+	 * Keys no value is admitted for: absent, which an open object says; a closed one has no
+	 * such key anyway (see `shut`).
+	 */
+	readonly absent: Set<string>;
+	/** The patterns whose keys template literal types say, by template (see `sortPatterns`). */
+	readonly keyed: KeyedPattern[];
+	/** The patterns no template says. */
+	readonly unwritten: { readonly pattern: string; readonly ty: Ty }[];
+	/** The types of the patterns every key matches. */
+	readonly everyKey: Ty[];
+	/** The type of each of `keyed`'s index signatures (see `sortPatterns`). */
+	exact: Ty[];
+}
+
+/** The object type of a schema, whose conversion reads `read`. */
+export function object(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	read: Pick<Reading, "left" | "keys">,
+): Ty {
 	// A multipart body's properties are its parts.
 	const part = cx.here === "parts" ? "part" : undefined;
-	const req = v.get("required");
-	const required = Array.isArray(req)
-		? req.filter((n) => typeof n === "string")
-		: [];
-	const declaredValue = v.get("properties");
-	const declared =
-		declaredValue instanceof JsonObject ? declaredValue.entries : [];
-	const props: Prop[] = [];
-	const base = child(at, "properties");
-	const left = leftOutKeys(cx, v);
-	for (const k of cx.leftOutIn(v)) left.add(k);
-	for (const [key, s] of declared) {
-		if (left.has(key)) continue;
-		const p: Prop = {
-			key,
-			ty: cx.withRaw(part, () => schema(cx, s, child(base, key))),
-			optional: !required.includes(key),
-		};
-		if (!p.optional) p.present = true;
-		const d = schemaDoc(cx, s);
-		if (d !== undefined) p.doc = d;
-		props.push(p);
-	}
+	const required = stringsIn(v.get("required"));
+	const left = read.left();
+	const props = declaredProps(cx, v, at, part, required, left);
 	// A closed object admits only its declared properties, so requiring another admits nothing.
 	const closed = closedKeys(v);
 	if (closed !== undefined && required.some((n) => !closed.has(n)))
@@ -165,228 +235,321 @@ export function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		return required.some((n) => !left.has(n))
 			? NEVER
 			: { kind: "map", props: [], index: NEVER };
-
-	// unevaluatedProperties is additionalProperties where nothing else evaluates the rest.
-	const apKey =
-		v.get("additionalProperties") === undefined
-			? "unevaluatedProperties"
-			: "additionalProperties";
-	const ap =
-		apKey === "additionalProperties"
-			? v.get(apKey)
-			: unevaluated(v, "unevaluatedProperties");
-	let additional: Ty | undefined;
-	if (ap === false) additional = NEVER;
-	else if (ap === true) additional = UNKNOWN;
-	else if (ap !== undefined)
-		additional = cx.withRaw(part, () => schema(cx, ap, child(at, apKey)));
-	const pp = v.get("patternProperties");
-	const patterns =
-		pp instanceof JsonObject
-			? pp.entries.map(
-					([key, s]) =>
-						[
-							key,
-							cx.withRaw(part, () =>
-								schema(cx, s, child(child(at, "patternProperties"), key)),
-							),
-						] as const,
-				)
-			: [];
-
+	const d: Draft = {
+		cx,
+		v,
+		left,
+		props,
+		additional: additionalType(cx, v, at, part),
+		patterns: patternTypes(cx, v, at, part),
+		absent: new Set(),
+		keyed: [],
+		unwritten: [],
+		everyKey: [],
+		exact: [],
+	};
 	// A property a pattern matches has both types.
 	for (const p of props) {
-		const matched = patterns
+		const matched = d.patterns
 			.filter(([k]) => matches(k, p.key))
 			.map(([, t]) => t);
 		if (matched.length > 0) p.ty = inter([p.ty, ...matched]);
 	}
-
-	// The value of a key without a property schema: what the patterns it matches admit,
-	// or else additionalProperties; any value without either.
-	const keyValue = (name: string): Ty => {
-		const matched = patterns
-			.filter(([p]) => matches(p, name))
-			.map(([, t]) => t);
-		return matched.length > 0 ? inter(matched) : (additional ?? UNKNOWN);
-	};
-
 	// A required key without a property schema must be present, with that value.
 	for (const name of required) {
-		if (left.has(name) || props.some((p) => p.key === name)) continue;
-		const ty = keyValue(name);
+		if (taken(d, name)) continue;
+		const ty = keyValue(d, name);
 		if (ty.kind === "never") return NEVER;
-		props.push({ ...prop(name, ty), present: true });
+		props.push(present(name, ty));
 	}
+	sortPatterns(d);
+	// propertyNames keys the object by the strings it admits (see `propertyKeys`); any
+	// string asks nothing.
+	const keys = read.keys();
+	return keys !== undefined && keys.kind !== "string"
+		? keyedObject(d, keys)
+		: patternObject(d);
+}
 
-	// The keys the schemas that apply to the same value name, through it and the schemas it
-	// is a member of, are keys of the same object, which its propertyNames asks of too:
-	// those it does not admit cannot be there.
-	const outside = (admits: (key: string) => boolean): string[] =>
-		[...new Set([v, ...cx.around].flatMap((s) => valueKeys(cx, s)))].filter(
-			(k) => !left.has(k) && !admits(k) && !props.some((p) => p.key === k),
-		);
-	// A closed object of these properties without them; one without properties it admits
-	// a value of admits no key.
-	const closedOver = (admits: (key: string) => boolean, kept: Prop[]): Ty => {
-		const none = kept.every((p) => p.optional && p.ty.kind === "never");
-		const t = counted(v, none ? [] : kept);
-		return t.kind === "map" ? t : forbid(t, outside(admits));
-	};
+/** The properties `properties` declares, but those left out of this view (`left`). */
+function declaredProps(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	part: "part" | undefined,
+	required: readonly string[],
+	left: ReadonlySet<string>,
+): PropDraft[] {
+	const declared = v.get("properties");
+	const base = child(at, "properties");
+	const props: PropDraft[] = [];
+	for (const [key, s] of declared instanceof JsonObject
+		? declared.entries
+		: []) {
+		if (left.has(key)) continue;
+		const p: PropDraft = {
+			key,
+			ty: cx.withRaw(part, () => schema(cx, s, child(base, key))),
+			optional: !required.includes(key),
+		};
+		if (!p.optional) p.present = true;
+		const doc = schemaDoc(cx, s);
+		if (doc !== undefined) p.doc = doc;
+		props.push(p);
+	}
+	return props;
+}
 
-	// Keys a pattern matches have its type whatever additionalProperties says. A pattern
-	// whose keys template literal types say keys index signatures by them, and a key it
-	// names is a property; another pattern's type joins the index signature by any string.
-	// Patterns of the same template are one index signature of both types.
-	const keyed: { pattern: string; all: Template[]; t: Template; ty: Ty }[] = [];
-	const unwritten: { pattern: string; ty: Ty }[] = [];
-	// A key no value is admitted for is absent, which an open object says; a closed one
-	// has no such key anyway (see `shut`).
-	const absent = new Set<string>();
-	const named = (name: string, ty: Ty) => {
-		if (left.has(name) || props.some((p) => p.key === name)) return;
-		if (ty.kind === "never") absent.add(name);
-		props.push({ key: name, ty, optional: true });
-	};
-	const shut = () =>
-		counted(
-			v,
-			props.filter((p) => !absent.has(p.key)),
-		);
-	// A pattern every key matches leaves additionalProperties no key: its type is every other key's.
-	const everyKey: Ty[] = [];
-	// A template without any text names its keys, as a literal does: TypeScript keys no
-	// index signature by them. Each has the type of every pattern that matches it.
-	const name = (t: Template) => {
-		for (const key of strings(t) as string[]) named(key, keyValue(key));
-	};
-	for (const [pattern, ty] of patterns) {
+/** What `additionalProperties`, or `unevaluatedProperties` where it is that, says the other keys are. */
+function additionalType(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	part: "part" | undefined,
+): Ty | undefined {
+	const extra = additionalKeys(v);
+	if (extra === undefined) return undefined;
+	if (extra.value === false) return NEVER;
+	if (extra.value === true) return UNKNOWN;
+	return cx.withRaw(part, () => schema(cx, extra.value, child(at, extra.key)));
+}
+
+/** Each `patternProperties` pattern, with its type. */
+function patternTypes(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	part: "part" | undefined,
+): (readonly [string, Ty])[] {
+	const pp = v.get("patternProperties");
+	if (!(pp instanceof JsonObject)) return [];
+	return pp.entries.map(
+		([key, s]) =>
+			[
+				key,
+				cx.withRaw(part, () =>
+					schema(cx, s, child(child(at, "patternProperties"), key)),
+				),
+			] as const,
+	);
+}
+
+/** Whether the object has a property at this key already, or leaves the key out of this view. */
+function taken(d: Draft, key: string): boolean {
+	return d.left.has(key) || d.props.some((p) => p.key === key);
+}
+
+/**
+ * The value of a key without a property schema: what the patterns it matches admit, or
+ * else additionalProperties; any value without either.
+ */
+function keyValue(d: Draft, name: string): Ty {
+	const matched = d.patterns
+		.filter(([p]) => matches(p, name))
+		.map(([, t]) => t);
+	return matched.length > 0 ? inter(matched) : (d.additional ?? UNKNOWN);
+}
+
+/**
+ * Adds an optional property a pattern or `propertyNames` names, where the object has none
+ * at its key; a key no value is admitted for is absent (see `Draft.absent`).
+ */
+function named(d: Draft, name: string, ty: Ty): void {
+	if (taken(d, name)) return;
+	if (ty.kind === "never") d.absent.add(name);
+	d.props.push({ key: name, ty, optional: true });
+}
+
+/**
+ * Names the keys of a template without any text that `admits` admits (the lengths beside
+ * a pattern, which the template does not carry, for `propertyNames`), each with the type
+ * of every pattern that matches it: TypeScript keys no index signature by them.
+ */
+function nameAll(
+	d: Draft,
+	t: Template,
+	admits: (key: string) => boolean,
+): void {
+	for (const key of strings(t) as string[])
+		if (admits(key)) named(d, key, keyValue(d, key));
+}
+
+/**
+ * Sorts the patterns by what says their keys. Keys a pattern matches have its type whatever
+ * additionalProperties says. A pattern whose keys template literal types say keys index
+ * signatures by them (`keyed`), and a key a template without any text names is a property;
+ * a pattern every key matches leaves additionalProperties no key: its type is every other
+ * key's; another pattern's type joins the index signature by any string (`unwritten`). A
+ * key has the type of every signature that applies to it, as TypeScript reads them, and a
+ * narrower one's type is within a wider one's, as TypeScript requires (`exact`).
+ */
+function sortPatterns(d: Draft): void {
+	for (const [pattern, ty] of d.patterns) {
 		const keys = patternType(pattern);
-		if (keys === undefined) unwritten.push({ pattern, ty });
-		else if (keys.kind === "string") everyKey.push(ty);
+		if (keys === undefined) d.unwritten.push({ pattern, ty });
+		else if (keys.kind === "string") d.everyKey.push(ty);
 		else {
 			const all = templates(pattern);
 			for (const t of all)
-				if (strings(t) !== undefined) name(t);
-				else keyed.push({ pattern, all, t, ty });
+				if (strings(t) !== undefined) nameAll(d, t, () => true);
+				else d.keyed.push({ pattern, all, t, ty });
 		}
 	}
-	if (everyKey.length > 0) additional = inter(everyKey);
-	// The types of every pattern that matches all keys of a template: those of a template
-	// that includes it, those of a pattern no template says where its machine says so (see
-	// `matching`), and those of a pattern of every key.
-	const types = (t: Template): Ty[] => [
-		...keyed.filter((k) => k.all.some((o) => includes(o, t))).map((k) => k.ty),
-		...unwritten
-			.filter((u) => matching(u.pattern, t) === "within")
-			.map((u) => u.ty),
-		...everyKey,
-	];
-	const textOf = (key: Ty) => (key as { text: string }).text;
-	// Patterns of the same template are one index signature of both types, which `types`
-	// gives each of them.
-	const signature = (out: Keyed[], key: Ty, ty: Ty): void => {
-		if (!out.some((s) => textOf(s.key) === textOf(key))) out.push({ key, ty });
-	};
-	// A key has the type of every signature that applies to it, as TypeScript reads them, and
-	// a narrower one's type is within a wider one's, as TypeScript requires.
-	const exact = keyed.map((k) => inter(types(k.t)));
-	// An index signature admits each property it applies to, `undefined` too for an optional one.
-	const admitting = (ty: Ty, applies: (key: string) => boolean): Ty => {
-		const own = props.filter((p) => applies(p.key));
-		return union([
-			ty,
-			...own.map((p) => p.ty),
-			...(own.some((p) => p.optional) ? [UNDEFINED] : []),
-		]);
-	};
-	// Read once the properties are all there.
-	const keyedSignatures = (): Keyed[] => {
-		const out: Keyed[] = [];
-		for (const [i, k] of keyed.entries())
-			signature(out, k.t.key, admitting(exact[i] as Ty, within(k.t)));
-		return out;
-	};
-	const allTypes = (): Ty[] => [
-		...unwritten.map((u) => u.ty),
-		...exact,
-		...props.map((p) => p.ty),
-	];
+	if (d.everyKey.length > 0) d.additional = inter(d.everyKey);
+	d.exact = d.keyed.map((k) => inter(types(d, k.t)));
+}
 
-	// propertyNames keys the object by the strings it admits (see `propertyKeys`): a
-	// property it does not admit cannot be there, a key it names is a property with the
-	// value the patterns or additionalProperties give it, and the others index signatures
-	// by its templates. Any string asks nothing.
-	const keys = propertyKeys(cx, v, at);
-	if (keys !== undefined && keys.kind !== "string") {
-		const admits = keyAdmits(cx, v.get("propertyNames") as Value, keys);
-		if (props.some((p) => !p.optional && !admits(p.key))) return NEVER;
-		for (const p of props) if (!admits(p.key)) p.ty = NEVER;
-		// The keys a template without any text names that its keywords admit (the lengths
-		// beside a pattern, which the template does not carry).
-		const nameAdmitted = (t: Template) => {
-			for (const key of strings(t) as string[])
-				if (admits(key)) named(key, keyValue(key));
-		};
-		for (const name of keyLiterals(keys)) named(name, keyValue(name));
-		const own = keyTerms(keys)
-			.flatMap((k) => (k.kind === "template" ? [templateOf(k)] : []))
-			.filter((t) => {
-				if (strings(t) === undefined) return true;
-				nameAdmitted(t);
-				return false;
-			});
-		// The object without the keys it names that no value is admitted for (see `shut`).
-		const kept = () => props.filter((p) => !absent.has(p.key));
-		// Where it names every key, those are the properties: no other key is admitted.
-		if (own.length === 0) return closedOver(admits, kept());
-		// A pattern's signature is by the keys propertyNames admits too: all of its own
-		// where they are, else the keys each template of propertyNames shares with it,
-		// written as templates (see `meet`). Where those are too many to read, it stays.
-		const signatures: Keyed[] = [];
-		for (const [i, k] of keyed.entries()) {
-			const both = own.some((n) => includes(n, k.t))
-				? [k.t]
-				: own.map((n) => meet(n, k.t));
-			if (both.some((m) => m === undefined))
-				signature(signatures, k.t.key, admitting(exact[i] as Ty, within(k.t)));
-			else
-				for (const t of (both as (Template | Template[])[]).flat())
-					if (t === k.t)
-						signature(signatures, t.key, admitting(exact[i] as Ty, within(t)));
-					else if (strings(t) !== undefined) nameAdmitted(t);
-					else
-						signature(signatures, t.key, admitting(inter(types(t)), within(t)));
-		}
-		// A template whose keys a pattern's include has that pattern's signature, and one a
-		// pattern of every key, or one no template says, matches has their types:
-		// additionalProperties applies to none of them.
-		const others = [
-			...unwritten.map((u) => u.ty),
-			...signatures.map((s) => s.ty),
-			...props.map((p) => p.ty),
-		];
-		const out = [...signatures];
-		for (const t of own) {
-			if (keyed.some((k) => k.all.some((o) => includes(o, t)))) continue;
-			const all = types(t);
-			if (all.length === 0 && additional?.kind === "never") continue;
-			const ty =
-				all.length > 0 ? inter(all) : union([additional ?? UNKNOWN, ...others]);
-			signature(out, t.key, admitting(ty, within(t)));
-		}
-		if (out.length === 0) return closedOver(admits, kept());
-		const forbidden = outside(admits).map((key) => ({
-			key,
-			ty: NEVER,
-			optional: true,
-		}));
-		return { kind: "map", props: [...props, ...forbidden], keyed: out };
+/**
+ * The types of every pattern that matches all keys of a template: those of a template that
+ * includes it, those of a pattern no template says where its machine says so (see
+ * `matchesAll`), and those of a pattern of every key.
+ */
+function types(d: Draft, t: Template): Ty[] {
+	return [
+		...d.keyed
+			.filter((k) => k.all.some((o) => includes(o, t)))
+			.map((k) => k.ty),
+		...d.unwritten.filter((u) => matchesAll(u.pattern, t)).map((u) => u.ty),
+		...d.everyKey,
+	];
+}
+
+const textOf = (key: Ty) => (key as { text: string }).text;
+
+/**
+ * Adds an index signature where none is by its key: patterns of the same template are one
+ * index signature of both types, which `types` gives each of them.
+ */
+function signature(out: Keyed[], key: Ty, ty: Ty): void {
+	if (!out.some((s) => textOf(s.key) === textOf(key))) out.push({ key, ty });
+}
+
+/** An index signature's type, which admits each property it applies to, `undefined` too for an optional one. */
+function signatureType(
+	d: Draft,
+	ty: Ty,
+	applies: (key: string) => boolean,
+): Ty {
+	const own = d.props.filter((p) => applies(p.key));
+	return union([
+		ty,
+		...own.map((p) => p.ty),
+		...(own.some((p) => p.optional) ? [UNDEFINED] : []),
+	]);
+}
+
+/**
+ * The keys the schemas that apply to the same value name, through it and the schemas it is
+ * a member of, which its `propertyNames` does not admit: keys of the same object, which
+ * cannot be there.
+ */
+function outside(d: Draft, admits: (key: string) => boolean): string[] {
+	const { cx, v } = d;
+	return [
+		...new Set([v, ...cx.around].flatMap((s) => valueKeys(cx, s))),
+	].filter(
+		(k) => !d.left.has(k) && !admits(k) && !d.props.some((p) => p.key === k),
+	);
+}
+
+/** The properties but the keys no value is admitted for (see `Draft.absent`). */
+function kept(d: Draft): PropDraft[] {
+	return d.props.filter((p) => !d.absent.has(p.key));
+}
+
+/**
+ * A closed object of its properties but those no value is admitted for, without the keys
+ * `propertyNames` does not admit (`outside`); one without properties it admits a value of
+ * admits no key.
+ */
+function closedOver(d: Draft, admits: (key: string) => boolean): Ty {
+	const props = kept(d);
+	const none = props.every((p) => p.optional && p.ty.kind === "never");
+	const t = counted(d.v, none ? [] : props);
+	return t.kind === "map" ? t : forbid(t, outside(d, admits));
+}
+
+/**
+ * The object type `propertyNames` keys by the strings it admits (`keys`): a property it
+ * does not admit cannot be there, a key it names is a property with the value the patterns
+ * or additionalProperties give it, and the others index signatures by its templates.
+ */
+function keyedObject(d: Draft, keys: Ty): Ty {
+	const admits = keyAdmits(d.cx, d.v.get("propertyNames") as Value, keys);
+	if (d.props.some((p) => !p.optional && !admits(p.key))) return NEVER;
+	for (const p of d.props) if (!admits(p.key)) p.ty = NEVER;
+	for (const name of keyLiterals(keys)) named(d, name, keyValue(d, name));
+	const own = keyTerms(keys)
+		.flatMap((k) => (k.kind === "template" ? [templateOf(k)] : []))
+		.filter((t) => {
+			if (strings(t) === undefined) return true;
+			nameAll(d, t, admits);
+			return false;
+		});
+	// Where it names every key, those are the properties: no other key is admitted.
+	if (own.length === 0) return closedOver(d, admits);
+	// A pattern's signature is by the keys propertyNames admits too: all of its own where
+	// they are, else the keys each template of propertyNames shares with it, written as
+	// templates (see `meet`). Where those are too many to read, it stays.
+	const signatures: Keyed[] = [];
+	for (const [i, k] of d.keyed.entries()) {
+		const both = own.some((n) => includes(n, k.t))
+			? [k.t]
+			: own.map((n) => meet(n, k.t));
+		if (both.some((m) => m === undefined))
+			signature(
+				signatures,
+				k.t.key,
+				signatureType(d, d.exact[i] as Ty, within(k.t)),
+			);
+		else
+			for (const t of (both as (Template | Template[])[]).flat())
+				if (t === k.t)
+					signature(
+						signatures,
+						t.key,
+						signatureType(d, d.exact[i] as Ty, within(t)),
+					);
+				else if (strings(t) !== undefined) nameAll(d, t, admits);
+				else
+					signature(
+						signatures,
+						t.key,
+						signatureType(d, inter(types(d, t)), within(t)),
+					);
 	}
+	// A template whose keys a pattern's include has that pattern's signature, and one a
+	// pattern of every key, or one no template says, matches has their types:
+	// additionalProperties applies to none of them.
+	const others = [
+		...d.unwritten.map((u) => u.ty),
+		...signatures.map((s) => s.ty),
+		...d.props.map((p) => p.ty),
+	];
+	const out = [...signatures];
+	for (const t of own) {
+		if (d.keyed.some((k) => k.all.some((o) => includes(o, t)))) continue;
+		const all = types(d, t);
+		if (all.length === 0 && d.additional?.kind === "never") continue;
+		const ty =
+			all.length > 0 ? inter(all) : union([d.additional ?? UNKNOWN, ...others]);
+		signature(out, t.key, signatureType(d, ty, within(t)));
+	}
+	if (out.length === 0) return closedOver(d, admits);
+	const forbidden = outside(d, admits).map(neverProp);
+	return { kind: "map", props: [...d.props, ...forbidden], keyed: out };
+}
 
-	const byPattern = keyedSignatures();
-	const everyType = allTypes();
-
+/** The object type of the properties, the patterns and additionalProperties. */
+function patternObject(d: Draft): Ty {
+	const { props, additional, unwritten } = d;
+	const byPattern: Keyed[] = [];
+	for (const [i, k] of d.keyed.entries())
+		signature(
+			byPattern,
+			k.t.key,
+			signatureType(d, d.exact[i] as Ty, within(k.t)),
+		);
 	if (additional === undefined) {
 		if (byPattern.length === 0)
 			return props.length === 0 ? RECORD : { kind: "object", props };
@@ -402,11 +565,20 @@ export function object(cx: Ctx, v: JsonObject, at: string): Ty {
 		byPattern.length === 0 &&
 		unwritten.length === 0
 	)
-		return shut();
+		return counted(d.v, kept(d));
 	const index =
 		additional.kind === "never" && unwritten.length === 0
 			? undefined
-			: admitting(union([additional, ...everyType]), () => true);
+			: signatureType(
+					d,
+					union([
+						additional,
+						...unwritten.map((u) => u.ty),
+						...d.exact,
+						...props.map((p) => p.ty),
+					]),
+					() => true,
+				);
 	return {
 		kind: "map",
 		props,
@@ -428,19 +600,19 @@ const within = (t: Template) => (key: string) => admits(t, key);
 function counted(v: JsonObject, props: Prop[]): Ty {
 	if (props.length === 0) return { kind: "map", props: [], index: NEVER };
 	const optional = props.filter((p) => p.optional).map((p) => p.key);
-	const present = props.length - optional.length;
+	const required = props.length - optional.length;
 	const min = count(v, "minProperties") ?? 0;
 	const max = count(v, "maxProperties") ?? props.length;
-	if (min > Math.min(max, props.length) || present > max) return NEVER;
+	if (min > Math.min(max, props.length) || required > max) return NEVER;
 	const variant = (f: (p: Prop) => Prop): Ty => ({
 		kind: "object",
 		props: props.map((p) => (p.optional ? f(p) : p)),
 	});
 	const parts: Ty[] = [];
-	if (min > present)
+	if (min > required)
 		parts.push(
 			union(
-				subsets(optional, min - present).map((keys) =>
+				subsets(optional, min - required).map((keys) =>
 					variant((p) =>
 						keys.includes(p.key) ? { ...p, optional: false, present: true } : p,
 					),
@@ -450,7 +622,7 @@ function counted(v: JsonObject, props: Prop[]): Ty {
 	if (max < props.length)
 		parts.push(
 			union(
-				subsets(optional, max - present).map((keys) =>
+				subsets(optional, max - required).map((keys) =>
 					variant((p) => (keys.includes(p.key) ? p : { ...p, ty: NEVER })),
 				),
 			),

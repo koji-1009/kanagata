@@ -2,13 +2,28 @@
   "openapi": "3.1.0",
   "paths": {
     "/health": { "$ref": "#/components/pathItems/Health" },
-    "/v2/health": { "$ref": "#/components/pathItems/Health" }
+    "/v2/health": { "$ref": "#/components/pathItems/Health" },
+    "/pets": { "$ref": "#/components/pathItems/Pets" }
+  },
+  "webhooks": {
+    "newPet": { "$ref": "#/components/pathItems/Pets" }
   },
   "components": {
     "pathItems": {
       "Health": {
         "get": { "operationId": "health", "description": "Is it up", "responses": { "200": { "content": { "text/plain": { "schema": { "type": "string" } } } } } }
+      },
+      "Pets": {
+        "post": {
+          "operationId": "addPet",
+          "description": "A path's and a webhook's: its schema has no readOnly or writeOnly property, so it is one type in either view.",
+          "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } } },
+          "responses": { "204": { "description": "ok" } }
+        }
       }
+    },
+    "schemas": {
+      "Pet": { "type": "object", "properties": { "id": { "type": "string" } } }
     }
   }
 }

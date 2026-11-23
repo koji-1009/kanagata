@@ -1,0 +1,1 @@
+#/components/schemas/A/properties/x: $ref has a malformed percent-encoding: #/components/schemas/B/properties/%FF

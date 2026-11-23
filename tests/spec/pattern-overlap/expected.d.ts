@@ -5,7 +5,6 @@ export interface paths {}
 export interface operations {}
 
 export interface schemas {
-  AnyAndTemplate: AnyAndTemplate;
   NarrowAndWide: NarrowAndWide;
   WideAndNarrowOthers: WideAndNarrowOthers;
   SameKeys: SameKeys;
@@ -15,12 +14,6 @@ export interface schemas {
   NamesWithinPatternClosed: NamesWithinPatternClosed;
   NamesSamePattern: NamesSamePattern;
 }
-
-/** An x- key matches both patterns, number and string: it cannot be there. */
-export type AnyAndTemplate = {
-  [key: `x-${string}`]: never;
-  [key: string]: string;
-};
 
 /** An x-a key matches both patterns; other x- keys the wider one. */
 export type NarrowAndWide = {

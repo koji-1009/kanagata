@@ -7,6 +7,9 @@ export interface operations {}
 export interface schemas {
   Card: Card;
   Payment: Payment;
+  ClosedCard: ClosedCard;
+  CardOnly: CardOnly;
+  PaymentByName: PaymentByName;
 }
 
 export type Card = {
@@ -17,6 +20,19 @@ export type Card = {
 export type Payment = Card & {
   number?: unknown;
   cvc?: string;
+  iban?: never;
+} | {
+  iban: string;
+};
+
+export type ClosedCard = {
+  number?: string;
+};
+
+export type CardOnly = ClosedCard;
+
+/** So does a member that is a $ref to another name of a closed schema. */
+export type PaymentByName = CardOnly & {
   iban?: never;
 } | {
   iban: string;

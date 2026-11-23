@@ -1,9 +1,9 @@
 // Paths, webhooks and operations → `Ty`.
 
 import { isBinaryMedia, isFormMedia, isTextMedia, METHODS } from "./client.ts";
-import { get, JsonObject, str, type Value } from "./json.ts";
+import { get, JsonObject, str, stringsIn, type Value } from "./json.ts";
 import { type Ctx, child, DiagError } from "./pointer.ts";
-import { doc, schema } from "./schema.ts";
+import { doc, docText, schema } from "./schema.ts";
 import {
 	BLOB,
 	lit,
@@ -24,7 +24,7 @@ const LOCATIONS = ["path", "query", "querystring", "header", "cookie"];
 /** Header parameters OpenAPI says to ignore, in lower case. */
 const RESERVED_HEADERS = ["accept", "content-type", "authorization"];
 
-export interface Paths {
+interface Paths {
 	paths: Prop[];
 	/** Present only when the document has `webhooks` and is 3.1 or later. */
 	webhooks?: Prop[];
@@ -37,7 +37,7 @@ export interface Paths {
  * An operation with an operationId reached again through a Path Item that paths or
  * webhooks share: `ty` is its type there, `first` the one `operations[id]` declares.
  */
-export interface Again {
+interface Again {
 	id: string;
 	ty: Ty;
 	at: string;
@@ -73,9 +73,9 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
 		operations: [],
 		again: [],
 	};
-	// `webhooks` is an OpenAPI 3.1 field, no field of a 3.0 document.
-	const v30 = (root.get("openapi") as string).startsWith("3.0.");
-	if (!v30 && root.get("webhooks") !== undefined)
+	// `webhooks` is an OpenAPI 3.1 field, no field of a 3.0 document (whose schemas ignore
+	// the keywords next to `$ref`).
+	if (cx.refSiblings && root.get("webhooks") !== undefined)
 		out.webhooks = pathItems(cx, root, "webhooks", operations);
 	out.operations = [...operations.values()].map((o) => o.prop);
 	out.again = [...operations].flatMap(([id, o]) =>
@@ -383,7 +383,8 @@ function operation(
 						...(c.items === undefined ? [] : [prop("itemContent", c.items)]),
 					]),
 					!booleanAt(body, bodyAt, "required"),
-					doc(body, described),
+					// A Request Body Object has no `deprecated`.
+					docText(described ?? body.str("description")),
 				),
 			);
 		});
@@ -401,9 +402,18 @@ function operation(
 
 	const responses: Prop[] = [];
 	const rs = o.get("responses");
+	// OpenAPI 3.0 requires responses; 3.1 and 3.2 do not. Without them, none is typed.
+	if (rs === undefined && !cx.refSiblings)
+		cx.warn(at, "OpenAPI 3.0 requires responses; none is typed");
 	const base = child(at, "responses");
 	const statuses =
 		rs === undefined ? [] : objectAt(rs, base, "responses").entries;
+	// A Responses Object must have a response (OpenAPI 3.0 to 3.2); an extension is none.
+	if (rs !== undefined && statuses.every(([status]) => status.startsWith("x-")))
+		cx.warn(
+			base,
+			"OpenAPI requires at least one response code in responses; none is typed",
+		);
 	for (const [status, raw] of statuses) {
 		if (status.startsWith("x-")) continue; // a specification extension, not a status
 		const rAt = child(base, status);
@@ -480,12 +490,7 @@ function serverUrl(url: string, variables: Value | undefined): Ty {
 	if (absolute && parts.length === 1) return lit(JSON.stringify(url));
 	const text = (s: string) =>
 		s.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
-	const values = (name: string) => {
-		const e = get(get(variables, name), "enum");
-		return Array.isArray(e)
-			? e.filter((x): x is string => typeof x === "string")
-			: [];
-	};
+	const values = (name: string) => stringsIn(get(get(variables, name), "enum"));
 	const hole = (name: string) => {
 		const vs = values(name);
 		return vs.length === 0

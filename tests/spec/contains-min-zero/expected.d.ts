@@ -6,15 +6,15 @@ export interface operations {}
 
 export interface schemas {
   Any: Any;
-  NoneAsked: NoneAsked;
+  Unasked: Unasked;
   Optional: Optional;
 }
 
 /** Every item matches and none need to: any array, and without type any other value. */
 export type Any = unknown;
 
-/** No item needs to match and any number may: contains asks nothing. */
-export type NoneAsked = unknown[];
+/** No item needs to match and any number may: contains asks nothing, so without type any value passes. */
+export type Unasked = unknown;
 
 /** No item needs to match, so no length is asked; how many may match cannot be typed, and without type any other value passes. */
 export type Optional = unknown;

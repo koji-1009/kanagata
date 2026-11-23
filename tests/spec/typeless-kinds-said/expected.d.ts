@@ -41,7 +41,7 @@ export type Anything = Record<string, unknown>;
 export type ItemsOfOneOf = string | Record<string, unknown>;
 
 /** And of all anyOf members, through $ref too; an array is one of those kinds, so minItems constrains it. */
-export type ItemsOfAnyOfRefs = [unknown, ...unknown[]] & Anything | [unknown, ...unknown[]] | Record<string, unknown> & Anything;
+export type ItemsOfAnyOfRefs = [unknown, ...unknown[]] | Record<string, unknown> & Anything;
 
 /** A member without type says nothing, so neither does its group: the keywords say the kind. */
 export type ItemsOfSomeTyped = [unknown, unknown?, unknown?];

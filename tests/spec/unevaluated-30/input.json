@@ -5,7 +5,7 @@
     "schemas": {
       "Cat": { "type": "object", "properties": { "kind": { "type": "string" } } },
       "Ignored": {
-        "description": "In 3.0 the keywords next to $ref are ignored, so they evaluate nothing.",
+        "description": "A 3.0 Schema Object has no unevaluatedProperties: it says nothing, so x is required as required says.",
         "allOf": [{ "$ref": "#/components/schemas/Cat", "properties": { "x": { "type": "string" } } }],
         "required": ["x"],
         "unevaluatedProperties": false

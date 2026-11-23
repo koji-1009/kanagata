@@ -226,26 +226,46 @@ test("a union drops the object and array types Record and unknown[] admit", () =
 	});
 });
 
-test("unions of one member of each kind meet kind by kind", () => {
+test("unions of members of one kind each meet kind by kind", () => {
 	const a = object([prop("a", STRING)]);
 	assert.deepEqual(
 		inter([union([a, lit('""')]), union([lit('""'), RECORD])]),
 		union([a, lit('""')]),
 	);
-	// A member of no one kind, two of one kind, or many members leave them as they are.
+	// Several members of a kind meet those of the kind beside them, and no string is left
+	// met with an object type (`string & { b?: never }` admits every string).
+	const optional = (key: string, ty: Ty): Prop => ({ key, ty, optional: true });
+	const noB = object([optional("b", NEVER)]);
+	assert.deepEqual(
+		inter([
+			union([object([optional("a", STRING)]), STRING]),
+			union([a, lit('""'), noB]),
+		]),
+		union([
+			a,
+			object([optional("a", STRING), optional("b", NEVER)]),
+			lit('""'),
+		]),
+	);
+	const many = ["a", "b", "c", "d", "e", "f", "g", "h"].map((s) =>
+		lit(`"${s}"`),
+	);
+	const x = object([prop("x", STRING)]);
+	assert.deepEqual(
+		inter([union([...many, x]), union([STRING, noB])]),
+		union([...many, object([prop("x", STRING), optional("b", NEVER)])]),
+	);
+	// Whole numbers meet the numbers.
+	assert.deepEqual(
+		inter([union([INTEGER, lit('"a"')]), union([NUMBER, lit('"a"')])]),
+		union([INTEGER, lit('"a"')]),
+	);
+	// A member of no one kind leaves them as they are, and so do kinds that all meet.
 	const refOrNull = union([schemaRef("A"), NULL]);
 	assert.equal(inter([refOrNull, union([STRING, NULL])]).kind, "inter");
-	const twoObjects = union([
-		inter([schemaRef("A"), a]),
-		inter([schemaRef("B"), object([prop("b", STRING)])]),
-		NULL,
-	]);
-	assert.equal(inter([twoObjects, union([RECORD, NULL])]).kind, "inter");
-	const many = union([
-		...["a", "b", "c", "d", "e", "f", "g", "h"].map((s) => lit(`"${s}"`)),
-		schemaRef("A"),
-	]);
-	assert.equal(inter([many, union([STRING, schemaRef("B")])]).kind, "inter");
+	const c = object([prop("c", STRING)]);
+	const d = object([prop("d", STRING)]);
+	assert.equal(inter([union([a, noB]), union([c, d])]).kind, "inter");
 });
 
 test("union of a single member", () => {

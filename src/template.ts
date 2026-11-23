@@ -16,7 +16,7 @@ export const MAX_UNION = 99_999;
 const ANY: Segment = { any: true };
 
 /** A template: its segments, one after the other. */
-export type Seq = Segment[];
+type Seq = Segment[];
 
 /** Strings: the union of some templates. */
 type Lang = Seq[];
@@ -350,8 +350,7 @@ class Parser {
 		if (negated)
 			return {
 				chars: other(chars),
-				text:
-					none || wide || set.size > 0 || escapes.size > 0 ? undefined : "any",
+				text: wide || set.size > 0 || escapes.size > 0 ? undefined : "any",
 			};
 		return {
 			chars,
@@ -447,24 +446,6 @@ function contains(b: Seq, a: Seq, i: number, j: number): boolean {
 	return x.set.every((c) => set.has(c)) && contains(b, a, i + 1, j + 1);
 }
 
-/**
- * Whether the templates `a` and `b` admit a string both do, from segment `i` of `a` and
- * `j` of `b`: any text in either takes any number of the other's segments, and two sets
- * meet where they share a character.
- */
-function meets(a: Seq, b: Seq, i: number, j: number): boolean {
-	const x = a[i];
-	const y = b[j];
-	if (x === undefined && y === undefined) return true;
-	if (x !== undefined && "any" in x)
-		return meets(a, b, i + 1, j) || (y !== undefined && meets(a, b, i, j + 1));
-	if (y !== undefined && "any" in y)
-		return meets(a, b, i, j + 1) || (x !== undefined && meets(a, b, i + 1, j));
-	if (x === undefined || y === undefined) return false;
-	const set = new Set(y.set);
-	return x.set.some((c) => set.has(c)) && meets(a, b, i + 1, j + 1);
-}
-
 /** One template of the strings a pattern matches: its segments, and its type. */
 export interface Template {
 	readonly seq: Seq;
@@ -475,7 +456,47 @@ const written = (seq: Seq): Template => ({ seq, key: render(seq) });
 
 /** The templates of a pattern `patternType` reads, one for each of its alternatives. */
 export function templates(pattern: string): Template[] {
-	return lang(new Parser(pattern).alternatives(true)).map(written);
+	return templatesOf(pattern) as Template[];
+}
+
+/**
+ * The templates of a pattern, one for each of its alternatives; undefined where no
+ * template says its strings, or JavaScript cannot read it. Each pattern is read once: a
+ * document repeats its patterns.
+ */
+function templatesOf(pattern: string): Template[] | undefined {
+	if (!templated.has(pattern)) templated.set(pattern, readTemplates(pattern));
+	return templated.get(pattern);
+}
+
+/** What `templatesOf` read of each pattern. */
+const templated = new Map<string, Template[] | undefined>();
+
+function readTemplates(pattern: string): Template[] | undefined {
+	if (regex(pattern) === null) return undefined;
+	try {
+		return lang(new Parser(pattern).alternatives(true)).map(written);
+	} catch {
+		// NoType: the parser throws nothing else on a pattern RegExp reads.
+		return undefined;
+	}
+}
+
+/** Patterns compiled once each; null for one JavaScript cannot read. */
+const compiled = new Map<string, RegExp | null>();
+
+/** A pattern as a regular expression (JSON Schema patterns are Unicode); null where JavaScript cannot read it. */
+export function regex(pattern: string): RegExp | null {
+	let re = compiled.get(pattern);
+	if (re === undefined) {
+		try {
+			re = new RegExp(pattern, "u");
+		} catch {
+			re = null;
+		}
+		compiled.set(pattern, re);
+	}
+	return re;
 }
 
 /** Whether template `outer` admits every string template `inner` does. */
@@ -486,18 +507,6 @@ export function includes(outer: Template, inner: Template): boolean {
 /** Whether a template admits a string. */
 export function admits(t: Template, key: string): boolean {
 	return inTemplate(t.seq, key);
-}
-
-/** How the strings of template `a` stand to those of `b`: all among them, some, or none. */
-export function relation(
-	a: Template,
-	b: Template,
-): "within" | "meets" | "apart" {
-	return includes(b, a)
-		? "within"
-		: meets(a.seq, b.seq, 0, 0)
-			? "meets"
-			: "apart";
 }
 
 /** The strings of a template without any text; undefined for one with it. */
@@ -515,7 +524,8 @@ const MAX_STEPS = 10_000;
 
 /**
  * The strings both templates admit, as templates: one for each way their segments line
- * up, the way `meets` reads them, a set meeting a set in the characters both have.
+ * up, any text in either taking any number of the other's segments, and a set meeting a
+ * set in the characters both have.
  */
 function common(
 	a: Seq,
@@ -664,34 +674,32 @@ function machine(pattern: string): Read | null {
 	let read = machines.get(pattern);
 	if (read === undefined) {
 		read = null;
-		try {
-			new RegExp(pattern, "u");
-			const m = new Machine();
-			const start = m.state();
-			const accept = m.build(new Parser(pattern).alternatives(true), start);
-			read = { m, start, accept };
-		} catch {
-			// A pattern JavaScript cannot read, `NoType`, or more states than read.
-		}
+		if (regex(pattern) !== null)
+			try {
+				const m = new Machine();
+				const start = m.state();
+				const accept = m.build(new Parser(pattern).alternatives(true), start);
+				read = { m, start, accept };
+			} catch {
+				// `NoType`, or more states than read.
+			}
 		machines.set(pattern, read);
 	}
 	return read;
 }
 
-/** The most pairs of states `matching` visits before it gives up. */
+/** The most pairs of states `matchesAll` visits before it gives up. */
 const MAX_PAIRS = 10_000;
 
 /**
  * Whether a pattern that is a regular expression (anywhere in the string, as JSON Schema
- * reads it) matches all strings of a template, some, or none, read by running both
- * machines side by side; undefined for any other pattern, or one too large to read.
+ * reads it) matches all strings of a template, read by running both machines side by side
+ * until a string of the template it does not match; false for any other pattern, or one
+ * too large to read.
  */
-export function matching(
-	pattern: string,
-	t: Template,
-): "within" | "meets" | "apart" | undefined {
+export function matchesAll(pattern: string, t: Template): boolean {
 	const read = machine(pattern);
-	if (read === null) return undefined;
+	if (read === null) return false;
 	const { m, start, accept } = read;
 	const tm = new Machine();
 	const tStart = tm.state();
@@ -709,11 +717,9 @@ export function matching(
 		for (const { chars } of moves)
 			for (const [from, to] of chars) {
 				bounds.add(from);
-				if (to < LAST) bounds.add(to + 1);
+				bounds.add(to + 1);
 			}
 	const letters = [...bounds];
-	let some = false;
-	let all = true;
 	const seen = new Set<string>();
 	const todo: [number[], number[]][] = [
 		[tm.closure([tStart]), m.closure([start])],
@@ -722,18 +728,16 @@ export function matching(
 		const [ts, ps] = pair;
 		const id = `${ts}|${ps}`;
 		if (seen.has(id)) continue;
-		if (seen.size >= MAX_PAIRS) return undefined;
+		if (seen.size >= MAX_PAIRS) return false;
 		seen.add(id);
-		if (ts.includes(tAccept)) {
-			if (ps.includes(accept)) some = true;
-			else all = false;
-		}
+		// A string of the template the pattern does not match.
+		if (ts.includes(tAccept) && !ps.includes(accept)) return false;
 		for (const c of letters) {
 			const next = tm.step(ts, c);
 			if (next.length > 0) todo.push([next, m.step(ps, c)]);
 		}
 	}
-	return all ? "within" : some ? "meets" : "apart";
+	return true;
 }
 
 /**
@@ -743,25 +747,15 @@ export function matching(
  * Each pattern is read once: a document repeats its patterns.
  */
 export function patternType(pattern: string): Ty | undefined {
-	if (!typed.has(pattern)) typed.set(pattern, typeOf(pattern));
+	if (!typed.has(pattern)) {
+		const all = templatesOf(pattern);
+		typed.set(
+			pattern,
+			all === undefined ? undefined : union(all.map((t) => t.key)),
+		);
+	}
 	return typed.get(pattern);
 }
 
 /** What `patternType` read of each pattern. */
 const typed = new Map<string, Ty | undefined>();
-
-function typeOf(pattern: string): Ty | undefined {
-	try {
-		new RegExp(pattern, "u");
-	} catch {
-		return undefined;
-	}
-	let read: Lang;
-	try {
-		read = lang(new Parser(pattern).alternatives(true));
-	} catch {
-		// NoType: the parser throws nothing else on a pattern RegExp reads.
-		return undefined;
-	}
-	return union(read.map(render));
-}

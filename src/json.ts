@@ -46,6 +46,24 @@ export class JsonObject {
 
 export type Value = null | boolean | string | JsonNumber | Value[] | JsonObject;
 
+/** The strings a list has (`required`, `enum`); none for a value that is no list. */
+export function stringsIn(v: Value | undefined): string[] {
+	return Array.isArray(v)
+		? v.filter((x): x is string => typeof x === "string")
+		: [];
+}
+
+/** The kind of a JSON value, as a schema's `type` names it (`number` for every number). */
+export function jsonKind(
+	x: Value,
+): "null" | "boolean" | "number" | "string" | "array" | "object" {
+	if (x === null) return "null";
+	if (Array.isArray(x)) return "array";
+	if (x instanceof JsonObject) return "object";
+	if (x instanceof JsonNumber) return "number";
+	return typeof x === "string" ? "string" : "boolean";
+}
+
 export class ParseError extends GenerateError {
 	readonly line: number;
 	readonly col: number;

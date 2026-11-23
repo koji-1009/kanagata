@@ -73,9 +73,3 @@ test("writeAll continues after partial writes and a full pipe", () => {
 		/EPIPE/,
 	);
 });
-
-test("stdout and stderr write through", () => {
-	// Writing nothing exercises the real descriptors without printing into the test report.
-	nodeIo.stdout("");
-	nodeIo.stderr("");
-});

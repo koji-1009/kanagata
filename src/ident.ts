@@ -26,7 +26,7 @@ const ID_CONTINUE = /^\p{ID_Continue}$/u;
  * allowed in an identifier separate words; the first letter of each word is
  * upper-cased, the rest kept.
  */
-export function pascalCase(s: string): string {
+function pascalCase(s: string): string {
 	let out = "";
 	let upper = true;
 	for (const c of s) {

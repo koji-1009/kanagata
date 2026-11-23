@@ -3,7 +3,13 @@
   "paths": {},
   "components": {
     "schemas": {
-      "Name": { "description": "An $id that is not a URI names no resource: the schema is read where it is.", "$id": "http://[", "type": "string" }
+      "Name": { "description": "An $id that is not a URI names no resource: the schema is read where it is.", "$id": "http://[", "type": "string" },
+      "Malformed": {
+        "description": "Nor does one with a malformed percent-encoding: its $refs resolve against the document.",
+        "$id": "schemas/v%zz/malformed.json",
+        "type": "object",
+        "properties": { "name": { "$ref": "#/components/schemas/Name" } }
+      }
     }
   }
 }

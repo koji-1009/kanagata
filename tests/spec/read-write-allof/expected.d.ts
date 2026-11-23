@@ -10,6 +10,9 @@ export interface schemas {
   Derived: Derived;
   Stamped: Stamped;
   Mixed: Mixed;
+  StampedBase: StampedBase;
+  RequiredInMember: RequiredInMember;
+  RequiredInNestedMember: RequiredInNestedMember;
 }
 
 export type RO = {
@@ -53,3 +56,23 @@ export type Mixed = Stamped & {
 export type MixedInput = StampedInput & {
   name: string;
 };
+
+export type StampedBase = Stamped;
+
+export type StampedBaseInput = StampedInput;
+
+/** required in another member does not bring back what a referenced member leaves out, through its own allOf too. */
+export type RequiredInMember = StampedBase & {
+  stamp: {} | null;
+};
+
+/** required in another member does not bring back what a referenced member leaves out, through its own allOf too. */
+export type RequiredInMemberInput = StampedBaseInput & Record<string, unknown>;
+
+/** Nor required in a member's allOf. */
+export type RequiredInNestedMember = StampedBase & {
+  stamp: {} | null;
+};
+
+/** Nor required in a member's allOf. */
+export type RequiredInNestedMemberInput = StampedBaseInput & Record<string, unknown>;

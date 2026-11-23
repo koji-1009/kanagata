@@ -23,6 +23,7 @@ export interface paths {
             "text/html": string;
             "application/xml": string;
             "*/*": string;
+            "application/*": number;
             "Application/PDF; version=1.7": Blob;
           };
         };

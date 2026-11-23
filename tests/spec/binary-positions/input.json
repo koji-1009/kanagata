@@ -3,6 +3,7 @@
   "paths": {
     "/upload": {
       "post": {
+        "parameters": [{ "name": "checksum", "in": "query", "description": "Bytes are a string in a parameter.", "schema": { "type": "string", "format": "binary" } }],
         "requestBody": {
           "required": true,
           "content": {
@@ -23,6 +24,7 @@
               }
             },
             "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Upload" } } } },
+            "application/x-www-form-urlencoded": { "schema": { "type": "object", "properties": { "data": { "type": "string", "format": "binary" } } } },
             "*/*": { "schema": { "$ref": "#/components/schemas/Upload" } }
           }
         },
@@ -55,7 +57,7 @@
       "Maybe": { "description": "So with null too.", "type": ["string", "null"], "format": "binary" },
       "Pair": { "description": "And in prefixItems.", "type": "array", "prefixItems": [{ "$ref": "#/components/schemas/Upload" }, true] },
       "Patterned": { "description": "Pattern properties are parts too.", "type": "object", "patternProperties": { "^f": { "$ref": "#/components/schemas/Upload" } }, "additionalProperties": false },
-      "Extra": { "description": "And additional ones.", "type": "object", "properties": { "any": true }, "additionalProperties": { "$ref": "#/components/schemas/Upload" } },
+      "Extra": { "description": "And additional ones.", "type": "object", "properties": { "name": { "type": "string" } }, "additionalProperties": { "$ref": "#/components/schemas/Upload" } },
       "Form": { "description": "A form with a file part, written out where it is the parts.", "type": "object", "properties": { "file": { "$ref": "#/components/schemas/Upload" }, "name": { "type": "string" } } }
     }
   }

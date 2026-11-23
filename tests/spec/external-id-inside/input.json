@@ -1,0 +1,16 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Holder": {
+        "description": "A schema in another file is named however it is reached: by the file's URL, a pointer into it, or the file's $id inside it; once, under its first name.",
+        "type": "object",
+        "properties": {
+          "thing": { "$ref": "thing.json" },
+          "name": { "$ref": "thing.json#/$defs/name" }
+        }
+      }
+    }
+  }
+}

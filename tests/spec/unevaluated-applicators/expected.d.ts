@@ -73,15 +73,13 @@ export type Either = Record<string, unknown> & (Card | Bank) & ({
 } | Bank);
 
 /** A schema types the keys nothing else evaluates; non-objects pass it. */
-export type Typed = ({
+export type Typed = {
   a?: string;
-} | string) & ({
-  b?: string;
-} | string) & ({
-  b?: number;
+  b?: never;
 } | {
+  a?: string;
   b?: string;
-} | string);
+} | string;
 
 /** if and then evaluate where if admits the value, else where it does not. */
 export type Conditional = ({

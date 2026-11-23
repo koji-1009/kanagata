@@ -556,9 +556,9 @@ export async function unionAcrossServers(
 ): Promise<void> {
 	const s = createClient<ServerPaths>({ baseUrl: "https://api.example.com" });
 	// No one init serves both: /assets needs its server, which is wrong for /items.
-	// @ts-expect-error
+	// @ts-expect-error /items takes no baseUrl
 	await s.post(path, { baseUrl: "https://uploads.example.com" });
-	// @ts-expect-error
+	// @ts-expect-error /assets must be given its server
 	await s.post(path);
 }
 

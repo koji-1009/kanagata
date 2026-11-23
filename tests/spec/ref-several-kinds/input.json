@@ -1,0 +1,35 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Value": { "oneOf": [{ "type": "object", "properties": { "x": { "type": "number" } } }, { "type": "string" }] },
+      "Code": { "oneOf": [{ "type": "object", "properties": { "x": { "type": "number" } } }, { "const": "s" }] },
+      "Maybe": { "oneOf": [{ "type": "object", "properties": { "x": { "type": "number" } } }, { "type": "null" }] },
+      "OnlyObjects": {
+        "description": "A reference of several kinds met with an object type is written out: TypeScript reads string & { y?: string } as any string.",
+        "type": "object",
+        "properties": { "y": { "type": "string" } },
+        "allOf": [{ "$ref": "#/components/schemas/Value" }]
+      },
+      "OnlyStrings": {
+        "description": "So is one met with a string: { x?: number } & string is any string too.",
+        "type": "string",
+        "allOf": [{ "$ref": "#/components/schemas/Code" }]
+      },
+      "ValueOrNull": { "anyOf": [{ "$ref": "#/components/schemas/Value" }, { "type": "null" }] },
+      "Twice": {
+        "description": "The references in what is written out are written out in turn.",
+        "type": "object",
+        "properties": { "y": { "type": "string" } },
+        "allOf": [{ "$ref": "#/components/schemas/ValueOrNull" }]
+      },
+      "Kept": {
+        "description": "TypeScript reads null met with an object type as never, so the reference stays.",
+        "type": "object",
+        "properties": { "y": { "type": "string" } },
+        "allOf": [{ "$ref": "#/components/schemas/Maybe" }]
+      }
+    }
+  }
+}
