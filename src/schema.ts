@@ -286,9 +286,10 @@ export function schemaDoc(cx: Ctx, v: Value): string | undefined {
 	);
 }
 
-function docText(
+/** JSDoc text from a description, and `@deprecated` where the object is deprecated. */
+export function docText(
 	description: string | undefined,
-	deprecated: boolean,
+	deprecated = false,
 ): string | undefined {
 	const desc = description?.trim() || undefined;
 	if (!deprecated) return desc;

@@ -3,7 +3,7 @@
 import { isBinaryMedia, isFormMedia, isTextMedia, METHODS } from "./client.ts";
 import { get, JsonObject, str, type Value } from "./json.ts";
 import { type Ctx, child, DiagError } from "./pointer.ts";
-import { doc, schema } from "./schema.ts";
+import { doc, docText, schema } from "./schema.ts";
 import {
 	BLOB,
 	lit,
@@ -383,7 +383,8 @@ function operation(
 						...(c.items === undefined ? [] : [prop("itemContent", c.items)]),
 					]),
 					!booleanAt(body, bodyAt, "required"),
-					doc(body, described),
+					// A Request Body Object has no `deprecated`.
+					docText(described ?? body.str("description")),
 				),
 			);
 		});

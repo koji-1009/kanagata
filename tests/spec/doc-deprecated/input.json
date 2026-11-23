@@ -1,6 +1,22 @@
 {
   "openapi": "3.0.3",
-  "paths": {},
+  "paths": {
+    "/things": {
+      "post": {
+        "deprecated": true,
+        "requestBody": { "description": "A Request Body Object has no deprecated.", "deprecated": true, "content": { "text/plain": { "schema": { "type": "string" } } } },
+        "responses": { "204": { "description": "ok" } }
+      },
+      "put": {
+        "parameters": [
+          { "name": "old", "in": "query", "description": "Use new.", "deprecated": true, "schema": { "type": "string" } },
+          { "name": "new", "in": "query", "deprecated": false, "schema": { "type": "string" } }
+        ],
+        "requestBody": { "deprecated": true, "content": { "text/plain": { "schema": { "type": "string" } } } },
+        "responses": { "204": { "description": "ok" } }
+      }
+    }
+  },
   "components": {
     "schemas": {
       "Old": { "type": "string", "deprecated": true },
