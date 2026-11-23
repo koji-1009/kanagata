@@ -46,7 +46,14 @@ pnpm build      # dist/
 | `src/json.ts`                                | JSON parser keeping key order and number notation, rejecting repeated keys; JSON Pointer helpers               |
 | `src/yaml.ts`                                | YAML 1.2 → the same values (via `yaml`)                                                                        |
 | `src/pointer.ts`                             | `Ctx`: `$ref` / `$dynamicRef` resolution, base URI, read/write view, hoisting, component aliasing, warnings    |
-| `src/schema.ts`                              | JSON Schema → `Ty`                                                                                             |
+| `src/schema.ts`                              | JSON Schema → `Ty`: entry points, the parts of a schema, references, the type of each kind                     |
+| `src/kinds.ts`                               | which kinds of value a schema is; how values of the other kinds pass a member of some kinds only               |
+| `src/object.ts`                              | object types: properties, index signatures, the keys `propertyNames` admits, property counts                   |
+| `src/keys.ts`                                | the keys schemas name, require or close; the keys a view leaves out (readOnly / writeOnly)                     |
+| `src/not.ts`                                 | `not` and `if`: the values a schema leaves out, where TypeScript can say them; whether it admits a literal     |
+| `src/oneof.ts`                               | `oneOf`: what each member leaves out of what another admits                                                    |
+| `src/unevaluated.ts`                         | `unevaluatedProperties` / `unevaluatedItems`: what the schemas beside them evaluate                            |
+| `src/number.ts`                              | numbers read exactly: bounds, `multipleOf`, count keywords; literals against a schema's own keywords           |
 | `src/operation.ts`                           | paths, webhooks and operations → `Ty`                                                                          |
 | `src/ty.ts`                                  | the type IR and its algebra (`union`, `inter`, `narrow`)                                                       |
 | `src/template.ts`                            | `pattern` → template literal types, where they say its strings exactly; template intersections, regex machines |
