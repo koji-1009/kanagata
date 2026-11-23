@@ -54,6 +54,50 @@ const NAME_MAPS = new Set([
 	"webhooks",
 ]);
 
+/**
+ * The keywords kanagata reads for what they say that an OpenAPI 3.0 Schema Object does not
+ * define (OAS 3.0.4, Schema Object): JSON Schema keywords 3.0 leaves unsupported. In a 3.0
+ * document they say nothing, as a keyword kanagata does not know says nothing. No other
+ * 3.0 object has a field of these names.
+ */
+const NOT_IN_30 = new Set([
+	"const",
+	"if",
+	"then",
+	"else",
+	"prefixItems",
+	"contains",
+	"minContains",
+	"maxContains",
+	"unevaluatedItems",
+	"patternProperties",
+	"unevaluatedProperties",
+	"propertyNames",
+	"dependentRequired",
+	"dependentSchemas",
+	"$id",
+	"$anchor",
+	"$dynamicRef",
+	"$dynamicAnchor",
+	"$schema",
+	"$defs",
+	"definitions",
+	"contentMediaType",
+	"contentEncoding",
+	"contentSchema",
+]);
+
+/** The keywords of a 3.0 Schema Object that hold schemas: one, a list, or a map from names. */
+const SUBSCHEMAS_30 = new Map<string, "schema" | "list" | "map">([
+	["allOf", "list"],
+	["oneOf", "list"],
+	["anyOf", "list"],
+	["not", "schema"],
+	["items", "schema"],
+	["properties", "map"],
+	["additionalProperties", "schema"],
+]);
+
 function withoutFragment(url: URL): string {
 	return url.href.slice(0, url.href.length - url.hash.length).replace(/#$/, "");
 }
@@ -313,6 +357,54 @@ export class Ctx {
 	 */
 	readsSiblings(s: Value): boolean {
 		return this.refSiblings || get(s, "$ref") === undefined;
+	}
+
+	/** Each schema `schemaObject` read in a 3.0 document, and each it gave, to what it gives. */
+	readonly #read30 = new Map<Value, Value>();
+
+	/**
+	 * A Schema Object as the document's version defines it: in 3.1 and 3.2 as written; in
+	 * 3.0 without the keywords a 3.0 Schema Object does not define (`NOT_IN_30`), in it and
+	 * in the schemas it holds, so that no reader sees them. A schema without them is itself,
+	 * and one with them always gives the same schema, so schemas stay matched by identity
+	 * (`componentKey`). Every schema is read through this: the document's (`schema`), the
+	 * components (`componentKey`), and every `$ref` target.
+	 */
+	schemaObject(v: Value): Value {
+		if (this.refSiblings || !(v instanceof JsonObject)) return v;
+		const known = this.#read30.get(v);
+		if (known !== undefined) return known;
+		let changed = false;
+		const entries: [string, Value][] = [];
+		for (const [k, x] of v.entries) {
+			const read = NOT_IN_30.has(k) ? undefined : this.#held(k, x);
+			if (read !== x) changed = true;
+			if (read !== undefined) entries.push([k, read]);
+		}
+		const out = changed ? new JsonObject(entries) : v;
+		this.#read30.set(v, out);
+		this.#read30.set(out, out);
+		return out;
+	}
+
+	/** The value of a 3.0 schema's keyword `k`, the schemas it holds read by `schemaObject`. */
+	#held(k: string, x: Value): Value {
+		const holds = SUBSCHEMAS_30.get(k);
+		if (holds === "schema") return this.schemaObject(x);
+		if (holds === "list" && Array.isArray(x)) {
+			const out = x.map((s) => this.schemaObject(s));
+			return out.every((s, i) => s === x[i]) ? x : out;
+		}
+		if (holds === "map" && x instanceof JsonObject) {
+			const out = x.entries.map(([name, s]): [string, Value] => [
+				name,
+				this.schemaObject(s),
+			]);
+			return out.every(([, s], i) => s === (x.entries[i] as [string, Value])[1])
+				? x
+				: new JsonObject(out);
+		}
+		return x;
 	}
 
 	warn(at: string, msg: string): void {
@@ -585,7 +677,7 @@ export class Ctx {
 	 * undefined otherwise. Reading it inside it already changes nothing (`inOwnResource`).
 	 */
 	ownResource(v: Value): string | undefined {
-		return this.refSiblings ? this.#ids().resources.get(v) : undefined;
+		return this.#ids().resources.get(v);
 	}
 
 	/**
@@ -705,7 +797,8 @@ export class Ctx {
 		if (value === undefined)
 			return new DiagError(at, `$ref target not found: ${r}`);
 		return {
-			value,
+			// A schema as its version defines it; no other object has the keywords it leaves out.
+			value: this.schemaObject(value),
 			base: fragment.startsWith("/")
 				? this.#within(doc, fragment, resource)
 				: scope,
@@ -761,7 +854,7 @@ export class Ctx {
 			);
 		}
 		const ids = new Map<string, Value>();
-		indexIds(this.#ids(), ids, doc, resource);
+		if (this.refSiblings) indexIds(this.#ids(), ids, doc, resource);
 		for (const uri of [resource, ...ids.keys()])
 			if (!this.#idsIn.has(uri)) this.#idsIn.set(uri, ids);
 		this.#files.set(resource, doc);
@@ -794,7 +887,9 @@ export class Ctx {
 			resources: new Map(),
 			dynamicRefs: false,
 		};
-		indexIds(index, index.ids, this.root, this.documentBase);
+		// A 3.0 Schema Object has none of them (`NOT_IN_30`).
+		if (this.refSiblings)
+			indexIds(index, index.ids, this.root, this.documentBase);
 		this.#index = index;
 		return index;
 	}
@@ -814,8 +909,10 @@ export class Ctx {
 			const schemas = get(get(this.root, "components"), "schemas");
 			const entries = schemas instanceof JsonObject ? schemas.entries : [];
 			this.#own = new Map();
-			for (const [key, s] of entries)
+			for (const [key, raw] of entries) {
+				const s = this.schemaObject(raw);
 				if (!this.#own.has(s)) this.#own.set(s, key);
+			}
 		}
 		const own = this.#own.get(v);
 		if (own !== undefined) return own;

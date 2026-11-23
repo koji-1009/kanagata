@@ -163,8 +163,6 @@ function evaluates(
 		);
 		seen.delete(target.uri);
 	}
-	// In 3.0 the keywords next to $ref are ignored.
-	if (!cx.readsSiblings(s)) return ev;
 	const props = s.get("properties");
 	for (const [k] of props instanceof JsonObject ? props.entries : []) {
 		ev.names.add(k);

@@ -22,7 +22,8 @@ export type Closed = "a" | "b" | null;
 
 export type Untyped = "a" | null;
 
-export type Fixed = "a" | null;
+/** A 3.0 Schema Object has no const: it says nothing. */
+export type Fixed = string | null;
 
 export type Choice = "a" | null;
 

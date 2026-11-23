@@ -238,8 +238,7 @@ export function listed(
 			const values = cx.inTarget(target, () => listed(cx, target.value, seen));
 			if (values !== undefined) return values;
 		}
-		// In 3.0 the keywords next to $ref are ignored.
-		return cx.readsSiblings(s) ? ownValues(s) : undefined;
+		return ownValues(s);
 	});
 }
 

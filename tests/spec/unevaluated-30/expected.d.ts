@@ -13,5 +13,7 @@ export type Cat = {
   kind?: string;
 };
 
-/** In 3.0 the keywords next to $ref are ignored, so they evaluate nothing. */
-export type Ignored = never;
+/** A 3.0 Schema Object has no unevaluatedProperties: it says nothing, so x is required as required says. */
+export type Ignored = Cat & {
+  x: {} | null;
+};

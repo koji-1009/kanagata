@@ -5,7 +5,7 @@
     "schemas": {
       "Closed": { "description": "With looseNullable, nullable adds null even next to an enum without it.", "type": "string", "enum": ["a", "b"], "nullable": true },
       "Untyped": { "enum": ["a"], "nullable": true },
-      "Fixed": { "type": "string", "const": "a", "nullable": true },
+      "Fixed": { "description": "A 3.0 Schema Object has no const: it says nothing.", "type": "string", "const": "a", "nullable": true },
       "Choice": { "type": "string", "enum": ["a", null], "nullable": true },
       "Name": { "type": "string", "nullable": true },
       "User": { "type": "object", "required": ["id"], "properties": { "id": { "type": "integer" } } },

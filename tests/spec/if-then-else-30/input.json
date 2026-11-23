@@ -4,7 +4,7 @@
   "components": {
     "schemas": {
       "Delivery": {
-        "description": "Without nullable, type names no null: null passes no part of if and then.",
+        "description": "A 3.0 Schema Object has no if / then / else: they say nothing, so address is never required.",
         "type": "object",
         "properties": { "method": { "type": "string", "enum": ["ship", "pickup"] }, "address": { "type": "string" } },
         "if": { "properties": { "method": { "const": "ship" } } },

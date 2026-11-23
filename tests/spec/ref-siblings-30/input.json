@@ -33,7 +33,7 @@
           "stamp": { "type": "string", "readOnly": true }
         }
       },
-      "Negated": { "description": "Without $ref, an ignored keyword is reported.", "not": { "const": "x" } },
+      "Negated": { "description": "Without $ref, an ignored keyword is reported.", "not": { "enum": ["x"] } },
       "Old": { "$ref": "#/components/schemas/Base", "deprecated": true },
       "Name": { "type": "string" },
       "Upload": { "$ref": "#/components/schemas/Name", "type": "string", "format": "binary" },
@@ -78,22 +78,9 @@
         "additionalProperties": false,
         "allOf": [{ "$ref": "#/components/schemas/Keyed", "type": "array" }]
       },
-      "Way": { "type": "object", "properties": { "method": { "enum": ["ship", "pickup"] } } },
-      "Shipped": {
-        "description": "properties next to a $ref in a member declare no values if reads.",
-        "type": "object",
-        "allOf": [{ "$ref": "#/components/schemas/Way", "properties": { "method": { "enum": ["ship"] } } }],
-        "properties": { "address": { "type": "string" } },
-        "if": { "properties": { "method": { "const": "ship" } } },
-        "then": { "required": ["address"] }
-      },
-      "Delivery": {
-        "description": "Nor does enum next to a $ref.",
-        "type": "object",
-        "properties": { "method": { "$ref": "#/components/schemas/Name", "enum": ["ship"] }, "address": { "type": "string" } },
-        "allOf": [{ "properties": { "method": { "enum": ["ship", "pickup"] } } }],
-        "if": { "properties": { "method": { "const": "ship" } } },
-        "then": { "required": ["address"] }
+      "NotBase": {
+        "description": "Nor are the $refs next to a $ref in a not that is ignored resolved.",
+        "not": { "$ref": "#/components/schemas/Base", "properties": { "id": { "$ref": "#/components/schemas/Missing" } } }
       }
     }
   }

@@ -101,14 +101,13 @@ const OAS_DIALECTS = [
 ];
 
 /** Converts a schema. */
-export function schema(cx: Ctx, v: Value, at: string): Ty {
-	if (v === true) return UNKNOWN;
-	if (v === false) return NEVER;
-	if (!(v instanceof JsonObject)) return UNKNOWN; // not a schema
-	// A 3.0 Schema Object has no $schema.
+export function schema(cx: Ctx, written: Value, at: string): Ty {
+	if (written === true) return UNKNOWN;
+	if (written === false) return NEVER;
+	if (!(written instanceof JsonObject)) return UNKNOWN; // not a schema
+	const v = cx.schemaObject(written) as JsonObject;
 	const dialect = v.get("$schema");
-	if (dialect !== undefined && cx.refSiblings)
-		readDialect(child(at, "$schema"), dialect);
+	if (dialect !== undefined) readDialect(child(at, "$schema"), dialect);
 	// This schema is where `raw` says; the schemas in it are elsewhere unless they say.
 	const saved = cx.here;
 	cx.here = cx.raw;

@@ -35,7 +35,8 @@ export type Closed = "a";
 /** nullable without type takes no effect. */
 export type Untyped = "a";
 
-export type Fixed = "a";
+/** A 3.0 Schema Object has no const: it says nothing. */
+export type Fixed = string | null;
 
 export type NotNull = string;
 

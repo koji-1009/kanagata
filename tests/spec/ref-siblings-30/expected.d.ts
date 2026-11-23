@@ -49,9 +49,7 @@ export interface schemas {
   Keyed: Keyed;
   MaybeKeyed: MaybeKeyed;
   ClosedKeyed: ClosedKeyed;
-  Way: Way;
-  Shipped: Shipped;
-  Delivery: Delivery;
+  NotBase: NotBase;
 }
 
 export type Base = {
@@ -131,24 +129,5 @@ export type MaybeKeyed = Keyed & Record<string, unknown> | null;
 /** Nor does type next to it keep the arrays of a member that requires a key the closed object forbids. */
 export type ClosedKeyed = null;
 
-export type Way = {
-  method?: "ship" | "pickup";
-};
-
-/** properties next to a $ref in a member declare no values if reads. */
-export type Shipped = Way & ({
-  address: string;
-  method?: "ship";
-} | {
-  address?: string;
-  method: "pickup";
-});
-
-/** Nor does enum next to a $ref. */
-export type Delivery = {
-  method?: "ship" & Name;
-  address: string;
-} | {
-  method: "pickup" & Name;
-  address?: string;
-};
+/** Nor are the $refs next to a $ref in a not that is ignored resolved. */
+export type NotBase = unknown;
