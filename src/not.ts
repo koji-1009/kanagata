@@ -291,7 +291,7 @@ function isOfKind(x: Value, kind: string): boolean {
 }
 
 /** Whether two JSON values are equal, numbers by value. */
-function sameValue(a: Value, b: Value): boolean {
+export function sameValue(a: Value, b: Value): boolean {
 	return equalValues(literal(a), literal(b));
 }
 

@@ -481,7 +481,11 @@ function choiceParts(
 			),
 		);
 		out.push(
-			union(key === "oneOf" ? shared(exclusive(cx, members, tys, group)) : tys),
+			union(
+				key === "oneOf"
+					? shared(exclusive(cx, members, tys, group, v.get("properties")))
+					: tys,
+			),
 		);
 	}
 	return out;

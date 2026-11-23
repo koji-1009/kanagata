@@ -15,6 +15,10 @@ export interface schemas {
   Alone: Alone;
   AnyObject: AnyObject;
   Declared: Declared;
+  Restated: Restated;
+  RestatedType: RestatedType;
+  Narrower: Narrower;
+  Fewer: Fewer;
   Either: Either;
 }
 
@@ -112,6 +116,47 @@ export type AnyObject = {
 export type Declared = {
   a?: unknown;
   b?: never;
+};
+
+/** A member property that restates the declaration of the property beside the oneOf, apart from annotations, asks nothing more. */
+export type Restated = {
+  a: string;
+  b?: never;
+} | {
+  a?: never;
+  b: string;
+};
+
+export type RestatedType = {
+  a: string;
+  b?: never;
+} | {
+  a?: never;
+  b: string;
+};
+
+/** One that asks more is not counted: an object with a and b may match both. */
+export type Narrower = {
+  a: string;
+  b?: string;
+} | {
+  a?: string;
+  b: string;
+};
+
+/** Nor is one that leaves out keywords of the declaration: without properties, additionalProperties: false rejects x. */
+export type Fewer = {
+  a: {
+    x?: unknown;
+  } & {
+    [key: string]: never;
+  };
+  b?: string;
+} | {
+  a?: {
+    x?: unknown;
+  };
+  b: string;
 };
 
 export type Either = {

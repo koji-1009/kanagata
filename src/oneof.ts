@@ -5,7 +5,8 @@
 // `null` two members list (`shared`), and among members that ask only for keys, the
 // objects with all of another's (`exclusive`).
 
-import { JsonObject, stringsIn, type Value } from "./json.ts";
+import { get, JsonObject, stringsIn, type Value } from "./json.ts";
+import { sameValue } from "./not.ts";
 import type { Ctx } from "./pointer.ts";
 import {
 	absent,
@@ -17,7 +18,7 @@ import {
 	UNKNOWN,
 	union,
 } from "./ty.ts";
-import { isAnnotation, REFS, refsAndAnnotations } from "./vocab.ts";
+import { asserted, isAnnotation, REFS, refsAndAnnotations } from "./vocab.ts";
 
 /**
  * oneOf admits a value only one member admits, so a literal or `null` two members
@@ -64,16 +65,20 @@ export function booleansListed(members: Ty[], values: readonly Ty[]): Ty[] {
  * or `({ b?: never } | { c?: never })` for `required: [b, c]`, with `b?: unknown;
  * c?: unknown` so that an object literal with one of them is not excess. One that has
  * all of another's keys admits nothing. Other members stay as they are: TypeScript
- * cannot say what they do not admit.
+ * cannot say what they do not admit. `declared` is the `properties` of the schema the
+ * `oneOf` is in.
  */
 export function exclusive(
 	cx: Ctx,
 	members: Value[],
 	tys: Ty[],
 	left: ReadonlySet<string>,
+	declared: Value | undefined,
 ): Ty[] {
 	// A key left out of this view is required on the other side only.
-	const keys = members.map((m) => keysOnly(cx, m)?.filter((k) => !left.has(k)));
+	const keys = members.map((m) =>
+		keysOnly(cx, m, undefined, declared)?.filter((k) => !left.has(k)),
+	);
 	const without = (key: string, ty: Ty): Prop => ({ key, ty, optional: true });
 	return tys.map((t, i) => {
 		const own = keys[i];
@@ -103,17 +108,18 @@ export function exclusive(
 
 /**
  * The keys a schema requires, when that is all it asks of an object: `required` (none
- * for an empty one), `type: object` and properties that admit any value, with
- * annotations, an object with one of them at least (none where `required` is absent);
- * a `$ref` or `$dynamicRef`, with annotations at most, to such a schema (see
- * `Ctx.onlyTarget`); or in 3.1 and 3.2, such keywords next to references to such schemas,
- * which require their keys too. One reached again on the way (`seen`), which is an
- * error, is none.
+ * for an empty one), `type: object` and properties that admit any value or, in the
+ * member itself, restate the property `declared` beside the `oneOf`, with annotations, an
+ * object with one of them at least (none where `required` is absent); a `$ref` or
+ * `$dynamicRef`, with annotations at most, to such a schema (see `Ctx.onlyTarget`); or in
+ * 3.1 and 3.2, such keywords next to references to such schemas, which require their keys
+ * too. One reached again on the way (`seen`), which is an error, is none.
  */
 function keysOnly(
 	cx: Ctx,
 	s: Value,
 	seen: ReadonlySet<string> = new Set(),
+	declared?: Value,
 ): string[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
 	// The keys each reference's target requires; undefined where one requires more, or is
@@ -137,7 +143,10 @@ function keysOnly(
 			(k === "type" && x === "object") ||
 			(k === "properties" &&
 				x instanceof JsonObject &&
-				x.entries.every(([, ps]) => admitsAnyValue(cx, ps))),
+				x.entries.every(
+					([key, ps]) =>
+						admitsAnyValue(cx, ps) || restates(ps, get(declared, key)),
+				)),
 	);
 	const keys = allowed ? reached() : undefined;
 	// Annotations alone admit every value, not only objects.
@@ -148,6 +157,23 @@ function keysOnly(
 	const own = stringsIn(s.get("required"));
 	// A key the target and the keywords next to it both require is one key.
 	return [...new Set([...keys, ...own])];
+}
+
+/**
+ * Whether a property schema of a `oneOf` member asks nothing its declaration beside the
+ * `oneOf` (`declared`) does not: it has the same keywords with equal values, annotations
+ * aside. Both are in the same schema resource, so equal references reach the same schema.
+ * Fewer keywords may ask more, as `additionalProperties: false` without `properties`.
+ */
+function restates(s: Value, declared: Value | undefined): boolean {
+	if (!(s instanceof JsonObject && declared instanceof JsonObject))
+		return false;
+	const within = (a: JsonObject, b: JsonObject) =>
+		asserted(a).every((k) => {
+			const x = b.get(k);
+			return x !== undefined && sameValue(a.get(k) as Value, x);
+		});
+	return within(s, declared) && within(declared, s);
 }
 
 /**
