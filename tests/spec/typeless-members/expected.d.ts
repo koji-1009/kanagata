@@ -28,6 +28,7 @@ export interface schemas {
   Keyed: Keyed;
   RefInMember: RefInMember;
   RefMember: RefMember;
+  RefBeside: RefBeside;
   RefTyped: RefTyped;
   TrueInMember: TrueInMember;
   FalseInMember: FalseInMember;
@@ -162,6 +163,9 @@ export type RefInMember = Keys & {
 
 /** So is a $ref member. */
 export type RefMember = (Keyed | null) & (Record<string, unknown> | null);
+
+/** And a $ref next to type, whose target applies as a member does. */
+export type RefBeside = (Keyed | null) & (Record<string, unknown> | null);
 
 /** A $ref to a schema with a type constrains every value. */
 export type RefTyped = Cat & (Record<string, unknown> | null);

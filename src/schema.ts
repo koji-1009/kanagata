@@ -40,6 +40,7 @@ import {
 	kindsOfMember,
 	passed,
 	passing,
+	passingTarget,
 	widen,
 } from "./kinds.ts";
 import { excluded, mayAdmit, negation, notContained, refuted } from "./not.ts";
@@ -263,20 +264,28 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 							: NEVER
 						: t,
 				);
+	// The schema a reference reaches applies to the value as an allOf member does, values
+	// of other kinds passing it (`passingTarget`); a schema that is only one is its target.
+	const target = (to: string, t: Ty) => {
+		const [met] = admitted([v], [t]) as [Ty];
+		return onlyTarget(cx, v) === undefined
+			? passingTarget(cx, v, cx.locate(to, at), met)
+			: met;
+	};
 	const r = v.str("$ref");
 	if (r !== undefined) {
 		const t = referenced(cx, v, r, at);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
 		// are ignored, nullable among them unless loose.
 		if (!cx.readsSiblings(v)) return loose ? union([t, NULL]) : t;
-		out.push(...admitted([v], [t]));
+		out.push(target(r, t));
 	}
 	// $dynamicRef is $ref, except where it reaches a $dynamicAnchor: then it reaches the
 	// one of that name in the outermost resource the value was reached through.
 	const dr = v.str("$dynamicRef");
 	if (dr !== undefined) {
-		const outer = cx.dynamicAnchorOf(cx.locate(dr, at));
-		out.push(...admitted([v], [referenced(cx, v, outer ?? dr, at)]));
+		const to = cx.dynamicAnchorOf(cx.locate(dr, at)) ?? dr;
+		out.push(target(to, referenced(cx, v, to, at)));
 	}
 	const c = v.get("const");
 	if (c !== undefined) out.push(literal(c));
@@ -729,9 +738,12 @@ function own(cx: Ctx, v: JsonObject, at: string): Ty {
 	// kinds: then those kinds, the keywords constraining their own. So does a `type` around
 	// it, except for a member whose other kinds the schemas around it pass (`passing`,
 	// `typelessKinds`): it is of its object and array kinds.
-	const keyed = keywordKinds(v);
 	// Keywords of no kind say none (most schemas without `type`: references, compositions).
-	const of = keyed.length === 0 ? undefined : keywordsOf(cx, v, keyed);
+	// Where they say some, the schemas its references reach say kinds of the value too.
+	const of =
+		keywordKinds(cx, v).length === 0
+			? undefined
+			: keywordsOf(cx, v, keywordKinds(cx, v, true));
 	if (of !== undefined)
 		return union(
 			of.map((k) =>
