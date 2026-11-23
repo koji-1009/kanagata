@@ -1,0 +1,11 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/a": {
+      "get": {
+        "parameters": [{ "$ref": "http://[bad/p" }],
+        "responses": { "204": { "description": "done" } }
+      }
+    }
+  }
+}

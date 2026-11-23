@@ -1,0 +1,1 @@
+#/components/schemas/A/properties/x: $ref has a malformed percent-encoding: schemas/a%zz.json

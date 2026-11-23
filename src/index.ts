@@ -5,7 +5,14 @@ import { GenerateError } from "./error.ts";
 import { inputNames, typeNames } from "./ident.ts";
 import { get, JsonObject, parse, type Value } from "./json.ts";
 import { paths } from "./operation.ts";
-import { Ctx, child, type Diag, DiagError, type Hoisted } from "./pointer.ts";
+import {
+	Ctx,
+	child,
+	type Diag,
+	DiagError,
+	decodes,
+	type Hoisted,
+} from "./pointer.ts";
 import { readDialect, schema, schemaDoc } from "./schema.ts";
 import {
 	admitsAny,
@@ -37,7 +44,7 @@ export interface Generated {
 
 /** Where the document is, so that `$ref`s to other files can be followed. */
 export interface Source {
-	/** The document's absolute URL, such as a `file:` URL; relative `$ref`s resolve against it. */
+	/** The document's absolute URL, such as a `file:` URL; relative `$ref`s resolve against it. Any other string is an `input` GenerateError. */
 	url: string;
 	/** The text of the document at an absolute URL; throws, with a message saying why, when it cannot be read. */
 	read: (url: string) => string;
@@ -72,6 +79,7 @@ export function generate(
 	source?: Source,
 	options: Options = {},
 ): Generated {
+	if (source !== undefined) checkSource(source.url);
 	const read: Diag[] = [];
 	const root = parseText(src, read);
 	if (!(root instanceof JsonObject))
@@ -185,6 +193,23 @@ export function generate(
 
 	const code = render({ ...ops, schemas: index, decls }, name, options.version);
 	return { code, warnings: [...read, ...cx.warnings] };
+}
+
+/**
+ * Accepts a source URL that `$ref`s can resolve against and messages can name files by: an
+ * absolute URL whose percent-encoding decodes. Anything else is an input error.
+ */
+function checkSource(url: string): void {
+	if (!URL.canParse(url))
+		throw new GenerateError(
+			"input",
+			`source.url is not an absolute URL: ${url}`,
+		);
+	if (!decodes(url))
+		throw new GenerateError(
+			"input",
+			`source.url has a malformed percent-encoding: ${url}`,
+		);
 }
 
 /** Parses another document; its problems are located in that file (`defs/a.yaml:3:1`, `defs/a.yaml#/b`). */

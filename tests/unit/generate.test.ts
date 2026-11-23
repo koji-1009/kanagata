@@ -417,6 +417,24 @@ function error2(
 	assert.fail(`generated: ${src}`);
 }
 
+test("a source URL that is not an absolute URL, or whose percent-encoding does not decode, is an input error", () => {
+	const src =
+		'{"openapi":"3.1.0","components":{"schemas":{"A":{"$ref":"defs/a.json"}}}}';
+	const read = () => '{"type":"string"}';
+	for (const [url, message] of [
+		["openapi.json", "source.url is not an absolute URL: openapi.json"],
+		[
+			"file:///api%zz/openapi.json",
+			"source.url has a malformed percent-encoding: file:///api%zz/openapi.json",
+		],
+	] as const) {
+		const e = error2(src, { url, read });
+		assert.equal(e.kind, "input");
+		assert.equal(e.message, message);
+		assert.equal(e.diag, undefined);
+	}
+});
+
 test("the YAML merge key is not YAML 1.2: it is a property named <<, with a warning", () => {
 	const g = generate(
 		"openapi: 3.1.0\ncomponents:\n  schemas:\n    B: &b { type: string }\n    A:\n      <<: *b\n      description: x\n",

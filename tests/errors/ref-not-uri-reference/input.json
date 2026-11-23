@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "A": { "type": "object", "properties": { "x": { "$ref": "http://[bad/x" } } }
+    }
+  }
+}

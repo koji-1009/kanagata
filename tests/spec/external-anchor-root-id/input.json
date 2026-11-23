@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Holder": {
+        "description": "A $ref by a file's URL reaches the schema resource its root's $id makes it: an $anchor in it, whose $refs resolve against that $id.",
+        "type": "object",
+        "properties": { "name": { "$ref": "thing.json#name" } }
+      }
+    }
+  }
+}

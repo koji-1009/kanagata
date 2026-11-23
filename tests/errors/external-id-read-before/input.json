@@ -1,0 +1,10 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Read": { "type": "object", "properties": { "thing": { "$ref": "thing.json" } } },
+      "ById": { "type": "object", "properties": { "thing": { "$ref": "https://example.com/thing" } } }
+    }
+  }
+}

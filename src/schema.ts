@@ -187,6 +187,74 @@ function bytesIn(
 /** The keywords that reach another schema for the same value (see `Ctx.reached`). */
 export const REFS = new Set(["$ref", "$dynamicRef"]);
 
+/** The keywords kanagata reads whose value is a schema, a list of schemas, or schemas by name. */
+const SUBSCHEMA = new Set([
+	"not",
+	"contains",
+	"items",
+	"additionalProperties",
+	"propertyNames",
+	"unevaluatedItems",
+	"unevaluatedProperties",
+]);
+const SUBSCHEMA_LISTS = new Set(["allOf", "anyOf", "oneOf", "prefixItems"]);
+const SUBSCHEMA_MAPS = new Set([
+	"properties",
+	"patternProperties",
+	"dependentSchemas",
+]);
+
+/**
+ * Resolves the `$ref`s and `$dynamicRef`s of a schema kanagata reads but does not convert
+ * (a `not` or an `if` / `then` / `else` it ignores, `contains`), in it and in the schemas
+ * they reach but components (which are converted), so that one that does not resolve is
+ * an error where it is, as in a schema converted.
+ */
+function resolveRefs(
+	cx: Ctx,
+	v: Value | undefined,
+	at: string,
+	seen = new Set<string>(),
+): void {
+	if (!(v instanceof JsonObject)) return;
+	const follow = (r: string): void => {
+		const target = cx.locate(r, at);
+		if (seen.has(target.uri) || cx.componentKey(target.value) !== undefined)
+			return;
+		seen.add(target.uri);
+		cx.inTarget(target, () =>
+			resolveRefs(cx, target.value, target.where, seen),
+		);
+	};
+	cx.inOwnResource(v, () => {
+		const r = v.str("$ref");
+		if (r !== undefined) follow(r);
+		// In 3.0 the keywords next to $ref are ignored.
+		if (!cx.readsSiblings(v)) return;
+		const dr = v.str("$dynamicRef");
+		if (dr !== undefined) follow(dr);
+		for (const [k, x] of v.entries) {
+			const here = child(at, k);
+			if (SUBSCHEMA.has(k)) resolveRefs(cx, x, here, seen);
+			else if (SUBSCHEMA_LISTS.has(k) && Array.isArray(x))
+				x.forEach((s, i) => {
+					resolveRefs(cx, s, child(here, String(i)), seen);
+				});
+			else if (SUBSCHEMA_MAPS.has(k) && x instanceof JsonObject)
+				for (const [name, s] of x.entries)
+					resolveRefs(cx, s, child(here, name), seen);
+		}
+	});
+}
+
+/** Whether a schema's `if` / `then` / `else` ask anything: `if` and `then` or `else`. */
+function conditional(v: JsonObject): boolean {
+	return (
+		v.get("if") !== undefined &&
+		(v.get("then") !== undefined || v.get("else") !== undefined)
+	);
+}
+
 function convert(cx: Ctx, v: JsonObject, at: string): Ty {
 	// The schemas in it with `contains` read what its `unevaluatedItems` says of their items.
 	const said = saying(cx, v, at);
@@ -355,18 +423,17 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 	}
 	// The value is as `then` says where `if` admits it, and as `else` says where it does
 	// not: TypeScript can say so where it can say which values `if` does not admit.
-	const cond = v.get("if");
-	if (
-		cond !== undefined &&
-		(v.get("then") !== undefined || v.get("else") !== undefined)
-	) {
+	if (conditional(v)) {
+		const cond = v.get("if") as Value;
 		const not = refuted(cx, cond, [v, ...cx.around]);
-		if (not === undefined)
+		if (not === undefined) {
 			cx.warn(
 				child(at, "if"),
 				"if / then / else cannot be expressed in TypeScript; ignored",
 			);
-		else {
+			for (const key of ["if", "then", "else"])
+				resolveRefs(cx, v.get(key), child(at, key));
+		} else {
 			const branches = [cond, v.get("then") ?? true, v.get("else") ?? true];
 			const [i, t, e] = membersIn(cx, v, branches, group, at, [
 				"if",
@@ -627,6 +694,7 @@ function keywordParts(
 	// beside it may say which, and then how many (see `saidHolders`).
 	const contains = v.get("contains");
 	if (contains !== undefined) {
+		resolveRefs(cx, contains, child(at, "contains"));
 		const min = count(v, "minContains") ?? 1;
 		const max = count(v, "maxContains");
 		const none = max === 0 ? notContained(cx, v, contains) : undefined;
@@ -676,6 +744,7 @@ function keywordParts(
 	}
 	const n = v.get("not");
 	if (n !== undefined) {
+		resolveRefs(cx, n, child(at, "not"));
 		const t = negation(n);
 		if (t !== undefined) parts.push(t);
 		else if (excluded(v) === undefined)
@@ -816,16 +885,15 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 			return expand(cx, located, cx.componentKey(located.value));
 	}
 	if (r.startsWith(SCHEMA_PREFIX) && cx.inDocument && !cx.dynamicScope) {
-		const rest = r.slice(SCHEMA_PREFIX.length);
-		if (!rest.includes("/")) {
-			const name = unescapeToken(rest);
+		const name = componentName(r.slice(SCHEMA_PREFIX.length));
+		if (name !== undefined) {
 			if (!cx.schemas.has(name))
 				throw new DiagError(at, `$ref target not found: ${r}`);
 			return ref(name, cx.mode);
 		}
 	}
 	const located = cx.locate(r, at);
-	const { value: target, base, uri } = located;
+	const { value: target, base } = located;
 	// A named type is the target as reached from the document. Where a $dynamicRef in it
 	// reaches another $dynamicAnchor from here, it is written out here.
 	if (cx.dynamicScope && rescoped(cx, target, base))
@@ -835,10 +903,23 @@ function reference(cx: Ctx, r: string, at: string): Ty {
 	const key = cx.componentKey(target);
 	if (key !== undefined) {
 		if (at !== child("#/components/schemas", key)) return ref(key, cx.mode);
-	} else if (cx.isFile(base) || cx.isHoisted(uri)) {
+	} else if (cx.isFile(base) || cx.isHoisted(located)) {
 		return ref(cx.hoist(target, located), cx.mode);
 	}
 	return expand(cx, located, key);
+}
+
+/**
+ * The component the rest of a `#/components/schemas/…` `$ref` names: undefined where it
+ * goes on into the component, or where its percent-encoding is malformed (`locate` says so).
+ */
+function componentName(rest: string): string | undefined {
+	if (rest.includes("/")) return undefined;
+	try {
+		return unescapeToken(rest);
+	} catch {
+		return undefined;
+	}
 }
 
 /**
@@ -905,7 +986,7 @@ function expand(
 			cx.withRaw(cx.here, () => schema(cx, target, where)),
 		);
 		// It reached itself, so it has a name now: every view refers to it by that.
-		return cx.isHoisted(uri) ? ref(cx.hoist(target, located), cx.mode) : t;
+		return cx.isHoisted(located) ? ref(cx.hoist(target, located), cx.mode) : t;
 	} finally {
 		cx.leave();
 	}

@@ -57,7 +57,28 @@ function decodePath(segment: string): string {
 	return decodeURIComponent(segment);
 }
 
+/**
+ * Why a `$ref`, `$id` or `$self` is no URI reference: a URL does not parse from it (against
+ * `base`), or its percent-encoding does not decode, as UTF-8, to the file path or JSON
+ * Pointer it spells (`%zz`, `%FF`). undefined for a URI reference.
+ */
+function notUriReference(s: string, base: string): string | undefined {
+	if (!URL.canParse(s, base)) return "is not a URI reference";
+	return decodes(s) ? undefined : "has a malformed percent-encoding";
+}
+
+/** Whether a URI's percent-encoding decodes, as UTF-8. */
+export function decodes(uri: string): boolean {
+	try {
+		decodeURIComponent(uri);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 interface Index {
+	/** The document's schema resources (`$id`); another file's are known inside it alone (`Ctx.#idsIn`). */
 	ids: Map<string, Value>;
 	anchors: Map<string, Value>;
 	/** The `$dynamicAnchor`s, by resource and name (`https://example.com/tree#node`). */
@@ -69,11 +90,16 @@ interface Index {
 }
 
 /**
- * Adds the schema resources (`$id`) and `$anchor`s in `doc` to the index, by absolute
- * URI. Values of `example`, `default`, `const` and `enum` are data, not schemas, unless
- * the key names a property (in `properties`, `$defs`, …).
+ * Adds the schema resources (`$id`) in `doc` to `ids` and its `$anchor`s to the index, by
+ * absolute URI. Values of `example`, `default`, `const` and `enum` are data, not schemas,
+ * unless the key names a property (in `properties`, `$defs`, …).
  */
-function indexIds(index: Index, doc: Value, base: string): void {
+function indexIds(
+	index: Index,
+	ids: Map<string, Value>,
+	doc: Value,
+	base: string,
+): void {
 	const walk = (v: Value, base: string, names: boolean): void => {
 		if (Array.isArray(v)) {
 			for (const x of v) walk(x, base, false);
@@ -83,9 +109,9 @@ function indexIds(index: Index, doc: Value, base: string): void {
 		let here = base;
 		const id = v.str("$id");
 		// An $id that is not a URI cannot be referred to.
-		if (id !== undefined && URL.canParse(id, base)) {
+		if (id !== undefined && notUriReference(id, base) === undefined) {
 			here = withoutFragment(new URL(id, base));
-			if (!index.ids.has(here)) index.ids.set(here, v);
+			if (!ids.has(here)) ids.set(here, v);
 			if (!index.resources.has(v)) index.resources.set(v, here);
 		}
 		// A $dynamicAnchor is a plain-name fragment too (JSON Schema 2020-12, 8.2.2).
@@ -205,8 +231,11 @@ export class Ctx {
 	readonly looseNullable: boolean;
 	/** Schemas from other files that got a key, in the order they were first referred to. */
 	readonly hoisted: Hoisted[] = [];
-	/** Hoisted keys by the URI of the schema. */
-	readonly #hoistedKeys = new Map<string, string>();
+	/**
+	 * Hoisted keys by the schema, whichever URI reaches it (a pointer into its file, or the
+	 * file's `$id`).
+	 */
+	readonly #hoistedKeys = new Map<Value, string>();
 	readonly #hoistedNames = new Set<string>();
 
 	/**
@@ -218,8 +247,7 @@ export class Ctx {
 		value: Value,
 		target: { base: string; uri: string; where: string },
 	): string {
-		// By location, not by value: two equal `true` schemas are two schemas.
-		const known = this.#hoistedKeys.get(target.uri);
+		const known = this.#hoistedKeys.get(value);
 		if (known !== undefined) return known;
 		const url = new URL(target.uri);
 		const fragment = url.hash.slice(1);
@@ -233,7 +261,7 @@ export class Ctx {
 			this.schemas.has(k) || this.#hoistedNames.has(k);
 		let key = name;
 		for (let n = 2; taken(key); n++) key = `${name}${n}`;
-		this.#hoistedKeys.set(target.uri, key);
+		this.#hoistedKeys.set(value, key);
 		this.#hoistedNames.add(key);
 		this.hoisted.push({ key, value, base: target.base, where: target.where });
 		return key;
@@ -259,7 +287,8 @@ export class Ctx {
 		const self = this.v32 ? get(root, "$self") : undefined;
 		if (
 			self !== undefined &&
-			(typeof self !== "string" || !URL.canParse(self, this.documentUrl))
+			(typeof self !== "string" ||
+				notUriReference(self, this.documentUrl) !== undefined)
 		)
 			throw new DiagError("#/$self", "$self must be a URI reference");
 		this.documentBase =
@@ -595,41 +624,66 @@ export class Ctx {
 	 * the base URI it lives under, and where it is, for messages.
 	 */
 	locate(r: string, at: string): Located {
+		const found = this.#found(r, at);
+		if (found instanceof GenerateError) throw found;
+		return found;
+	}
+
+	/** `locate`, or undefined where the document keeps it from finding the target (the conversion reports why, where it is). */
+	tryLocate(r: string): Located | undefined {
+		const found = this.#found(r, "");
+		return found instanceof GenerateError ? undefined : found;
+	}
+
+	/**
+	 * What a `$ref` reaches, or the document's error that keeps it from being found, located
+	 * at `at`; any other error is kanagata's, and is thrown.
+	 */
+	#found(r: string, at: string): Located | GenerateError {
 		// What a $ref reaches from a base never changes: it is found once.
 		const key = `${this.base} ${r}`;
-		let found = this.#located.get(key);
-		if (found === undefined) {
-			found = this.#find(r, at);
-			this.#located.set(key, found);
-		}
+		const known = this.#located.get(key);
+		if (known !== undefined) return known;
+		const found = this.#find(r, at);
+		if (!(found instanceof GenerateError)) this.#located.set(key, found);
 		return found;
 	}
 
 	readonly #located = new Map<string, Located>();
 
-	#find(r: string, at: string): Located {
+	#find(r: string, at: string): Located | GenerateError {
+		const why = notUriReference(r, this.base);
+		if (why !== undefined) return new DiagError(at, `$ref ${why}: ${r}`);
 		const url = new URL(r, this.base);
 		const fragment = url.hash.slice(1);
 		// A reference by the URL the document was read from still means the document.
 		const named = withoutFragment(url);
 		const resource = named === this.documentUrl ? this.documentBase : named;
 		const index = this.#ids();
+		// The file the $ref is in declares the resource, or the document does, or it is a file.
 		const doc =
 			resource === this.documentBase
 				? this.root
-				: (index.ids.get(resource) ?? this.#read(resource, r, at));
-		const value =
-			fragment === "" || fragment.startsWith("/")
-				? pointer(doc, `#${fragment}`)
-				: index.anchors.get(`${resource}#${fragment}`);
+				: (this.#idsIn.get(this.base)?.get(resource) ??
+					index.ids.get(resource) ??
+					this.#files.get(resource) ??
+					this.#read(resource, r, at));
+		if (doc instanceof GenerateError) return doc;
+		// A plain name is an $anchor in the resource the document is: a file whose root has an
+		// $id is that resource (3.1, 3.2), so its $refs resolve against the $id.
+		const anchored = fragment !== "" && !fragment.startsWith("/");
+		const scope = anchored ? (this.ownResource(doc) ?? resource) : resource;
+		const value = anchored
+			? index.anchors.get(`${scope}#${fragment}`)
+			: pointer(doc, `#${fragment}`);
 		if (value === undefined)
-			throw new DiagError(at, `$ref target not found: ${r}`);
+			return new DiagError(at, `$ref target not found: ${r}`);
 		return {
 			value,
 			base: fragment.startsWith("/")
 				? this.#within(doc, fragment, resource)
-				: resource,
-			uri: `${resource}#${fragment}`,
+				: scope,
+			uri: `${scope}#${fragment}`,
 			where: this.where(resource, fragment),
 		};
 	}
@@ -645,7 +699,7 @@ export class Ctx {
 		// The pointer resolved, so every token names a member or an index.
 		for (const raw of fragment.slice(1).split("/")) {
 			const id = str(cur, "$id");
-			if (id !== undefined && URL.canParse(id, base))
+			if (id !== undefined && notUriReference(id, base) === undefined)
 				base = withoutFragment(new URL(id, base));
 			const token = unescapeToken(raw);
 			cur = Array.isArray(cur) ? cur[Number(token)] : get(cur, token);
@@ -653,18 +707,20 @@ export class Ctx {
 		return base;
 	}
 
-	/** Whether a schema is hoisted, by its URI. */
-	isHoisted(uri: string): boolean {
-		return this.#hoistedKeys.has(uri);
+	/** Whether a schema a reference reaches is hoisted. */
+	isHoisted(target: { value: Value }): boolean {
+		return this.#hoistedKeys.has(target.value);
 	}
 
 	/**
 	 * Loads another document, once, and indexes its `$id`s and `$anchor`s. It is known by
-	 * the URL it is read from: kanagata reads files, so another document's `$self` is not read.
+	 * the URL it is read from: kanagata reads files, so another document's `$self` is not
+	 * read, and its `$id`s are known inside it alone, whatever files were read before.
+	 * The error where it cannot be read or parsed.
 	 */
-	#read(resource: string, r: string, at: string): Value {
+	#read(resource: string, r: string, at: string): Value | GenerateError {
 		if (this.#load === undefined)
-			throw new DiagError(
+			return new DiagError(
 				at,
 				`external $ref, but the document's location is unknown: ${r}`,
 			);
@@ -672,38 +728,37 @@ export class Ctx {
 		try {
 			doc = this.#load(resource);
 		} catch (e) {
-			if (e instanceof GenerateError) throw e;
-			throw new DiagError(
+			if (e instanceof GenerateError) return e;
+			return new DiagError(
 				at,
 				`cannot read ${this.where(resource)}: ${(e as Error).message}`,
 			);
 		}
-		const index = this.#ids();
-		index.ids.set(resource, doc);
-		indexIds(index, doc, resource);
-		this.#files.add(resource);
+		const ids = new Map<string, Value>();
+		indexIds(this.#ids(), ids, doc, resource);
+		for (const uri of [resource, ...ids.keys()])
+			if (!this.#idsIn.has(uri)) this.#idsIn.set(uri, ids);
+		this.#files.set(resource, doc);
 		return doc;
 	}
 
-	readonly #files = new Set<string>();
+	/** Other files, by the URL each is read from. */
+	readonly #files = new Map<string, Value>();
 
-	/** Whether a base URI is another file (not the document, nor an `$id` resource). */
+	/** The schema resources (`$id`) of the file each base URI in another file is in: its URL, or a resource it declares. */
+	readonly #idsIn = new Map<string, Map<string, Value>>();
+
+	/** Whether a base URI is in another file: its URL, or a schema resource (`$id`) it declares. */
 	isFile(base: string): boolean {
-		return this.#files.has(base);
-	}
-
-	/** `locate`, or undefined where it would fail (the conversion reports the failure). */
-	tryLocate(r: string): Located | undefined {
-		try {
-			return this.locate(r, "");
-		} catch {
-			return undefined;
-		}
+		return this.#idsIn.has(base);
 	}
 
 	#index?: Index;
 
-	/** Every schema resource (`$id`) and `$anchor` in the document, by absolute URI, found on first use; other documents add theirs as they load. */
+	/**
+	 * Every schema resource (`$id`) and `$anchor` in the document, by absolute URI, found on
+	 * first use; other files add their `$anchor`s as they load, and keep their `$id`s apart.
+	 */
 	#ids(): Index {
 		if (this.#index !== undefined) return this.#index;
 		const index: Index = {
@@ -713,7 +768,7 @@ export class Ctx {
 			resources: new Map(),
 			dynamicRefs: false,
 		};
-		indexIds(index, this.root, this.documentBase);
+		indexIds(index, index.ids, this.root, this.documentBase);
 		this.#index = index;
 		return index;
 	}

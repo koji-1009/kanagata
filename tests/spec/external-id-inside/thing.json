@@ -1,0 +1,13 @@
+{
+  "$id": "https://example.com/thing",
+  "description": "A file's $ids are known inside it: its $refs reach its schemas by them.",
+  "type": "object",
+  "properties": {
+    "name": { "$ref": "https://example.com/thing#/$defs/name" },
+    "tag": { "$ref": "tag" }
+  },
+  "$defs": {
+    "name": { "type": "string" },
+    "tag": { "$id": "tag", "type": "boolean" }
+  }
+}

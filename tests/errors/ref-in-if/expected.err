@@ -1,0 +1,1 @@
+#/components/schemas/Order/if/allOf/0: $ref target not found: #/components/schemas/Shipped
