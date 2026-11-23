@@ -385,7 +385,7 @@ test("usage errors exit 2", () => {
 	}
 	const { io, out } = memoryIo();
 	assert.equal(run([], io), 2);
-	assert.equal(out.stderr, `${HELP}\n`);
+	assert.equal(out.stderr, HELP);
 });
 
 test("help and version", () => {
