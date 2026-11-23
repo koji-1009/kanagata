@@ -31,7 +31,6 @@ export interface schemas {
   Nullable: Nullable;
   Typeless: Typeless;
   Nothing: Nothing;
-  Number: Number;
 }
 
 export type Prefix = `https://${string}`;
@@ -98,6 +97,3 @@ export type Typeless = "a" | number | boolean | null | unknown[] | Record<string
 
 /** maxLength: 0 admits the empty string, which the pattern does not. */
 export type Nothing = never;
-
-/** Without type, bounds that admit one number are it where the value is a number. */
-export type Number = 3;

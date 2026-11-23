@@ -6,6 +6,7 @@ export interface operations {}
 
 export interface schemas {
   Listed: Listed;
+  ListedOpen: ListedOpen;
   Prefixed: Prefixed;
   AtMostOne: AtMostOne;
 }
@@ -14,6 +15,12 @@ export interface schemas {
 export type Listed = {
   a?: string;
   b?: string;
+};
+
+/** Without additionalProperties, it has any value. */
+export type ListedOpen = {
+  a?: unknown;
+  b?: unknown;
 };
 
 /** The index signature by the pattern's keys admits the optional property's type, and undefined. */

@@ -38,8 +38,7 @@ test("an error goes to stderr with exit code 2", () => {
 		{ encoding: "utf8" },
 	);
 	assert.equal(out.status, 2);
-	assert.match(out.stderr, /^does-not-exist\.json: \S/);
-	assert.doesNotMatch(out.stderr, /ENOENT/);
+	assert.equal(out.stderr, "does-not-exist.json: no such file or directory\n");
 });
 
 test("a stdout nobody reads exits 2", async () => {

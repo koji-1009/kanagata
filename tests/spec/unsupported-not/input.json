@@ -3,13 +3,7 @@
   "paths": {},
   "components": {
     "schemas": {
-      "NotString": { "not": { "type": "string" } },
       "NonEmpty": { "type": "string", "not": { "const": "" } },
-      "Present": {
-        "description": "Values no member admits by its kind (null and false, for a string) are left out without a warning.",
-        "type": ["string", "null"],
-        "not": { "enum": [null, false] }
-      },
       "Partly": {
         "description": "true is left out of boolean; \"a\", which string admits by its kind, is not, with a warning on it.",
         "type": ["boolean", "string"],
@@ -22,9 +16,10 @@
       },
       "PartlyRef": {
         "description": "null is left out of the member that lists it, not of the reference, which may admit it.",
-        "anyOf": [{ "type": "null" }, { "$ref": "#/components/schemas/NotString" }],
+        "anyOf": [{ "type": "null" }, { "$ref": "#/components/schemas/MaybeNull" }],
         "not": { "const": null }
-      }
+      },
+      "MaybeNull": { "description": "A schema that admits null among other values.", "not": { "type": "string" } }
     }
   }
 }

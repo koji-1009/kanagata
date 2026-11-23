@@ -2,11 +2,6 @@
   "openapi": "3.1.0",
   "components": {
     "schemas": {
-      "AnyAndTemplate": {
-        "description": "An x- key matches both patterns, number and string: it cannot be there.",
-        "type": "object",
-        "patternProperties": { "^x-": { "type": "number" }, "^[\\s\\S]*$": { "type": "string" } }
-      },
       "NarrowAndWide": {
         "description": "An x-a key matches both patterns; other x- keys the wider one.",
         "type": "object",

@@ -7,6 +7,7 @@ export interface operations {}
 export interface schemas {
   Below: Below;
   Inclusive: Inclusive;
+  Integers: Integers;
   Point: Point;
 }
 
@@ -15,6 +16,9 @@ export type Below = 1;
 
 /** false leaves it inclusive. */
 export type Inclusive = 1 | 2;
+
+/** The integers between the bounds leave out an exclusive one. */
+export type Integers = 0 | 1 | 2 | 3 | 4;
 
 /** Bounds that meet, one of them exclusive, admit nothing. */
 export type Point = never;

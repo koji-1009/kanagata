@@ -1,0 +1,22 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "KeyedInner": { "$id": "https://example.com/keyed-inner", "required": ["a"] },
+      "KeyedHolder": { "$id": "https://example.com/keyed-holder", "$ref": "keyed-inner" },
+      "PassedById": {
+        "description": "The member asks a key of objects only, through a $ref that resolves against its target's own $id: null passes it.",
+        "type": ["object", "null"],
+        "allOf": [{ "$ref": "#/components/schemas/KeyedHolder" }]
+      },
+      "ObjInner": { "$id": "https://example.com/obj-inner", "type": "object" },
+      "ObjHolder": { "$id": "https://example.com/obj-holder", "$ref": "obj-inner" },
+      "SaidById": {
+        "description": "The kind is said through it: minItems asks nothing of the object.",
+        "minItems": 1,
+        "allOf": [{ "$ref": "#/components/schemas/ObjHolder" }]
+      }
+    }
+  }
+}

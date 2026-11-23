@@ -36,6 +36,12 @@
       "ContainsNoShort": { "description": "As contains's keywords read them.", "type": "array", "items": { "enum": ["a", "bb"] }, "contains": { "maxLength": 1 }, "minContains": 0, "maxContains": 0 },
       "ContainsNoObject": { "description": "Not where they cannot tell.", "type": "array", "items": { "enum": ["a"] }, "contains": { "minProperties": 1 }, "minContains": 0, "maxContains": 0 },
       "ContainsPastPrefix": { "description": "Past prefixItems, whose items items does not list, the items are those it lists that contains rejects.", "type": "array", "prefixItems": [{ "type": "string" }], "items": { "enum": ["a", "b"] }, "contains": { "const": "a" }, "minContains": 0, "maxContains": 0 },
+      "DepReq": {
+        "description": "dependentRequired: without a, or with b, as the properties type them.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "dependentRequired": { "a": ["b"] }
+      },
       "NoDeps": { "description": "dependentRequired with no keys asks nothing.", "type": "object", "dependentRequired": { "a": [], "b": "c" } },
       "OrNull": { "description": "Object keywords like these do not apply to null.", "type": ["object", "null"], "dependentRequired": { "a": ["b"] } }
     }

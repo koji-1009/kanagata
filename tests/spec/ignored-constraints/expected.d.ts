@@ -6,25 +6,14 @@ export interface operations {}
 
 export interface schemas {
   Email: Email;
-  Age: Age;
   Tags: Tags;
   Shape: Shape;
 }
 
 export type Email = string;
 
-export type Age = integers<`${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `1${0 | 1 | 2 | 3 | 4}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`>;
-
-export type Tags = [string, ...repeated<[string?], 4>];
+export type Tags = string[];
 
 export type Shape = {
   kind?: string;
 };
-
-/** `N` times the items of `T`, by the digits `D` of `N`: `repeated<[string?], 3>` is `[string?, string?, string?]`. */
-export type repeated<T extends unknown[], N extends number, D extends string = `${N}`, R extends unknown[] = []> = D extends `${infer F extends number}${infer E}`
-  ? repeated<T, N, E, [...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...R, ...[[], T, [...T, ...T], [...T, ...T, ...T], [...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T], [...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T, ...T]][F]]>
-  : R;
-
-/** The integers the decimal texts `S` spell: ``integers<`1${0 | 1}`>`` is `10 | 11`. */
-export type integers<S extends string> = S extends `${infer N extends number}` ? N : never;

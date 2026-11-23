@@ -12,13 +12,7 @@
         "dependentSchemas": { "kind": { "required": ["x"] } },
         "unevaluatedProperties": false
       },
-      "Names": { "type": "object", "propertyNames": { "enum": ["a", "b"] } },
-      "Contains": { "type": "array", "items": { "type": ["string", "number"] }, "contains": { "type": "string" } },
-      "DepReq": {
-        "type": "object",
-        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
-        "dependentRequired": { "a": ["b"] }
-      }
+      "Contains": { "type": "array", "items": { "type": ["string", "number"] }, "contains": { "type": "string" } }
     }
   }
 }

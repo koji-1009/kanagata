@@ -369,12 +369,16 @@ test("objects and arrays inside query arrays are JSON in every arrayFormat", asy
 	await client(rec, { arrayFormat: "comma" }).get("/q", { query });
 	await client(rec).get("/q", { query });
 	await client(rec, { arrayFormat: "brackets" }).get("/q", { query });
+	await client(rec, { arrayFormat: "space" }).get("/q", { query });
+	await client(rec, { arrayFormat: "pipe" }).get("/q", { query });
 	assert.deepEqual(
 		rec.requests.map((r) => new URL(r.url).search),
 		[
 			"?f=%7B%22a%22%3A1%7D,%5B2%2C3%5D,4",
 			"?f=%7B%22a%22%3A1%7D&f=%5B2%2C3%5D&f=4",
 			"?f%5B%5D=%7B%22a%22%3A1%7D&f%5B%5D=%5B2%2C3%5D&f%5B%5D=4",
+			"?f=%7B%22a%22%3A1%7D%20%5B2%2C3%5D%204",
+			"?f=%7B%22a%22%3A1%7D%7C%5B2%2C3%5D%7C4",
 		],
 	);
 	// So in URL-encoded bodies, which are serialized the same way.
@@ -383,7 +387,7 @@ test("objects and arrays inside query arrays are JSON in every arrayFormat", asy
 		contentType: "application/x-www-form-urlencoded",
 	});
 	assert.equal(
-		await rec.request(3).text(),
+		await rec.request(5).text(),
 		"items=%7B%22price%22%3A%22p1%22%7D&items=%7B%22price%22%3A%22p2%22%7D",
 	);
 	// A Blob is not text in any array.
@@ -393,7 +397,7 @@ test("objects and arrays inside query arrays are JSON in every arrayFormat", asy
 		}),
 		{ name: "TypeError", message: "a Blob cannot be URL-encoded: f" },
 	);
-	assert.equal(rec.requests.length, 4);
+	assert.equal(rec.requests.length, 6);
 });
 
 test("a baseUrl with a query keeps it, and the path goes before it", async () => {

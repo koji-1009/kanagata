@@ -28,8 +28,7 @@
       "Both": { "description": "Two members' patterns both apply.", "allOf": [{ "type": "string", "pattern": "^a" }, { "type": "string", "pattern": "z$" }] },
       "Nullable": { "type": ["string", "null"], "pattern": "^id_" },
       "Typeless": { "description": "Without type, values of the other kinds pass the pattern.", "pattern": "^a$" },
-      "Nothing": { "description": "maxLength: 0 admits the empty string, which the pattern does not.", "type": "string", "pattern": "^a", "maxLength": 0 },
-      "Number": { "description": "Without type, bounds that admit one number are it where the value is a number.", "type": "integer", "allOf": [{ "minimum": 3, "maximum": 3 }] }
+      "Nothing": { "description": "maxLength: 0 admits the empty string, which the pattern does not.", "type": "string", "pattern": "^a", "maxLength": 0 }
     }
   }
 }

@@ -17,7 +17,7 @@ export interface schemas {
   ItemsOrNumber: ItemsOrNumber;
   RequiredOrMemberItems: RequiredOrMemberItems;
   ItemsOrMemberDependent: ItemsOrMemberDependent;
-  OneOfKind: OneOfKind;
+  AnyOfKind: AnyOfKind;
   MemberDependentOrItems: MemberDependentOrItems;
   MemberKeysOrContains: MemberKeysOrContains;
   MemberOrNull: MemberOrNull;
@@ -94,8 +94,8 @@ export type ItemsOrMemberDependent = {
   b: {} | null;
 } | [unknown, ...unknown[]];
 
-/** So do anyOf and oneOf members: each constrains its own kind, and the schema's other kinds pass it. */
-export type OneOfKind = Record<string, unknown> | unknown[];
+/** So do anyOf members: each constrains its own kind, and the schema's other kinds pass it. */
+export type AnyOfKind = Record<string, unknown> | unknown[];
 
 /** A member with keywords of several kinds constrains each kind by its own. */
 export type MemberDependentOrItems = {

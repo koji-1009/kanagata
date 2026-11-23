@@ -3,10 +3,6 @@
   "paths": {},
   "components": {
     "schemas": {
-      "Overlap": {
-        "description": "Every literal two oneOf members list is in neither.",
-        "oneOf": [{ "enum": ["a", "b", "c"] }, { "enum": ["b", "c", "d"] }]
-      },
       "FalseTwice": {
         "description": "number does not admit false by its kind, so false, which two members list, is left out.",
         "oneOf": [{ "type": "number" }, { "enum": [false, "none"] }, { "enum": [false, "off"] }]

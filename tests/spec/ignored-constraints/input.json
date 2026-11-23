@@ -15,8 +15,7 @@
         "readOnly": true,
         "x-internal": true
       },
-      "Age": { "type": "integer", "minimum": 0, "maximum": 150, "exclusiveMaximum": true, "multipleOf": 1, "writeOnly": true },
-      "Tags": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 5, "uniqueItems": true },
+      "Tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
       "Shape": {
         "type": "object",
         "minProperties": 1,

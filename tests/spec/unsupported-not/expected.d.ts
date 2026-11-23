@@ -5,20 +5,14 @@ export interface paths {}
 export interface operations {}
 
 export interface schemas {
-  NotString: NotString;
   NonEmpty: NonEmpty;
-  Present: Present;
   Partly: Partly;
   PartlyNull: PartlyNull;
   PartlyRef: PartlyRef;
+  MaybeNull: MaybeNull;
 }
 
-export type NotString = number | boolean | null | unknown[] | Record<string, unknown>;
-
 export type NonEmpty = string;
-
-/** Values no member admits by its kind (null and false, for a string) are left out without a warning. */
-export type Present = string;
 
 /** true is left out of boolean; "a", which string admits by its kind, is not, with a warning on it. */
 export type Partly = false | string;
@@ -27,4 +21,7 @@ export type Partly = false | string;
 export type PartlyNull = string;
 
 /** null is left out of the member that lists it, not of the reference, which may admit it. */
-export type PartlyRef = NotString;
+export type PartlyRef = MaybeNull;
+
+/** A schema that admits null among other values. */
+export type MaybeNull = number | boolean | null | unknown[] | Record<string, unknown>;

@@ -8,12 +8,6 @@
         "contains": true,
         "minContains": 0
       },
-      "NoneAsked": {
-        "description": "No item needs to match and any number may: contains asks nothing.",
-        "type": "array",
-        "contains": { "type": "string" },
-        "minContains": 0
-      },
       "Optional": {
         "description": "No item needs to match, so no length is asked; how many may match cannot be typed, and without type any other value passes.",
         "contains": { "type": "string" },

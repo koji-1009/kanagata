@@ -9,6 +9,11 @@
         "propertyNames": { "enum": ["a", "b"] },
         "additionalProperties": { "type": "string" }
       },
+      "ListedOpen": {
+        "description": "Without additionalProperties, it has any value.",
+        "type": "object",
+        "propertyNames": { "enum": ["a", "b"] }
+      },
       "Prefixed": {
         "description": "The index signature by the pattern's keys admits the optional property's type, and undefined.",
         "type": "object",

@@ -5,26 +5,13 @@ export interface paths {}
 export interface operations {}
 
 export interface schemas {
-  P: P;
   Q: Q;
-  M: M;
   R: R;
   Tagged: Tagged;
 }
 
-/** Keys matching a pattern are allowed even with additionalProperties: false. */
-export type P = {
-  a?: string;
-  [key: `x-${string}`]: number;
-};
-
 export type Q = {
   [key: `n${string}`]: number;
-};
-
-export type M = {
-  [key: `n${string}`]: number;
-  [key: string]: boolean | number;
 };
 
 export type R = {

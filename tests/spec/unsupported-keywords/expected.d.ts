@@ -6,9 +6,7 @@ export interface operations {}
 
 export interface schemas {
   Cond: Cond;
-  Names: Names;
   Contains: Contains;
-  DepReq: DepReq;
 }
 
 export type Cond = {
@@ -18,17 +16,4 @@ export type Cond = {
   x: {} | null;
 };
 
-export type Names = {
-  a?: unknown;
-  b?: unknown;
-};
-
 export type Contains = [string | number, ...(string | number)[]];
-
-export type DepReq = {
-  a?: never;
-  b?: string;
-} | {
-  a?: string;
-  b: string;
-};
