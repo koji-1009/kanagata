@@ -10,6 +10,7 @@ export interface schemas {
   PartlyNull: PartlyNull;
   PartlyRef: PartlyRef;
   MaybeNull: MaybeNull;
+  TwoViews: TwoViews;
 }
 
 export type NonEmpty = string;
@@ -25,3 +26,14 @@ export type PartlyRef = MaybeNull;
 
 /** A schema that admits null among other values. */
 export type MaybeNull = number | boolean | null | unknown[] | Record<string, unknown>;
+
+/** A warning in a schema of two types is reported once. */
+export type TwoViews = {
+  id?: number;
+  x?: unknown;
+};
+
+/** A warning in a schema of two types is reported once. */
+export type TwoViewsInput = {
+  x?: unknown;
+};

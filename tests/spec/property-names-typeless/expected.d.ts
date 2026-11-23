@@ -66,7 +66,7 @@ export type Sibling = {
   a?: unknown;
 };
 
-/** And a key a oneOf member of the object names. */
+/** And a key an anyOf member of the object names. */
 export type BesideUnion = {
   a?: unknown;
   b?: never;

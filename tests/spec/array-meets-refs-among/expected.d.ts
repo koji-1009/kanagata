@@ -6,6 +6,7 @@ export interface operations {}
 
 export interface schemas {
   OneOrNull: OneOrNull;
+  OneArray: OneArray;
   OneNotNull: OneNotNull;
   OneOrEmpty: OneOrEmpty;
   OneMixed: OneMixed;
@@ -25,6 +26,9 @@ export interface schemas {
 
 /** A $ref to a schema that admits arrays among other kinds keeps its arrays beside it where an array meets it; the other kinds its type names pass the array keywords. */
 export type OneOrNull = TagsOrNull & ([string?] | null);
+
+/** Where the other member admits arrays only, its arrays alone are beside it: its other kinds meet none of it. */
+export type OneArray = TagsOrNull & [string?];
 
 /** Its keywords are read together: not leaves arrays only. */
 export type OneNotNull = NotNullTags & [string?];

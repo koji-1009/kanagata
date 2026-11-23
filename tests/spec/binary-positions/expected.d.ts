@@ -3,6 +3,12 @@
 export interface paths {
   "/upload": {
     post: {
+      parameters: {
+        query?: {
+          /** Bytes are a string in a parameter. */
+          checksum?: string;
+        };
+      };
       requestBody: {
         content: {
           "multipart/form-data": {
@@ -19,6 +25,9 @@ export interface paths {
           };
           "application/json": {
             data?: Upload;
+          };
+          "application/x-www-form-urlencoded": {
+            data?: string;
           };
           "*/*": Blob;
         };
@@ -46,8 +55,8 @@ export interface paths {
             [key: `f${string}`]: Blob;
           };
           "multipart/related": {
-            any?: unknown;
-            [key: string]: unknown;
+            name?: string;
+            [key: string]: Blob | string | undefined;
           };
           "*/*": Meta;
         };
@@ -100,8 +109,8 @@ export type Patterned = {
 
 /** And additional ones. */
 export type Extra = {
-  any?: unknown;
-  [key: string]: unknown;
+  name?: string;
+  [key: string]: Upload | string | undefined;
 };
 
 /** A form with a file part, written out where it is the parts. */

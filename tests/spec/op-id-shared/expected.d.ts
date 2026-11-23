@@ -7,6 +7,15 @@ export interface paths {
   "/v2/health": {
     get: operations["health"];
   };
+  "/pets": {
+    post: operations["addPet"];
+  };
+}
+
+export interface webhooks {
+  newPet: {
+    post: operations["addPet"];
+  };
 }
 
 export interface operations {
@@ -20,6 +29,23 @@ export interface operations {
       };
     };
   };
+  /** A path's and a webhook's: its schema has no readOnly or writeOnly property, so it is one type in either view. */
+  addPet: {
+    requestBody?: {
+      content: {
+        "application/json": Pet;
+      };
+    };
+    responses: {
+      204: {};
+    };
+  };
 }
 
-export interface schemas {}
+export interface schemas {
+  Pet: Pet;
+}
+
+export type Pet = {
+  id?: string;
+};

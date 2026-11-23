@@ -44,9 +44,9 @@
         ]
       },
       "BesideUnion": {
-        "description": "And a key a oneOf member of the object names.",
+        "description": "And a key an anyOf member of the object names.",
         "allOf": [{ "propertyNames": { "enum": ["a"] } }],
-        "oneOf": [
+        "anyOf": [
           { "properties": { "b": { "type": "string" } } },
           { "properties": { "c": { "type": "string" } } }
         ]

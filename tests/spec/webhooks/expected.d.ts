@@ -29,6 +29,31 @@ export interface webhooks {
       };
     };
   };
+  petUpdated: {
+    post: {
+      parameters: {
+        query?: {
+          /** A parameter defined by content is typed as a path's is: string for JSON. */
+          filter?: string;
+        };
+        header?: {
+          /** Parameters are the read view. */
+          "X-Pet"?: Pet;
+        };
+      };
+      responses: {
+        200: {
+          headers: {
+            /** Response headers are the write view. */
+            "X-Echo"?: PetInput;
+          };
+          content: {
+            "application/x-www-form-urlencoded": PetInput;
+          };
+        };
+      };
+    };
+  };
 }
 
 export interface operations {

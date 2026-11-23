@@ -8,7 +8,8 @@
           { "name": "Accept", "in": "header", "required": true, "schema": { "type": "string" } },
           { "name": "content-type", "in": "header", "schema": { "type": "string" } },
           { "name": "Authorization", "in": "header", "required": true, "schema": { "type": "string" } },
-          { "name": "session", "in": "cookie", "schema": { "type": "string" } }
+          { "name": "session", "in": "cookie", "schema": { "type": "string" } },
+          { "name": "payload", "in": "body", "required": true, "schema": { "type": "object" } }
         ],
         "responses": { "200": { "description": "ok" } }
       }

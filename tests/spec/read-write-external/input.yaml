@@ -1,0 +1,14 @@
+openapi: 3.1.0
+components:
+  schemas:
+    A:
+      description: A property whose $ref reaches readOnly through a $ref inside another file, resolved against that file, is left out of what is sent.
+      type: object
+      required: [id, name]
+      properties:
+        id: { $ref: "defs/b.yaml#/X" }
+        name: { type: string }
+    B:
+      description: So is one of a member there, whatever requires it.
+      allOf: [{ $ref: "defs/b.yaml#/Base" }]
+      required: [stamp]

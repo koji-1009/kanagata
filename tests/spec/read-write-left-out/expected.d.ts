@@ -26,6 +26,7 @@ export interface schemas {
   Named: Named;
   MemberSiblings: MemberSiblings;
   Other: Other;
+  AnyOfRequired: AnyOfRequired;
   OneOfRequired: OneOfRequired;
 }
 
@@ -33,16 +34,18 @@ export type Holder = {
   thing?: Thing;
   sibling?: ViaRefSibling;
   member?: MemberSiblings;
-  either?: OneOfRequired;
+  either?: AnyOfRequired;
   other?: Other;
+  one?: OneOfRequired;
 };
 
 export type HolderInput = {
   thing?: ThingInput;
   sibling?: ViaRefSiblingInput;
   member?: MemberSiblingsInput;
-  either?: OneOfRequiredInput;
+  either?: AnyOfRequiredInput;
   other?: OtherInput;
+  one?: OneOfRequiredInput;
 };
 
 export type Base = {
@@ -103,8 +106,8 @@ export type Other = Named & {
 /** A referenced member without the key stays a reference. */
 export type OtherInput = Named & Record<string, unknown>;
 
-/** Nor a oneOf member's required. */
-export type OneOfRequired = {
+/** Nor an anyOf member's required. */
+export type AnyOfRequired = {
   id: string;
   name?: string;
 } | {
@@ -112,7 +115,21 @@ export type OneOfRequired = {
   name: string;
 };
 
-/** Nor a oneOf member's required. */
-export type OneOfRequiredInput = {
+/** Nor an anyOf member's required. */
+export type AnyOfRequiredInput = {
   name?: string;
+};
+
+/** Nor a oneOf member's: what is sent, the member that requires id requires nothing, so it admits every object, and one with name matches both. */
+export type OneOfRequired = {
+  id: string;
+  name?: never;
+} | {
+  id?: never;
+  name: string;
+};
+
+/** Nor a oneOf member's: what is sent, the member that requires id requires nothing, so it admits every object, and one with name matches both. */
+export type OneOfRequiredInput = {
+  name?: never;
 };

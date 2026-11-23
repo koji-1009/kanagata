@@ -17,6 +17,7 @@
               "text/html": { "schema": { "type": "string" } },
               "application/xml": { "schema": { "type": "string" } },
               "*/*": { "schema": { "type": "string" } },
+              "application/*": { "schema": { "type": "number" } },
               "Application/PDF; version=1.7": {}
             }
           }

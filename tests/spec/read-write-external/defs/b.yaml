@@ -1,0 +1,4 @@
+X: { allOf: [{ $ref: "#/Y" }] }
+Y: { type: string, readOnly: true }
+Base: { allOf: [{ $ref: "#/Stamped" }] }
+Stamped: { properties: { stamp: { type: string, readOnly: true } } }

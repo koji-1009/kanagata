@@ -22,6 +22,8 @@ export interface paths {
             "X-Page"?: {
               next?: string;
             };
+            /** A response header keeps its schema for any media type. */
+            "X-Count"?: number;
           };
         };
       };

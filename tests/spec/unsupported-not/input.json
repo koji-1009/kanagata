@@ -19,7 +19,12 @@
         "anyOf": [{ "type": "null" }, { "$ref": "#/components/schemas/MaybeNull" }],
         "not": { "const": null }
       },
-      "MaybeNull": { "description": "A schema that admits null among other values.", "not": { "type": "string" } }
+      "MaybeNull": { "description": "A schema that admits null among other values.", "not": { "type": "string" } },
+      "TwoViews": {
+        "description": "A warning in a schema of two types is reported once.",
+        "type": "object",
+        "properties": { "id": { "type": "integer", "readOnly": true }, "x": { "not": { "const": "a" } } }
+      }
     }
   }
 }

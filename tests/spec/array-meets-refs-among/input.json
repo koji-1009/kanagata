@@ -7,6 +7,10 @@
         "description": "A $ref to a schema that admits arrays among other kinds keeps its arrays beside it where an array meets it; the other kinds its type names pass the array keywords.",
         "allOf": [{ "$ref": "#/components/schemas/TagsOrNull" }, { "maxItems": 1 }]
       },
+      "OneArray": {
+        "description": "Where the other member admits arrays only, its arrays alone are beside it: its other kinds meet none of it.",
+        "allOf": [{ "$ref": "#/components/schemas/TagsOrNull" }, { "type": "array", "maxItems": 1 }]
+      },
       "OneNotNull": {
         "description": "Its keywords are read together: not leaves arrays only.",
         "allOf": [{ "$ref": "#/components/schemas/NotNullTags" }, { "maxItems": 1 }]

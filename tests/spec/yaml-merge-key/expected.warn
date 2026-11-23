@@ -1,0 +1,1 @@
+#/components/schemas/A: << merges mappings only in YAML 1.1; read as a key named <<

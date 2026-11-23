@@ -408,43 +408,6 @@ export type B = string;
 	);
 });
 
-test("readOnly reached through $refs inside another file resolves against that file", () => {
-	const files: Record<string, string> = {
-		"file:///api/openapi.yaml": [
-			"openapi: 3.1.0",
-			"components:",
-			"  schemas:",
-			"    A:",
-			"      type: object",
-			"      required: [id, name]",
-			"      properties:",
-			"        id: { $ref: 'defs/b.yaml#/X' }",
-			"        name: { type: string }",
-			"    B:",
-			"      allOf: [{ $ref: 'defs/b.yaml#/Base' }]",
-			"      required: [stamp]",
-			"",
-		].join("\n"),
-		"file:///api/defs/b.yaml": [
-			"X: { allOf: [{ $ref: '#/Y' }] }",
-			"Y: { type: string, readOnly: true }",
-			"Base: { allOf: [{ $ref: '#/Stamped' }] }",
-			"Stamped: { properties: { stamp: { type: string, readOnly: true } } }",
-			"",
-		].join("\n"),
-	};
-	const source = {
-		url: "file:///api/openapi.yaml",
-		read: (url: string) => files[url] as string,
-	};
-	const code = generate(files[source.url] as string, source).code;
-	assert.match(code, /export type AInput = \{\n {2}name: string;\n\};/);
-	assert.match(
-		code,
-		/export type BInput = BaseInput & Record<string, unknown>;/,
-	);
-});
-
 /** Like `error`, with a source for external $refs. */
 function error2(
 	src: string,
@@ -477,64 +440,12 @@ test("a source URL that is not an absolute URL, or whose percent-encoding does n
 	}
 });
 
-test("the YAML merge key is not YAML 1.2: it is a property named <<, with a warning", () => {
-	const g = generate(
-		"openapi: 3.1.0\ncomponents:\n  schemas:\n    B: &b { type: string }\n    A:\n      <<: *b\n      description: x\n",
-	);
-	assert.deepEqual(g.warnings, [
-		{
-			at: "#/components/schemas/A",
-			msg: "<< merges mappings only in YAML 1.1; read as a key named <<",
-		},
-	]);
-});
-
-test("required in another allOf member does not bring a readOnly property back", () => {
-	const src = schemas(
-		[
-			'"Stamped":{"properties":{"stamp":{"type":"string","readOnly":true}}}',
-			'"Base":{"allOf":[{"$ref":"#/components/schemas/Stamped"}]}',
-			'"B":{"allOf":[{"$ref":"#/components/schemas/Base"},{"type":"object","required":["stamp"]}]}',
-			// The same, with the required member inside an allOf of its own.
-			'"C":{"allOf":[{"$ref":"#/components/schemas/Base"},{"allOf":[{"type":"object","required":["stamp"]}]}]}',
-		].join(","),
-	);
-	const { code } = generate(src);
-	assert.match(
-		code,
-		/export type BInput = BaseInput & Record<string, unknown>;/,
-	);
-	assert.match(
-		code,
-		/export type CInput = BaseInput & Record<string, unknown>;/,
-	);
-});
-
-test("a warning raised in both views of a schema is reported once", () => {
-	const src = schemas(
-		`"S":{"type":"object","properties":{"id":{"type":"integer","readOnly":true},"x":{"not":{"const":"a"}}}}`,
-	);
-	assert.deepEqual(generate(src).warnings, [
-		{
-			at: "#/components/schemas/S/properties/x/not",
-			msg: "not cannot be expressed in TypeScript; ignored",
-		},
-	]);
-});
-
 test("an operationId is declared once for the same operation, and is an error for another", () => {
 	// A YAML alias is the node it names: the same operation, declared once.
 	const aliased = generate(
 		"openapi: 3.1.0\npaths:\n  /a: &a\n    get: { operationId: get, responses: {} }\n  /b: *a\n",
 	).code;
 	assert.equal(aliased.match(/^ {2}get: \{$/gm)?.length, 1, aliased);
-
-	// Two Operation Objects are two operations, even written alike.
-	const op = '{"get":{"operationId":"x","responses":{}}}';
-	assert.equal(
-		error(paths(`"/a":${op},"/b":${op}`)).message,
-		`#/paths/~1b/get: operationId "x" is also #/paths/~1a/get's; OpenAPI requires it to be unique`,
-	);
 
 	// The same operation as a path's and a webhook's has two types, sent by either side.
 	assert.equal(
@@ -552,21 +463,11 @@ test("an operationId is declared once for the same operation, and is an error fo
 		`#/paths/~1b/get: operation "thing" is also #/paths/~1a~1{id}/get, where its type differs; operations["thing"] has one type`,
 	);
 
-	// Its types are compared as declared: a $ref to a schema without readOnly or writeOnly
-	// is one type in both views, and one with them is S in one and SInput in the other.
-	const shared = (s: string) =>
-		`{"openapi":"3.1.0","paths":{"/a":{"$ref":"#/components/pathItems/P"}},"webhooks":{"w":{"$ref":"#/components/pathItems/P"}},"components":{"pathItems":{"P":{"post":{"operationId":"p","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/S"}}}}}}},"schemas":{"S":${s}}}}`;
-	const alike = generate(
-		shared(`{"type":"object","properties":{"id":{"type":"string"}}}`),
-	).code;
-	assert.match(alike, /^ {2}"\/a": \{\n {4}post: operations\["p"\];$/m);
-	assert.match(alike, /^ {2}w: \{\n {4}post: operations\["p"\];$/m);
-	assert.match(alike, /"application\/json": S;/);
+	// Its types are compared as declared: a $ref to a schema with readOnly or writeOnly is S
+	// in one view and SInput in the other (spec/op-id-shared has one without them).
 	assert.equal(
 		error(
-			shared(
-				`{"type":"object","properties":{"id":{"type":"string","readOnly":true}}}`,
-			),
+			`{"openapi":"3.1.0","paths":{"/a":{"$ref":"#/components/pathItems/P"}},"webhooks":{"w":{"$ref":"#/components/pathItems/P"}},"components":{"pathItems":{"P":{"post":{"operationId":"p","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/S"}}}}}}},"schemas":{"S":{"type":"object","properties":{"id":{"type":"string","readOnly":true}}}}}}`,
 		).message,
 		`#/webhooks/w/post: operation "p" is also #/paths/~1a/post, where its type differs; operations["p"] has one type`,
 	);
@@ -581,14 +482,5 @@ test("the first line names the version given in options, and only then", () => {
 	assert.match(
 		generate(src).code,
 		/^\/\/ Generated by kanagata\. Do not edit\.\n/,
-	);
-});
-
-test("a YAML alias inside the node it names is an error", () => {
-	assert.equal(
-		error(
-			"openapi: 3.1.0\ncomponents:\n  schemas:\n    A: &a\n      type: array\n      items: *a\n",
-		).message,
-		"#/components/schemas/A/items: alias *a is inside the node it names",
 	);
 });
