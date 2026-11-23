@@ -105,7 +105,7 @@ function ownPassed(
 				),
 			);
 	// In 3.0 the keywords next to $ref are ignored.
-	if (m.get("$ref") !== undefined && !cx.refSiblings) return inter(parts);
+	if (!cx.readsSiblings(m)) return inter(parts);
 	const each = (key: string): Ty[] | undefined => {
 		const members = m.get(key);
 		return Array.isArray(members) ? members.map((n) => inner(n)) : undefined;
@@ -175,9 +175,11 @@ export function passing(
 
 /**
  * The kinds `type` names, and null where 3.0's `nullable: true` adds it; every kind where
- * it names one JSON Schema does not have; undefined without `type`.
+ * it names one JSON Schema does not have; undefined without `type`, or next to a 3.0
+ * `$ref`, which ignores it.
  */
 function typeKinds(cx: Ctx, v: JsonObject): string[] | undefined {
+	if (!cx.readsSiblings(v)) return undefined;
 	const t = v.get("type");
 	const kinds =
 		typeof t === "string"
@@ -303,6 +305,7 @@ function madeKinds(
 ): { made: Set<string>; all: Set<string> } | undefined {
 	if (
 		m instanceof JsonObject &&
+		cx.readsSiblings(m) &&
 		(m.get("type") !== undefined ||
 			m.get("const") !== undefined ||
 			m.get("enum") !== undefined)
@@ -344,7 +347,7 @@ function ownMadeKinds(
 		);
 	if (!read) return undefined;
 	// In 3.0 the keywords next to $ref are ignored.
-	if (m.get("$ref") !== undefined && !cx.refSiblings) return kinds;
+	if (!cx.readsSiblings(m)) return kinds;
 	for (const k of ownKinds(m)) {
 		kinds.made.add(k);
 		kinds.all.add(k);
@@ -483,7 +486,7 @@ function saidKinds(
 							says(target.value, true, new Set([...seen, target.uri])),
 						),
 					);
-			if (s.get("$ref") !== undefined && !cx.refSiblings) return meet(named);
+			if (!cx.readsSiblings(s)) return meet(named);
 			add(typeKinds(cx, s));
 		}
 		add(valueKinds(s));

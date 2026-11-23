@@ -207,9 +207,12 @@ function declared(
 	};
 	for (const s of schemas)
 		cx.inOwnResource(s, () => {
-			meet(listed(cx, get(get(s, "properties"), key), new Set()));
-			const allOf = get(s, "allOf");
-			if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
+			// In 3.0 the keywords next to $ref are ignored; only the target counts.
+			if (cx.readsSiblings(s)) {
+				meet(listed(cx, get(get(s, "properties"), key), new Set()));
+				const allOf = get(s, "allOf");
+				if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
+			}
 			for (const target of cx.reached(s)) {
 				if (seen.has(target.uri)) continue;
 				seen.add(target.uri);
@@ -235,7 +238,8 @@ export function listed(
 			const values = cx.inTarget(target, () => listed(cx, target.value, seen));
 			if (values !== undefined) return values;
 		}
-		return ownValues(s);
+		// In 3.0 the keywords next to $ref are ignored.
+		return cx.readsSiblings(s) ? ownValues(s) : undefined;
 	});
 }
 

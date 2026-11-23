@@ -450,12 +450,6 @@ test("required in another allOf member does not bring a readOnly property back",
 	);
 });
 
-test("in 3.0, keywords next to $ref are ignored without warnings", () => {
-	const src =
-		'{"openapi":"3.0.3","components":{"schemas":{"S":{"type":"string"},"R":{"$ref":"#/components/schemas/S","not":{}}}}}';
-	assert.deepEqual(generate(src).warnings, []);
-});
-
 test("a warning raised in both views of a schema is reported once", () => {
 	const src = schemas(
 		`"S":{"type":"object","properties":{"id":{"type":"integer","readOnly":true},"x":{"not":{"const":"a"}}}}`,

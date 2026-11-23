@@ -155,6 +155,7 @@ function bytesIn(
 		if (cx.inTarget(target, () => binaryAt(cx, target.value, pos, seen)))
 			return true;
 	}
+	if (!cx.readsSiblings(v)) return false;
 	const inPlace = ["allOf", "oneOf", "anyOf"].flatMap((k) => {
 		const m = v.get(k);
 		return Array.isArray(m) ? m : [];
@@ -210,10 +211,9 @@ export function doc(
  */
 export function schemaDoc(cx: Ctx, v: Value): string | undefined {
 	if (!(v instanceof JsonObject)) return undefined;
-	const siblings = cx.refSiblings || v.get("$ref") === undefined;
 	return docText(
 		v.str("description"),
-		siblings && v.get("deprecated") === true,
+		cx.readsSiblings(v) && v.get("deprecated") === true,
 	);
 }
 
@@ -226,13 +226,16 @@ function docText(
 	return desc === undefined ? "@deprecated" : `${desc}\n@deprecated`;
 }
 
-/** What a `$ref` or `$dynamicRef` of `v` refers to: the same value, the keywords of `v` around it. */
+/**
+ * What a `$ref` or `$dynamicRef` of `v` refers to: the same value, the keywords of `v`
+ * around it, but in 3.0, which ignores them next to `$ref`.
+ */
 function referenced(cx: Ctx, v: JsonObject, ref: string, at: string): Ty {
 	// The keys left out beside the target: those it leaves out itself it is written without anyway.
 	const beside = leftOutKeys(cx, v, new Set(), false);
 	for (const k of cx.leftOutIn(v)) beside.add(k);
 	return cx.withAround(
-		v,
+		cx.readsSiblings(v) ? v : undefined,
 		() => leftOutTarget(cx, ref, at, beside) ?? reference(cx, ref, at),
 	);
 }
@@ -265,7 +268,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		const t = referenced(cx, v, r, at);
 		// In 3.1 (JSON Schema 2020-12) the keywords next to $ref apply too; in 3.0 they
 		// are ignored, nullable among them unless loose.
-		if (!cx.refSiblings) return loose ? union([t, NULL]) : t;
+		if (!cx.readsSiblings(v)) return loose ? union([t, NULL]) : t;
 		out.push(...admitted([v], [t]));
 	}
 	// $dynamicRef is $ref, except where it reaches a $dynamicAnchor: then it reaches the
@@ -419,12 +422,14 @@ const NO_TYS: readonly Ty[] = [];
 
 /**
  * What a schema that is only a reference reaches: one `$ref` or `$dynamicRef`, with
- * annotations at most. undefined for any other schema.
+ * annotations at most (anything next to a 3.0 `$ref`, which is ignored). undefined for
+ * any other schema.
  */
 export function onlyTarget(cx: Ctx, s: JsonObject): Located | undefined {
 	const targets = cx.reached(s);
 	return targets.length === 1 &&
-		s.entries.every(([k]) => REFS.has(k) || isAnnotation(k))
+		(!cx.readsSiblings(s) ||
+			s.entries.every(([k]) => REFS.has(k) || isAnnotation(k)))
 		? targets[0]
 		: undefined;
 }
@@ -523,7 +528,7 @@ function ownNamesArrays(cx: Ctx, v: JsonObject, seen: Set<string>): boolean {
 				namesArrays(cx, target.value, new Set([...seen, target.uri])),
 			);
 	// In 3.0 the keywords next to $ref are ignored.
-	if (viaRef || (v.get("$ref") !== undefined && !cx.refSiblings)) return viaRef;
+	if (viaRef || !cx.readsSiblings(v)) return viaRef;
 	const type = v.get("type");
 	if (type === "array" || (Array.isArray(type) && type.includes("array")))
 		return true;

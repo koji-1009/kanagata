@@ -96,7 +96,8 @@ export function exclusive(
 /**
  * The keys a schema requires, when that is all it asks of an object: a non-empty
  * `required`, with at most `type: object`, properties that admit any value and
- * annotations; or a `$ref` or `$dynamicRef`, with annotations at most, to such a schema.
+ * annotations; or a `$ref` or `$dynamicRef`, with annotations at most, to such a schema
+ * (see `onlyTarget`).
  */
 function keysOnly(cx: Ctx, s: Value): string[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
@@ -120,12 +121,16 @@ function keysOnly(cx: Ctx, s: Value): string[] | undefined {
 
 /**
  * Whether a schema admits every value: `true`, annotations alone, or a `$ref` or
- * `$dynamicRef` to such a schema next to them.
+ * `$dynamicRef` to such a schema next to them (next to anything, for a 3.0 `$ref`).
  */
 function admitsAnyValue(cx: Ctx, s: Value): boolean {
 	if (s === true) return true;
 	if (!(s instanceof JsonObject)) return false;
-	if (!s.entries.every(([k]) => REFS.has(k) || isAnnotation(k))) return false;
+	if (
+		cx.readsSiblings(s) &&
+		!s.entries.every(([k]) => REFS.has(k) || isAnnotation(k))
+	)
+		return false;
 	return cx
 		.reached(s)
 		.every((target) =>

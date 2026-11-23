@@ -174,7 +174,7 @@ export class Ctx {
 	 * properties, `write` (request bodies, parameters) leaves out readOnly ones.
 	 */
 	mode: View = "read";
-	/** Whether keywords next to `$ref` apply (OpenAPI 3.1) or are ignored (3.0). */
+	/** Whether keywords next to `$ref` apply (OpenAPI 3.1) or are ignored (3.0); see `readsSiblings`. */
 	readonly refSiblings: boolean;
 	/** Whether 3.0 `nullable: true` means "this schema or null" instead of adding `null` to `type`. */
 	readonly looseNullable: boolean;
@@ -244,6 +244,15 @@ export class Ctx {
 		this.base = this.documentBase;
 	}
 
+	/**
+	 * Whether a schema's keywords apply: everywhere in 3.1 and 3.2, and in 3.0 where it has
+	 * no `$ref`, next to which they are ignored (but `description`; see `schemaDoc`). Every
+	 * reader of a schema's keywords asks this, and then reads its `$ref` target alone.
+	 */
+	readsSiblings(s: Value): boolean {
+		return this.refSiblings || get(s, "$ref") === undefined;
+	}
+
 	warn(at: string, msg: string): void {
 		const key = `${at}\n${msg}`;
 		if (!this.#warnings.has(key)) this.#warnings.set(key, { at, msg });
@@ -282,10 +291,14 @@ export class Ctx {
 	/** What `around` is for the schema converted next. */
 	#nextAround: readonly JsonObject[] | undefined;
 
-	/** Converts with `parent` around the schema converted next, then restores. */
-	withAround<T>(parent: JsonObject, f: () => T): T {
+	/**
+	 * Converts with `parent` (none if undefined) around the schema converted next, after
+	 * the schemas around the one being converted, then restores.
+	 */
+	withAround<T>(parent: JsonObject | undefined, f: () => T): T {
 		const saved = this.#nextAround;
-		this.#nextAround = [...this.around, parent];
+		this.#nextAround =
+			parent === undefined ? this.around : [...this.around, parent];
 		try {
 			return f();
 		} finally {
@@ -701,9 +714,9 @@ export class Ctx {
 	/**
 	 * The key in `components.schemas` of a schema object, so references to it stay
 	 * named: the component itself, or the target of a component that is only a `$ref` or a
-	 * `$dynamicRef`, as read from the document (with at most `title` and `description`; a
-	 * schema kept in another file, `User: { $ref: schemas/User.yaml }`). Schemas are
-	 * matched by identity.
+	 * `$dynamicRef`, as read from the document (with at most `title` and `description`, or
+	 * anything next to a 3.0 `$ref`, which is ignored; a schema kept in another file,
+	 * `User: { $ref: schemas/User.yaml }`). Schemas are matched by identity.
 	 */
 	componentKey(v: Value): string | undefined {
 		if (this.#own === undefined) {
@@ -724,7 +737,8 @@ export class Ctx {
 				for (const [s, key] of this.#own) {
 					if (
 						!(s instanceof JsonObject) ||
-						!s.entries.every(([k]) => ALIAS_KEYS.has(k))
+						(this.readsSiblings(s) &&
+							!s.entries.every(([k]) => ALIAS_KEYS.has(k)))
 					)
 						continue;
 					// A target that does not resolve is reported where the component is converted.

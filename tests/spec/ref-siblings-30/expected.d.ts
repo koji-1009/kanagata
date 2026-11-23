@@ -13,6 +13,18 @@ export interface paths {
       };
     };
   };
+  "/files": {
+    post: {
+      requestBody?: {
+        content: {
+          "*/*": Upload;
+        };
+      };
+      responses: {
+        204: {};
+      };
+    };
+  };
 }
 
 export interface operations {}
@@ -23,6 +35,21 @@ export interface schemas {
   Holder: Holder;
   Negated: Negated;
   Old: Old;
+  Name: Name;
+  Upload: Upload;
+  Closed: Closed;
+  Tagged: Tagged;
+  Either: Either;
+  Anything: Anything;
+  NeedsA: NeedsA;
+  NeedsB: NeedsB;
+  OneKey: OneKey;
+  Keyed: Keyed;
+  MaybeKeyed: MaybeKeyed;
+  ClosedKeyed: ClosedKeyed;
+  Way: Way;
+  Shipped: Shipped;
+  Delivery: Delivery;
 }
 
 export type Base = {
@@ -53,3 +80,68 @@ export type HolderInput = {
 export type Negated = unknown;
 
 export type Old = Base;
+
+export type Name = string;
+
+export type Upload = Name;
+
+/** Nor is required next to a $ref in a member: the closed object admits Base. */
+export type Closed = Base & {
+  id?: string;
+};
+
+export type Tagged = {
+  tag?: string;
+};
+
+/** Nor is additionalProperties next to a $ref: no member is closed. */
+export type Either = Base | Tagged;
+
+export type Anything = unknown;
+
+export type NeedsA = {
+  a: {} | null;
+};
+
+export type NeedsB = {
+  b: Anything & ({} | null);
+};
+
+/** Both members only require keys, whatever is next to their $refs, so each lacks the other's. */
+export type OneKey = NeedsA & {
+  b?: never;
+} | NeedsB & {
+  a?: never;
+};
+
+export type Keyed = {
+  id: {} | null;
+};
+
+/** null passes a member that is a $ref to a schema without type, whatever type is next to it. */
+export type MaybeKeyed = (Keyed | null) & (Record<string, unknown> | null);
+
+/** Nor does type next to it keep the arrays of a member that requires a key the closed object forbids. */
+export type ClosedKeyed = null;
+
+export type Way = {
+  method?: "ship" | "pickup";
+};
+
+/** properties next to a $ref in a member declare no values if reads. */
+export type Shipped = Way & ({
+  address: string;
+  method?: "ship";
+} | {
+  address?: string;
+  method: "pickup";
+});
+
+/** Nor does enum next to a $ref. */
+export type Delivery = {
+  method?: "ship" & Name;
+  address: string;
+} | {
+  method: "pickup" & Name;
+  address?: string;
+};

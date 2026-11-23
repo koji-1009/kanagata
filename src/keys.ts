@@ -76,17 +76,20 @@ function ownKeysOf(
 	properties: boolean,
 	everywhere: boolean,
 ): string[] {
-	const req = get(s, "required");
-	const keys = Array.isArray(req)
-		? req.filter((n): n is string => typeof n === "string")
-		: [];
-	const props = get(s, "properties");
-	if (properties && props instanceof JsonObject)
-		keys.push(...props.entries.map(([k]) => k));
-	const allOf = get(s, "allOf");
-	const members = everywhere ? applied(s) : Array.isArray(allOf) ? allOf : [];
-	for (const m of members)
-		keys.push(...keysOf(cx, m, seen, properties, everywhere));
+	const keys: string[] = [];
+	// In 3.0 the keywords next to $ref are ignored; only the target counts.
+	if (cx.readsSiblings(s)) {
+		const req = get(s, "required");
+		if (Array.isArray(req))
+			keys.push(...req.filter((n): n is string => typeof n === "string"));
+		const props = get(s, "properties");
+		if (properties && props instanceof JsonObject)
+			keys.push(...props.entries.map(([k]) => k));
+		const allOf = get(s, "allOf");
+		const members = everywhere ? applied(s) : Array.isArray(allOf) ? allOf : [];
+		for (const m of members)
+			keys.push(...keysOf(cx, m, seen, properties, everywhere));
+	}
 	for (const target of cx.reached(s)) {
 		if (seen.has(target.uri)) continue;
 		seen.add(target.uri);
@@ -128,7 +131,10 @@ export function outsideKeys(
 	return [...new Set(valueKeys(cx, v))].filter((k) => !closed.has(k));
 }
 
-/** The keys a closed member admits: its own, or those of the closed schema its `$ref` or `$dynamicRef` alone reaches. */
+/**
+ * The keys a closed member admits: its own, or those of the closed schema its `$ref` or
+ * `$dynamicRef` alone reaches (see `onlyTarget`).
+ */
 function closedMember(cx: Ctx, s: Value): Set<string> | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
 	const target = onlyTarget(cx, s);
@@ -218,7 +224,7 @@ function isLeftOut(cx: Ctx, s: Value, seen = new Set<string>()): boolean {
 function leftOutHere(cx: Ctx, s: JsonObject, seen: Set<string>): boolean {
 	// In 3.0 the keywords next to $ref are ignored; only the target counts.
 	const ref = s.get("$ref");
-	const siblings = ref === undefined || cx.refSiblings;
+	const siblings = cx.readsSiblings(s);
 	if (
 		siblings &&
 		s.get(cx.mode === "write" ? "readOnly" : "writeOnly") === true
@@ -268,7 +274,7 @@ function leftOutKeysHere(
 	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
 	// are one schema.
 	const ref = get(v, "$ref");
-	if (ref === undefined || cx.refSiblings) {
+	if (cx.readsSiblings(v)) {
 		const props = get(v, "properties");
 		if (props instanceof JsonObject)
 			for (const [k, s] of props.entries) if (isLeftOut(cx, s)) keys.add(k);
