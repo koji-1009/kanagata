@@ -35,7 +35,7 @@ import {
 	UNKNOWN,
 	union,
 } from "./ty.ts";
-import { unevaluated } from "./unevaluated.ts";
+import { additional as additionalKeys } from "./unevaluated.ts";
 
 /**
  * The keys an object's `propertyNames` admits: every key is a string it must admit, so
@@ -167,19 +167,14 @@ export function object(cx: Ctx, v: JsonObject, at: string): Ty {
 			: { kind: "map", props: [], index: NEVER };
 
 	// unevaluatedProperties is additionalProperties where nothing else evaluates the rest.
-	const apKey =
-		v.get("additionalProperties") === undefined
-			? "unevaluatedProperties"
-			: "additionalProperties";
-	const ap =
-		apKey === "additionalProperties"
-			? v.get(apKey)
-			: unevaluated(v, "unevaluatedProperties");
+	const extra = additionalKeys(v);
 	let additional: Ty | undefined;
-	if (ap === false) additional = NEVER;
-	else if (ap === true) additional = UNKNOWN;
-	else if (ap !== undefined)
-		additional = cx.withRaw(part, () => schema(cx, ap, child(at, apKey)));
+	if (extra?.value === false) additional = NEVER;
+	else if (extra?.value === true) additional = UNKNOWN;
+	else if (extra !== undefined)
+		additional = cx.withRaw(part, () =>
+			schema(cx, extra.value, child(at, extra.key)),
+		);
 	const pp = v.get("patternProperties");
 	const patterns =
 		pp instanceof JsonObject

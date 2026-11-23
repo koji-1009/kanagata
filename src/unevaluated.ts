@@ -49,6 +49,22 @@ export function unevaluated(v: JsonObject, key: string): Value | undefined {
 	return evaluating.every((k) => v.get(k) === undefined) ? x : undefined;
 }
 
+/**
+ * What the keys without a property schema are, and the keyword that says it:
+ * `additionalProperties`, or else `unevaluatedProperties` where it is that (`unevaluated`);
+ * undefined without either.
+ */
+export function additional(
+	v: JsonObject,
+): { key: string; value: Value } | undefined {
+	const ap = v.get("additionalProperties");
+	if (ap !== undefined) return { key: "additionalProperties", value: ap };
+	const up = unevaluated(v, "unevaluatedProperties");
+	return up === undefined
+		? undefined
+		: { key: "unevaluatedProperties", value: up };
+}
+
 /** The keywords next to `unevaluatedItems` that evaluate for it: `contains` evaluates the items it matches. */
 const ITEM_APPLICATORS = [...APPLICATORS, "contains"];
 

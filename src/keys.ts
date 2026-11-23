@@ -9,16 +9,14 @@ import { get, JsonObject, type Value } from "./json.ts";
 import type { Ctx } from "./pointer.ts";
 import { onlyTarget, schema } from "./schema.ts";
 import { inter, NEVER, type Prop, type Ty } from "./ty.ts";
-import { unevaluated } from "./unevaluated.ts";
+import { additional } from "./unevaluated.ts";
 
 /**
  * The keys a closed object admits (`additionalProperties: false`, no
  * `patternProperties`): its declared properties. undefined when it is not closed.
  */
 export function closedKeys(v: JsonObject): Set<string> | undefined {
-	const ap =
-		v.get("additionalProperties") ?? unevaluated(v, "unevaluatedProperties");
-	if (ap !== false) return undefined;
+	if (additional(v)?.value !== false) return undefined;
 	if (v.get("patternProperties") !== undefined) return undefined;
 	const props = v.get("properties");
 	return new Set(
