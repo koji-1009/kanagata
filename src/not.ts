@@ -260,7 +260,6 @@ const VALUE_KEYWORDS = new Set([
 	"exclusiveMinimum",
 	"exclusiveMaximum",
 	"multipleOf",
-	"format",
 ]);
 
 /** Whether a schema admits a value; undefined where it says what this cannot decide. */

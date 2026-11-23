@@ -693,7 +693,10 @@ export function membersIn(
 	);
 }
 
-/** Keywords that do not change which values are valid. */
+/**
+ * Keywords that do not change which values are valid: `format` among them, an annotation
+ * in JSON Schema (`binary` changes the type only where bytes are bytes; see `typed`).
+ */
 const ANNOTATIONS = new Set([
 	"title",
 	"description",
@@ -704,6 +707,7 @@ const ANNOTATIONS = new Set([
 	"deprecated",
 	"externalDocs",
 	"xml",
+	"format",
 ]);
 
 export const isAnnotation = (k: string): boolean =>

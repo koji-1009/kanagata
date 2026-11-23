@@ -83,6 +83,8 @@ In 3.1 and 3.2, a Schema Object is JSON Schema 2020-12, the OAS dialect. A `$sch
 | `minProperties`, `maxProperties` of a closed object (`additionalProperties: false`, no `patternProperties`)                                      | which properties are present: `minProperties: 1` with `a` and `b` is `{ a: A; b?: B } \| { a?: A; b: B }`; too many or too few, `never`                                                       |
 | `format` (other than `binary`), `uniqueItems`, `minProperties`, `maxProperties` (other than 0) of an open object                                 | ignored, without a warning: the type admits every value they do, and more                                                                                                                     |
 
+`format` is an annotation in JSON Schema, so wherever what a schema admits is read, it is one as `title` is: `{ type: [string, null], not: { type: "null", format: uuid } }` is `string`, an `if: { format: date }` admits every value, and a [`oneOf`](#oneof) member whose properties have only `format` only requires keys.
+
 ## Array length
 
 An array is `T[]` until `prefixItems`, `minItems` or `maxItems` say more; then it is a tuple.
@@ -144,7 +146,7 @@ Object types the parts of a schema give (its own keywords, members, `if` / `then
 
 ## `oneOf`
 
-`oneOf` admits a value exactly one member admits. TypeScript has no type for what a member does not admit, so the members are a union, which also admits a value two of them admit, except among members that only require keys: `required`, with at most `type: object`, properties that admit any value (`{}`, `true`, a `$ref` to one) and annotations, or a `$ref` to such a schema. Such a member does not admit exactly the objects that lack one of its keys, so each of them lacks the keys the others require.
+`oneOf` admits a value exactly one member admits. TypeScript has no type for what a member does not admit, so the members are a union, which also admits a value two of them admit, except among members that only require keys: `required`, with at most `type: object`, properties that admit any value (`{}`, `true`, annotations and `format` alone, a `$ref` to one) and annotations, or a `$ref` to such a schema. Such a member does not admit exactly the objects that lack one of its keys, so each of them lacks the keys the others require.
 
 A literal or `null` two members admit is left out: `oneOf: [{ type: [string, null] }, { type: [integer, null] }]` is `string | number`, and `oneOf: [{ enum: [a, b] }, { enum: [b, c] }]` is `"a" | "c"`. Where a member admits it by its kind (`type: string` for `"a"`, `{}` for `null`), it stays: TypeScript has no type for a kind but one of its values. `boolean` is `true | false`, so `oneOf: [{ type: boolean }, { enum: [true, x] }]` is `false | "x"`. A `$ref` member is not counted.
 
