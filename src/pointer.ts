@@ -105,6 +105,31 @@ function indexIds(index: Index, doc: Value, base: string): void {
 	walk(doc, base, false);
 }
 
+/**
+ * Runs `f` with each of `keys` mapped to `value` in `map`, then restores what each was. A
+ * schema can be read again while it is read (a YAML alias is one object wherever it is,
+ * and a `$ref` can reach a schema being read), and the inner reading leaves the outer
+ * one's entry as it found it.
+ */
+function withEntries<K, V, T>(
+	map: Map<K, V>,
+	keys: readonly K[],
+	value: V,
+	f: () => T,
+): T {
+	const saved = keys.map((k) => map.get(k));
+	for (const k of keys) map.set(k, value);
+	try {
+		return f();
+	} finally {
+		keys.forEach((k, i) => {
+			const old = saved[i];
+			if (old === undefined) map.delete(k);
+			else map.set(k, old);
+		});
+	}
+}
+
 /** Appends a token to a JSON Pointer. */
 export function child(at: string, token: string): string {
 	return `${at}/${escapeToken(token)}`;
@@ -322,7 +347,7 @@ export class Ctx {
 	 * The `propertyNames` schemas being read for the strings they admit, which are an
 	 * object's keys: their references are written out rather than named.
 	 */
-	readonly #keysRead = new Set<Value>();
+	readonly #keysRead = new Map<Value, true>();
 
 	/** Whether a `propertyNames` is being read for its keys. */
 	get readingKeys(): boolean {
@@ -336,12 +361,7 @@ export class Ctx {
 
 	/** Reads a `propertyNames` for its keys, then restores. */
 	withKeysRead<T>(names: Value, f: () => T): T {
-		this.#keysRead.add(names);
-		try {
-			return f();
-		} finally {
-			this.#keysRead.delete(names);
-		}
+		return withEntries(this.#keysRead, [names], true, f);
 	}
 
 	/** Properties left out of the current view by the other members of the `allOf` a schema is in. */
@@ -357,12 +377,7 @@ export class Ctx {
 		keys: ReadonlySet<string>,
 		f: () => T,
 	): T {
-		for (const m of members) this.#leftOut.set(m, keys);
-		try {
-			return f();
-		} finally {
-			for (const m of members) this.#leftOut.delete(m);
-		}
+		return withEntries(this.#leftOut, members, keys, f);
 	}
 
 	/**
@@ -384,12 +399,7 @@ export class Ctx {
 		holders: () => ReadonlySet<JsonObject>,
 		f: () => T,
 	): T {
-		this.#said.set(s, holders);
-		try {
-			return f();
-		} finally {
-			this.#said.delete(s);
-		}
+		return withEntries(this.#said, [s], holders, f);
 	}
 
 	/** Converts in the given view, then restores the previous one. */

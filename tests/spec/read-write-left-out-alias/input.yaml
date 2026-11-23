@@ -1,0 +1,25 @@
+openapi: 3.1.0
+paths: {}
+components:
+  schemas:
+    Aliased:
+      description: A YAML alias is one schema in two allOf groups; the inner group does not end what the outer one leaves out of the view.
+      allOf:
+        - properties:
+            id: { type: string, readOnly: true }
+            inner:
+              allOf:
+                - &requiresId
+                  required: [id]
+                - {}
+        - *requiresId
+    SpelledOut:
+      description: The same schema without the alias.
+      allOf:
+        - properties:
+            id: { type: string, readOnly: true }
+            inner:
+              allOf:
+                - required: [id]
+                - {}
+        - required: [id]
