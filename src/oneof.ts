@@ -97,13 +97,20 @@ export function exclusive(
  * The keys a schema requires, when that is all it asks of an object: a non-empty
  * `required`, with at most `type: object`, properties that admit any value and
  * annotations; or a `$ref` or `$dynamicRef`, with annotations at most, to such a schema
- * (see `onlyTarget`).
+ * (see `onlyTarget`). One reached again on the way (`seen`), which is an error, is none.
  */
-function keysOnly(cx: Ctx, s: Value): string[] | undefined {
+function keysOnly(
+	cx: Ctx,
+	s: Value,
+	seen = new Set<string>(),
+): string[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
 	const target = onlyTarget(cx, s);
-	if (target !== undefined)
-		return cx.inTarget(target, () => keysOnly(cx, target.value));
+	if (target !== undefined) {
+		if (seen.has(target.uri)) return undefined;
+		seen.add(target.uri);
+		return cx.inTarget(target, () => keysOnly(cx, target.value, seen));
+	}
 	const allowed = s.entries.every(
 		([k, x]) =>
 			k === "required" ||
@@ -121,9 +128,14 @@ function keysOnly(cx: Ctx, s: Value): string[] | undefined {
 
 /**
  * Whether a schema admits every value: `true`, annotations alone, or a `$ref` or
- * `$dynamicRef` to such a schema next to them (next to anything, for a 3.0 `$ref`).
+ * `$dynamicRef` to such a schema next to them (next to anything, for a 3.0 `$ref`). A
+ * schema reached again on the way (`seen`), which is an error, is not one.
  */
-function admitsAnyValue(cx: Ctx, s: Value): boolean {
+function admitsAnyValue(
+	cx: Ctx,
+	s: Value,
+	seen: ReadonlySet<string> = new Set(),
+): boolean {
 	if (s === true) return true;
 	if (!(s instanceof JsonObject)) return false;
 	if (
@@ -133,7 +145,11 @@ function admitsAnyValue(cx: Ctx, s: Value): boolean {
 		return false;
 	return cx
 		.reached(s)
-		.every((target) =>
-			cx.inTarget(target, () => admitsAnyValue(cx, target.value)),
+		.every(
+			(target) =>
+				!seen.has(target.uri) &&
+				cx.inTarget(target, () =>
+					admitsAnyValue(cx, target.value, new Set([...seen, target.uri])),
+				),
 		);
 }

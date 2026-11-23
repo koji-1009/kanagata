@@ -21,6 +21,13 @@
         "properties": { "kind": { "$ref": "#/components/schemas/Loop" } },
         "if": { "properties": { "kind": { "const": "a" } } },
         "then": { "required": ["x"] }
+      },
+      "Either": { "oneOf": [{ "$ref": "#/components/schemas/Loop" }, { "required": ["a"] }] },
+      "EitherClosed": {
+        "oneOf": [{ "$ref": "#/components/schemas/Loop" }, { "properties": { "a": {} }, "additionalProperties": false }]
+      },
+      "EitherKeyed": {
+        "oneOf": [{ "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/Loop" } } }, { "required": ["b"] }]
       }
     }
   }

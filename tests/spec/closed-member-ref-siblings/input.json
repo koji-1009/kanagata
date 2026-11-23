@@ -14,6 +14,15 @@
           },
           { "type": "object", "properties": { "iban": { "type": "string" } }, "required": ["iban"] }
         ]
+      },
+      "ClosedCard": { "type": "object", "properties": { "number": { "type": "string" } }, "additionalProperties": false },
+      "CardOnly": { "$ref": "#/components/schemas/ClosedCard" },
+      "PaymentByName": {
+        "description": "So does a member that is a $ref to another name of a closed schema.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/CardOnly" },
+          { "type": "object", "properties": { "iban": { "type": "string" } }, "required": ["iban"] }
+        ]
       }
     }
   }

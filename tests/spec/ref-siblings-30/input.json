@@ -52,6 +52,11 @@
           { "$ref": "#/components/schemas/Tagged" }
         ]
       },
+      "ClosedBase": { "$ref": "#/components/schemas/Base", "properties": { "id": { "type": "string" } }, "additionalProperties": false },
+      "EitherByName": {
+        "description": "Nor in the schema a member's $ref reaches: ClosedBase is Base.",
+        "oneOf": [{ "$ref": "#/components/schemas/ClosedBase" }, { "$ref": "#/components/schemas/Tagged" }]
+      },
       "Anything": {},
       "NeedsA": { "required": ["a"] },
       "NeedsB": { "required": ["b"], "properties": { "b": { "$ref": "#/components/schemas/Anything", "type": "string" } } },

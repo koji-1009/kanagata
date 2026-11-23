@@ -133,15 +133,20 @@ export function outsideKeys(
 
 /**
  * The keys a closed member admits: its own, or those of the closed schema its `$ref` or
- * `$dynamicRef` alone reaches (see `onlyTarget`).
+ * `$dynamicRef` alone reaches (see `onlyTarget`), through any number of them. One reached
+ * again on the way (`seen`), which is an error, is not closed.
  */
-function closedMember(cx: Ctx, s: Value): Set<string> | undefined {
+function closedMember(
+	cx: Ctx,
+	s: Value,
+	seen = new Set<string>(),
+): Set<string> | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
 	const target = onlyTarget(cx, s);
 	if (target === undefined) return closedKeys(s);
-	return target.value instanceof JsonObject
-		? closedKeys(target.value)
-		: undefined;
+	if (seen.has(target.uri)) return undefined;
+	seen.add(target.uri);
+	return cx.inTarget(target, () => closedMember(cx, target.value, seen));
 }
 
 /** `dependentRequired`: each key and the keys it requires. */

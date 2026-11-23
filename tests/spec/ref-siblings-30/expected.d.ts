@@ -40,6 +40,8 @@ export interface schemas {
   Closed: Closed;
   Tagged: Tagged;
   Either: Either;
+  ClosedBase: ClosedBase;
+  EitherByName: EitherByName;
   Anything: Anything;
   NeedsA: NeedsA;
   NeedsB: NeedsB;
@@ -96,6 +98,11 @@ export type Tagged = {
 
 /** Nor is additionalProperties next to a $ref: no member is closed. */
 export type Either = Base | Tagged;
+
+export type ClosedBase = Base;
+
+/** Nor in the schema a member's $ref reaches: ClosedBase is Base. */
+export type EitherByName = ClosedBase | Tagged;
 
 export type Anything = unknown;
 
