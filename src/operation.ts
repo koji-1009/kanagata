@@ -402,9 +402,18 @@ function operation(
 
 	const responses: Prop[] = [];
 	const rs = o.get("responses");
+	// OpenAPI 3.0 requires responses; 3.1 and 3.2 do not. Without them, none is typed.
+	if (rs === undefined && !cx.refSiblings)
+		cx.warn(at, "OpenAPI 3.0 requires responses; none is typed");
 	const base = child(at, "responses");
 	const statuses =
 		rs === undefined ? [] : objectAt(rs, base, "responses").entries;
+	// A Responses Object must have a response (OpenAPI 3.0 to 3.2); an extension is none.
+	if (rs !== undefined && statuses.every(([status]) => status.startsWith("x-")))
+		cx.warn(
+			base,
+			"OpenAPI requires at least one response code in responses; none is typed",
+		);
 	for (const [status, raw] of statuses) {
 		if (status.startsWith("x-")) continue; // a specification extension, not a status
 		const rAt = child(base, status);

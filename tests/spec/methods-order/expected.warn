@@ -1,0 +1,8 @@
+#/paths/~1r/get/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/put/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/post/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/delete/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/options/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/head/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/patch/responses: OpenAPI requires at least one response code in responses; none is typed
+#/paths/~1r/trace/responses: OpenAPI requires at least one response code in responses; none is typed
