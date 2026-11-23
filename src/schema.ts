@@ -428,10 +428,7 @@ function parts(cx: Ctx, v: JsonObject, at: string): Ty {
 		const cond = v.get("if") as Value;
 		const not = refuted(cx, cond, [v, ...cx.around]);
 		if (not === undefined) {
-			cx.warn(
-				child(at, "if"),
-				"if / then / else cannot be expressed in TypeScript; ignored",
-			);
+			cx.ifIgnored(child(at, "if"));
 			for (const key of ["if", "then", "else"])
 				resolveRefs(cx, v.get(key), child(at, key));
 		} else {

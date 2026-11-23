@@ -21,6 +21,12 @@ export interface Diag {
 	msg: string;
 }
 
+/** The warnings on an `if` TypeScript cannot say the values it does not admit of (see `Ctx.ifIgnored`). */
+const IF_IGNORED =
+	"if / then / else cannot be expressed in TypeScript; ignored";
+const THEN_READ =
+	"if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates";
+
 /** A fatal problem at a location in the document. */
 export class DiagError extends GenerateError {
 	declare readonly diag: Diag;
@@ -220,6 +226,8 @@ export class Ctx {
 	readonly schemas: ReadonlySet<string>;
 	/** Warnings in the order first raised; the same schema converted for both views warns once. */
 	readonly #warnings = new Map<string, Diag>();
+	/** The `if`s (`…/if`) whose `then` an `unevaluated*` reads for what it evaluates (`thenRead`). */
+	readonly #thenRead = new Set<string>();
 	/**
 	 * Which view a schema is converted for: `read` (responses) leaves out writeOnly
 	 * properties, `write` (request bodies, parameters) leaves out readOnly ones.
@@ -312,8 +320,26 @@ export class Ctx {
 		if (!this.#warnings.has(key)) this.#warnings.set(key, { at, msg });
 	}
 
+	/**
+	 * Warns that the `if` / `then` / `else` whose `if` is at `at` is ignored: TypeScript has
+	 * no type for the values `if` does not admit. Where an `unevaluated*` reads its `then`
+	 * for what it evaluates (`thenRead`), the warning says that `then` is read for that only.
+	 */
+	ifIgnored(at: string): void {
+		this.warn(at, IF_IGNORED);
+	}
+
+	/** Records that an `unevaluated*` reads the `then` of the `if` at `at` for what it evaluates (see `ifIgnored`). */
+	thenRead(at: string): void {
+		this.#thenRead.add(at);
+	}
+
 	get warnings(): Diag[] {
-		return [...this.#warnings.values()];
+		return [...this.#warnings.values()].map((w) =>
+			w.msg === IF_IGNORED && this.#thenRead.has(w.at)
+				? { at: w.at, msg: THEN_READ }
+				: w,
+		);
 	}
 
 	/**

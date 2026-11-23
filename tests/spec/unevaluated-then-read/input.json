@@ -1,0 +1,43 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "ThenRequired": {
+        "description": "then holds where it evaluates a property; where it evaluates none, its required is not read.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["y"], "properties": { "x": { "type": "string" }, "y": { "type": "string" } } },
+        "unevaluatedProperties": false
+      },
+      "InMember": {
+        "description": "So for an if in a member the unevaluatedProperties around it reads.",
+        "type": "object",
+        "allOf": [
+          {
+            "properties": { "kind": { "type": "string" } },
+            "if": { "properties": { "kind": { "const": "a" } } },
+            "then": { "properties": { "x": { "type": "string" } } }
+          }
+        ],
+        "unevaluatedProperties": false
+      },
+      "ThenEvaluatesNothing": {
+        "description": "A then that evaluates nothing is not read: it is ignored.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" }, "x": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] },
+        "unevaluatedProperties": false
+      },
+      "NotRead": {
+        "description": "Without unevaluatedProperties, then is not read.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "properties": { "x": { "type": "string" } } }
+      }
+    }
+  }
+}

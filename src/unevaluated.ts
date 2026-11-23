@@ -113,6 +113,19 @@ function evaluateBoth(a: Evaluated, b: Evaluated): void {
 	a.branches.push(...b.branches);
 }
 
+/** Whether a schema evaluates a property or an item somewhere, itself or where a branch matches. */
+function evaluatesAny(e: Evaluated): boolean {
+	return (
+		e.names.size > 0 ||
+		e.patterns.length > 0 ||
+		e.all ||
+		e.length > 0 ||
+		e.rest ||
+		e.contained.length > 0 ||
+		e.branches.length > 0
+	);
+}
+
 /** `f`, run where it is read now (see `Ctx.place`) when first asked, and remembered. */
 function later<T>(cx: Ctx, f: () => T): () => T {
 	const place = cx.place;
@@ -208,6 +221,7 @@ function evaluates(
 	if (cond !== undefined) {
 		const then = s.get("then") ?? true;
 		const otherwise = s.get("else") ?? true;
+		const not = refuted(cx, cond, [s, ...cx.around]);
 		const tys = later(
 			cx,
 			() =>
@@ -219,15 +233,17 @@ function evaluates(
 		);
 		// if and then evaluate where if admits the value; else where it does not.
 		const both = member(cond, child(at, "if"));
-		evaluateBoth(both, member(then, child(at, "then")));
+		const thenEv = member(then, child(at, "then"));
+		evaluateBoth(both, thenEv);
 		branch(() => inter([tys()[0], tys()[1]]), both);
-		const not = refuted(cx, cond, [s, ...cx.around]);
-		if (not === undefined) ev.undecided ||= otherwise !== true;
-		else
+		if (not !== undefined)
 			branch(
 				() => inter([not, tys()[2]]),
 				member(otherwise, child(at, "else")),
 			);
+		else if (otherwise !== true) ev.undecided = true;
+		// Without else, then is read where it evaluates, though no type says where if fails.
+		else if (evaluatesAny(thenEv)) cx.thenRead(child(at, "if"));
 	}
 	const ds = s.get("dependentSchemas");
 	for (const [k, d] of ds instanceof JsonObject ? ds.entries : [])

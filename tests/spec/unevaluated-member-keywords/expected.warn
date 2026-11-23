@@ -1,1 +1,1 @@
-#/components/schemas/ThenWithoutElse/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/ThenWithoutElse/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
