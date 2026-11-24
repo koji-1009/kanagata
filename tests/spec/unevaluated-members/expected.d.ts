@@ -19,7 +19,7 @@ export type Strings = {
 };
 
 /** A boolean member evaluates no item. */
-export type First = [string?];
+export type First = [] | [string];
 
 /** A member's else whose if TypeScript cannot negate leaves what is evaluated unsaid: the keyword is ignored. */
 export type Unsaid = {

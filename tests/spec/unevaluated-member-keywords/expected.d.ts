@@ -47,7 +47,7 @@ export type AdditionalInMember = {
 };
 
 /** contains in a member evaluates the items it matches where that member matches: all strings, or a number at most. */
-export type ContainsInMember = [number] | [string, ...string[]] | [number, ...string[]] | [] | [number?];
+export type ContainsInMember = [number] | [string, ...string[]] | [number, ...string[]] | [];
 
 /** Without else, what then names is evaluated only where if admits the value, which TypeScript can say even where it cannot say which values if does not admit. */
 export type ThenWithoutElse = {

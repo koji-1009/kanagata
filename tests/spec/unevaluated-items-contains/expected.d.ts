@@ -26,7 +26,7 @@ export interface schemas {
 export type Matched = [string, ...string[]];
 
 /** Every item matches contains, so minContains and maxContains bound the length. */
-export type Bounded = [string, string, string?];
+export type Bounded = [string, string] | [string, string, string];
 
 /** minContains 0 admits no item too. */
 export type Optional = string[];
@@ -50,12 +50,12 @@ export type NoneMatch = [];
 export type NoneMatchUnsaid = string[];
 
 /** contains in an allOf member evaluates the items it matches. */
-export type InAllOf = [string, string?];
+export type InAllOf = [string] | [string, string];
 
 export type HasString = [unknown, ...unknown[]];
 
 /** contains in a $ref target evaluates the items it matches. */
-export type ViaRef = HasString & [string, string?];
+export type ViaRef = HasString & ([string] | [string, string]);
 
 /** An item matches one contains or the other; which no type says. */
 export type TwoSources = [string | number, ...(string | number)[]];

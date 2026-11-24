@@ -29,7 +29,7 @@ export type Tags = string[];
 export type MinOne = [unknown, ...unknown[]];
 
 /** A reference stays, and the items it reads are its own. */
-export type RefLength = Tags & [string?];
+export type RefLength = Tags & ([] | [string]);
 
 /** So do two. */
 export type Refs = Tags & MinOne & [string, ...string[]];

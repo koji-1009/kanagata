@@ -17,7 +17,7 @@ export interface schemas {
 }
 
 /** Every value prefixItems lists matches contains, so the prefix item counts: one more item at most. */
-export type Always = ["abc", string?];
+export type Always = ["abc"] | ["abc", string];
 
 /** No value prefixItems lists matches contains, so a matching item follows the prefix item. */
 export type Never = ["ab", string, ...string[]];
@@ -26,7 +26,7 @@ export type Never = ["ab", string, ...string[]];
 export type OfKind = [string];
 
 /** Both prefix items match contains, which admits one at most: the second is not admitted. */
-export type Fewer = ["abc"?];
+export type Fewer = [] | ["abc"];
 
 /** A string may or may not have three characters: whether the prefix item matches contains no type says. */
 export type Undecided = [string, ...string[]];
@@ -41,4 +41,4 @@ export type Wider = [number, ...number[]];
 export type InMember = [number, ...string[]];
 
 /** A member evaluates more items than the schema's own prefixItems types: whether the second matches contains is not read. */
-export type Longer = [number, number?, ...string[]];
+export type Longer = [number] | [number, number, ...string[]];

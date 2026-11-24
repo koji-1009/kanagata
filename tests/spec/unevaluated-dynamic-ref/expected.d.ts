@@ -37,13 +37,13 @@ export type Around = Base & {
   a?: never;
 };
 
-export type Tags = [string?, ...unknown[]];
+export type Tags = [] | [string, ...unknown[]];
 
 /** Tags' prefixItems evaluate the first item; no others are admitted. */
-export type AtMostOne = Tags & [string?];
+export type AtMostOne = Tags & ([] | [string]);
 
 /** The items after the first are numbers. */
-export type ThenNumbers = Tags & [string?, ...number[]];
+export type ThenNumbers = Tags & ([] | [string, ...number[]]);
 
 export type Item = {
   id?: string;

@@ -262,13 +262,13 @@ export type AccountInput = ({
 export type Alone = Record<string, unknown> | unknown[];
 
 /** Items past those prefixItems evaluate are not admitted. */
-export type Prefix = [string?, number?];
+export type Prefix = [] | [string] | [string, number];
 
 /** Each member evaluates its own prefix where it matches; the others are typed by the keyword. */
-export type Alternatives = [never?, ...boolean[]] | ["one"?, ...boolean[]] | [never?, string?, ...boolean[]] | [never?, never?, ...boolean[]] | ["two"?, string?, ...boolean[]];
+export type Alternatives = [] | ["one", ...boolean[]] | ["two"] | ["two", string, ...boolean[]];
 
 /** A member that evaluates every item, and a member's member that evaluates a prefix. */
-export type DeepItems = [] | [string?] | [never?, ...number[]] | [never?] | number[];
+export type DeepItems = [] | [string] | number[];
 
 /** items in a member evaluates every item. */
 export type AllItems = string[];
