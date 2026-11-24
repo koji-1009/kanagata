@@ -48,7 +48,7 @@
 		"lint": "biome ci .",
 		"format": "biome check --write .",
 		"test:unit": "node --test --test-isolation=none --experimental-test-coverage \"--test-coverage-include=src/**\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \"tests/*.test.ts\" \"tests/unit/*.test.ts\" tests/ts/runtime.test.ts",
-		"test:types": "tsc -p tests/ts",
+		"test:types": "tsc -p tests/ts && tsc -p tests/ts --exactOptionalPropertyTypes false",
 		"test:real": "sh scripts/real-specs.sh"
 	},
 	"devDependencies": {

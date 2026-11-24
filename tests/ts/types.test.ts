@@ -1048,13 +1048,16 @@ export function arrayLengths(): void {
 	expectType<Equal<ArrayLength.HeadUpTo[number], string | number>>();
 	const few: ArrayLength.Few = ["a", "b", "c"];
 	for (const item of few) expectType<Equal<typeof item, string>>();
+	// @ts-expect-error undefined, sent as null, is no string: also without
+	// exactOptionalPropertyTypes, which test:types checks too
+	const hole: ArrayLength.Few = ["a", undefined];
 	// @ts-expect-error past maxItems
 	const four: ArrayLength.Few = ["a", "b", "c", "d"];
 	// @ts-expect-error below minItems
 	const none: ArrayLength.HeadUpTo = [];
 	// @ts-expect-error an item the items schema does not admit
 	const head: ArrayLength.HeadUpTo = ["a", "b"];
-	void [four, none, head];
+	void [hole, four, none, head];
 }
 
 export function repeatedItemsAndIntegers(): void {
