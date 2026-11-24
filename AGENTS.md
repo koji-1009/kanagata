@@ -19,12 +19,12 @@ The exports of `src/index.ts` and `src/client.ts` are public API under semver.
 - `tests/`, `scripts/` and `docs/` are never published; README links to `docs/`, which npm resolves to the repository.
 - `dist/` and `.real-specs/` are generated and ignored by git.
 
-| Config                             | Checks                                                                                    |
-| ---------------------------------- | ----------------------------------------------------------------------------------------- |
-| `tsconfig.json`                    | `src/` and tests as Node runs them; needs no build, so `pnpm test` works on a clean clone |
-| `tsconfig.build.json`              | compiles `src/` into `dist/`                                                              |
-| `tests/ts/tsconfig.json`           | the client and expected declarations, as a strict browser project                         |
-| `scripts/real-specs.tsconfig.json` | the `test:real` output, and a call through the built `kanagata/client`                    |
+| Config                             | Checks                                                                                                           |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `tsconfig.json`                    | `src/` and tests as Node runs them; needs no build, so `pnpm test` works on a clean clone                        |
+| `tsconfig.build.json`              | compiles `src/` into `dist/`                                                                                     |
+| `tests/ts/tsconfig.json`           | the client and expected declarations, as a strict browser project, with and without `exactOptionalPropertyTypes` |
+| `scripts/real-specs.tsconfig.json` | the `test:real` output, and a call through the built `kanagata/client`                                           |
 
 ## Commands
 

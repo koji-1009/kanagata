@@ -44,7 +44,7 @@ export type ItemsOfOneOf = string | Record<string, unknown>;
 export type ItemsOfAnyOfRefs = [unknown, ...unknown[]] | Record<string, unknown> & Anything;
 
 /** A member without type says nothing, so neither does its group: the keywords say the kind. */
-export type ItemsOfSomeTyped = [unknown, unknown?, unknown?];
+export type ItemsOfSomeTyped = [unknown, ...unknown[]] & { length: 1 | 2 | 3 };
 
 /** const and enum say the kinds of the values they list, as type does: minItems constrains the arrays, and the string passes it. */
 export type ItemsOfEnum = ["a"] | "none";
@@ -89,7 +89,7 @@ export type IfOfBothKinds = {
 } | [unknown] | [] | null;
 
 /** maxItems in if fails for the longer arrays, which pass without then. */
-export type IfShort = [string?] | [unknown, unknown, ...unknown[]];
+export type IfShort = [] | [string] | [unknown, unknown, ...unknown[]];
 
 /** minItems: 0 in if admits every array. */
 export type IfAnyLength = string[];

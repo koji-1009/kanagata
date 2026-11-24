@@ -33,10 +33,10 @@ export type Beside = Base & {
   c: {} | null;
 };
 
-export type Pair = [string?, number?, ...unknown[]];
+export type Pair = [] | [string] | [string, number, ...unknown[]];
 
 /** Pair's prefixItems evaluate the first two items; no others are admitted. */
-export type AtMostPair = Pair & [string?, number?];
+export type AtMostPair = Pair & ([] | [string] | [string, number]);
 
 export type Named = {
   name?: string;

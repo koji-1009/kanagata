@@ -11,7 +11,7 @@ export interface schemas {
 }
 
 /** The OAS dialect is JSON Schema 2020-12. */
-export type Base = [string?];
+export type Base = [] | [string];
 
 /** So is a dated id of it, and 3.2's. */
 export type Dated = string;

@@ -5,9 +5,10 @@
     "schemas": {
       "NonEmpty": { "description": "minItems items are required.", "type": "array", "items": { "type": "string" }, "minItems": 1 },
       "Pair": { "description": "maxItems not past them closes the tuple.", "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
-      "UpToTwo": { "description": "Items past minItems up to maxItems are optional.", "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 2 },
-      "Few": { "description": "maxItems alone too.", "type": "array", "items": { "type": "string" }, "maxItems": 3 },
-      "Some": { "description": "Equal items in a row are repeated where that is shorter than writing each.", "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 12 },
+      "UpToTwo": { "description": "Items past minItems up to maxItems are optional: a tuple for each length.", "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 2 },
+      "Few": { "description": "maxItems alone too: the equal items one rest, bounded by length, where that is shorter.", "type": "array", "items": { "type": "string" }, "maxItems": 3 },
+      "Some": { "description": "Equal optional items that end it are one rest, bounded by length, where that is shorter than a tuple for each length.", "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 12 },
+      "Hundred": { "description": "The length is that of a tuple where that is shorter than listing each.", "type": "array", "items": { "type": "string" }, "maxItems": 100 },
       "Many": { "description": "Required ones too.", "type": "array", "items": { "type": "string" }, "minItems": 12 },
       "Objects": { "description": "An object type is written once.", "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] }, "maxItems": 2 },
       "Empty": { "description": "maxItems 0 admits only the empty array.", "type": "array", "items": { "type": "string" }, "maxItems": 0 },
@@ -25,6 +26,7 @@
       "SplitItems": { "description": "Items meet too.", "allOf": [{ "type": "array", "items": { "type": "string" } }, { "items": { "enum": ["a", 1] } }] },
       "SplitClosed": { "description": "minItems past a closed tuple in another member admits nothing.", "allOf": [{ "prefixItems": [{ "type": "string" }], "items": false }, { "minItems": 2 }] },
       "SplitRef": { "description": "A reference stays a reference.", "allOf": [{ "$ref": "#/components/schemas/NonEmpty" }, { "maxItems": 1 }] },
+      "Alike": { "description": "Members written alike are written once, in parentheses where they bind looser than their place.", "type": "array", "items": { "anyOf": [{ "type": "array", "items": { "type": "string" }, "maxItems": 3 }, { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "string" }, { "type": "string" }, false], "items": { "type": "string" } }] } },
       "NotArray": { "description": "Array keywords constrain only arrays, so the strings type names pass them.", "type": "string", "allOf": [{ "minItems": 1 }] }
     }
   }

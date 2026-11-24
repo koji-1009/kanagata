@@ -17,7 +17,7 @@ export interface schemas {
 export type Items = string[];
 
 /** A reference to an array without type stays, and the items it reads are its own. */
-export type Short = Items & [string?];
+export type Short = Items & ([] | [string]);
 
 export type Tags = string[];
 
@@ -28,4 +28,4 @@ export type Documented = unknown;
 export type Labeled = Tags & Documented;
 
 /** An array whose items meet a reference to it: the reference is read once, then stays a reference. */
-export type Tree = (Tree & [(Tree & [unknown?])?])[];
+export type Tree = (Tree & ([] | [Tree & ([] | [unknown])]))[];

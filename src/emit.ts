@@ -77,6 +77,57 @@ function sameLength(lo: string, hi: string): string[] {
 	return out;
 }
 
+type Tuple = Extract<Ty, { kind: "tuple" }>;
+
+/** A member of the union a tuple is written as. */
+interface Member {
+	text: string;
+	/** Whether it is `[…] & { length: … }`, an intersection. */
+	bounded: boolean;
+	/** Whether it uses `repeated`. */
+	repeated: boolean;
+}
+
+/**
+ * Items in a row. TypeScript bounds a length only item by item, so equal items in a row
+ * are `...repeated<[T], n>` where that is shorter than writing each.
+ */
+function runs(items: string[]): { parts: string[]; repeated: boolean } {
+	const parts: string[] = [];
+	let repeated = false;
+	for (let i = 0; i < items.length; ) {
+		const item = items[i] as string;
+		let j = i + 1;
+		while (j < items.length && items[j] === item) j++;
+		const n = j - i;
+		const run = `...repeated<[${item}], ${n}>`;
+		if (run.length < n * item.length + (n - 1) * 2) {
+			repeated = true;
+			parts.push(run);
+		} else for (let k = 0; k < n; k++) parts.push(item);
+		i = j;
+	}
+	return { parts, repeated };
+}
+
+/**
+ * The lengths from `lo` to `hi`: listed, or the length of a tuple of `lo` items and
+ * `hi - lo` optional ones where that is shorter.
+ */
+function lengths(lo: number, hi: number): { text: string; repeated: boolean } {
+	const row = runs([
+		...Array<string>(lo).fill("unknown"),
+		...Array<string>(hi - lo).fill("unknown?"),
+	]);
+	const tuple = `[${row.parts.join(", ")}]["length"]`;
+	let listed = String(lo);
+	let n = lo + 1;
+	for (; n <= hi && listed.length <= tuple.length; n++) listed += ` | ${n}`;
+	return n > hi && listed.length <= tuple.length
+		? { text: listed, repeated: false }
+		: { text: tuple, repeated: row.repeated };
+}
+
 /** The first line, naming the kanagata version when one is given. */
 function header(version: string | undefined): string {
 	const by = version === undefined ? "kanagata" : `kanagata ${version}`;
@@ -139,7 +190,7 @@ class Out {
 				this.buf += "[]";
 				break;
 			case "tuple":
-				this.tuple(t);
+				this.tuple(t, ctx);
 				break;
 			case "object":
 				this.object(t.props);
@@ -148,7 +199,7 @@ class Out {
 				this.object(t.props, t.index, t.keyed);
 				break;
 			case "union":
-				this.union(t.items, ctx > Prec.Union);
+				this.union(t.items, ctx);
 				break;
 			case "inter":
 				this.list(t.items, " & ", ctx > Prec.Inter, Prec.Inter);
@@ -182,46 +233,102 @@ class Out {
 		if (paren) this.buf += ")";
 	}
 
-	/**
-	 * `[A, B?, ...R[]]`. TypeScript bounds a length only item by item, so equal items in a
-	 * row are `...repeated<[T], n>` where that is shorter than writing each.
-	 */
-	private tuple(t: Extract<Ty, { kind: "tuple" }>): void {
-		const parts: (Ty | string)[] = [];
-		for (let i = 0; i < t.items.length; ) {
-			const first = t.items[i] as Ty;
-			const required = i < t.min;
-			let j = i + 1;
-			while (
-				j < t.items.length &&
-				j < t.min === required &&
-				equal(t.items[j] as Ty, first)
-			)
-				j++;
-			const item = required
-				? this.text(first, Prec.Union)
-				: `${this.text(first, Prec.Postfix)}?`;
-			const n = j - i;
-			const run = `...repeated<[${item}], ${n}>`;
-			if (run.length < n * item.length + (n - 1) * 2) {
-				this.used.add("repeated");
-				parts.push(run);
-			} else for (let k = 0; k < n; k++) parts.push(item);
-			i = j;
-		}
-		if (t.rest !== undefined)
-			parts.push(`...${this.text(t.rest, Prec.Postfix)}[]`);
-		this.buf += "[";
-		this.list(parts, ", ", false, Prec.Union);
-		this.buf += "]";
+	/** A tuple's members (see `members`), parenthesized where they bind looser than `ctx`. */
+	private tuple(t: Tuple, ctx: Prec): void {
+		const members = this.members(t);
+		const paren =
+			members.length > 1
+				? ctx > Prec.Union
+				: (members[0] as Member).bounded && ctx > Prec.Inter;
+		this.list(
+			members.map((m) => m.text),
+			" | ",
+			paren,
+			Prec.Union,
+		);
 	}
 
 	/**
-	 * Members joined by `|`. Integers in a row are `integers<…>`, spelled by their digits,
-	 * where that is shorter than listing each.
+	 * A tuple as the members of a union. An optional item (`[A?]`) admits `undefined`, which
+	 * is no JSON value, and reads back as one, so the items past `min` are a tuple for each
+	 * length: `[] | [A] | [A, B, ...R[]]`; an item that admits no value ends the arrays. In
+	 * a closed tuple, the equal items that end it are one rest, `...T[]` with `length`
+	 * bounding it, where that is shorter than a tuple for each of their lengths.
 	 */
-	private union(items: Ty[], paren: boolean): void {
-		const parts: (Ty | string)[] = [];
+	private members(t: Tuple): Member[] {
+		const cut = t.items.findIndex(
+			(item, i) => i >= t.min && item.kind === "never",
+		);
+		const items = cut === -1 ? t.items : t.items.slice(0, cut);
+		const rest = cut === -1 ? t.rest : undefined;
+		const n = items.length;
+		const texts: string[] = [];
+		for (const [i, item] of items.entries())
+			texts.push(
+				i > 0 && equal(item, items[i - 1] as Ty)
+					? (texts[i - 1] as string)
+					: this.text(item, Prec.Union),
+			);
+		const exact = (length: number, more?: Ty): Member =>
+			this.row(texts.slice(0, length), more);
+		if (t.min === n) return this.use([exact(n, rest)]);
+		// The items from `k` on are the rest's, or in a closed tuple, the last item's.
+		const last = (rest ?? items[n - 1]) as Ty;
+		let k = n;
+		while (k > t.min && equal(items[k - 1] as Ty, last)) k--;
+		const shorter: Member[] = [];
+		for (let length = t.min; length < k; length++) shorter.push(exact(length));
+		const tail =
+			k === 0
+				? {
+						text: `${this.text(last, Prec.Postfix)}[]`,
+						bounded: false,
+						repeated: false,
+					}
+				: exact(k, last);
+		if (rest !== undefined) return this.use([...shorter, tail]);
+		const length = lengths(k, n);
+		const bounded = {
+			text: `${tail.text} & { length: ${length.text} }`,
+			bounded: true,
+			repeated: tail.repeated || length.repeated,
+		};
+		const each: Member[] = [];
+		let size = -3;
+		for (let i = k; i <= n && size <= bounded.text.length; i++) {
+			const m = exact(i);
+			each.push(m);
+			size += m.text.length + 3;
+		}
+		return this.use([
+			...shorter,
+			...(size <= bounded.text.length ? each : [bounded]),
+		]);
+	}
+
+	/** Members written: the helper they use with them. */
+	private use(members: Member[]): Member[] {
+		if (members.some((m) => m.repeated)) this.used.add("repeated");
+		return members;
+	}
+
+	/** `[A, B, ...R[]]`: the items, and `rest` after them where it is given. */
+	private row(items: string[], rest?: Ty): Member {
+		const { parts, repeated } = runs(items);
+		if (rest !== undefined) parts.push(`...${this.text(rest, Prec.Postfix)}[]`);
+		return { text: `[${parts.join(", ")}]`, bounded: false, repeated };
+	}
+
+	/**
+	 * Members joined by `|`, each written once. Integers in a row are `integers<…>`, spelled
+	 * by their digits, where that is shorter than listing each. A tuple's members are the
+	 * union's (see `members`). Members written alike may leave one, parenthesized as it
+	 * binds.
+	 */
+	private union(items: Ty[], ctx: Prec): void {
+		const parts = new Set<string>();
+		// The members that are intersections.
+		const inters = new Set<string>();
 		for (let i = 0; i < items.length; ) {
 			const first = integerOf(items[i] as Ty);
 			let j = i + 1;
@@ -243,13 +350,28 @@ class Out {
 				const spelled = `integers<${spell(first as number, last).join(" | ")}>`;
 				if (spelled.length < listed) {
 					this.used.add("integers");
-					parts.push(spelled);
+					parts.add(spelled);
 					continue;
 				}
 			}
-			parts.push(...run);
+			for (const t of run)
+				if (t.kind === "tuple")
+					for (const m of this.members(t)) {
+						parts.add(m.text);
+						if (m.bounded) inters.add(m.text);
+					}
+				else {
+					const text = this.text(t, Prec.Union);
+					parts.add(text);
+					if (t.kind === "inter") inters.add(text);
+				}
 		}
-		this.list(parts, " | ", paren && parts.length > 1, Prec.Union);
+		const [only] = parts;
+		const paren =
+			parts.size > 1
+				? ctx > Prec.Union
+				: inters.has(only as string) && ctx > Prec.Inter;
+		this.list([...parts], " | ", paren, Prec.Union);
 	}
 
 	object(props: Prop[], index?: Ty, keyed: Keyed[] = []): void {

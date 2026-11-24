@@ -594,7 +594,7 @@ type Arrays = { ty: Ty; rest: Ty[] };
 /**
  * The types of the components among `out` that admit arrays, where an array meets
  * them: the reference stays, and its type beside it lets the items read as it says
- * (`Tags & [unknown?]` is `Tags & [string?]`). TypeScript reads an item of an
+ * (`Tags & ([] | [unknown])` is `Tags & ([] | [string])`). TypeScript reads an item of an
  * intersection of arrays as one member's alone. Where something there admits arrays
  * only, a component's other values (`null` of `string[] | null`) meet none of it: the
  * intersection leaves its arrays alone.

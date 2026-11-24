@@ -9,12 +9,16 @@ export interface schemas {
   Open: Open;
   Rest: Rest;
   NoPrefix: NoPrefix;
+  Ended: Ended;
 }
 
 export type Pair = [string, number];
 
-export type Open = [string?, (number | null)?, ...unknown[]];
+export type Open = [] | [string] | [string, number | null, ...unknown[]];
 
 export type Rest = [string, ...number[]];
 
 export type NoPrefix = [...number[]];
+
+/** An item that admits no value ends the arrays. */
+export type Ended = [] | [string];

@@ -16,13 +16,13 @@ export interface schemas {
 
 export type Tags = string[];
 
-export type Pair = [unknown?, unknown?];
+export type Pair = unknown[] & { length: 0 | 1 | 2 };
 
 /** Names arrays through $dynamicRef. */
 export type DynamicTags = Tags;
 
 /** Its items read as DynamicTags says. */
-export type TagPair = DynamicTags & Pair & [string?, string?];
+export type TagPair = DynamicTags & Pair & ([] | [string] | [string, string]);
 
 export type TagsInner = string[];
 
@@ -30,4 +30,4 @@ export type TagsInner = string[];
 export type TagsHolder = TagsInner;
 
 /** Its items read as TagsHolder says. */
-export type HeldPair = TagsHolder & Pair & [string?, string?];
+export type HeldPair = TagsHolder & Pair & ([] | [string] | [string, string]);

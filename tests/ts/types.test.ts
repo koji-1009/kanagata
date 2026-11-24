@@ -1040,27 +1040,29 @@ type Below<N extends number, A extends number[] = []> = A["length"] extends N
 	? A[number]
 	: Below<N, [...A, A["length"]]>;
 
+export function arrayLengths(): void {
+	// Items past minItems are no optional items, which admit undefined (not a JSON value,
+	// and read back with every item): an item of each is one its schema admits.
+	expectType<Equal<ArrayLength.Few[number], string>>();
+	expectType<Equal<ArrayLength.Head[number], string | number>>();
+	expectType<Equal<ArrayLength.HeadUpTo[number], string | number>>();
+	const few: ArrayLength.Few = ["a", "b", "c"];
+	for (const item of few) expectType<Equal<typeof item, string>>();
+	// @ts-expect-error undefined, sent as null, is no string: also without
+	// exactOptionalPropertyTypes, which test:types checks too
+	const hole: ArrayLength.Few = ["a", undefined];
+	// @ts-expect-error past maxItems
+	const four: ArrayLength.Few = ["a", "b", "c", "d"];
+	// @ts-expect-error below minItems
+	const none: ArrayLength.HeadUpTo = [];
+	// @ts-expect-error an item the items schema does not admit
+	const head: ArrayLength.HeadUpTo = ["a", "b"];
+	void [hole, four, none, head];
+}
+
 export function repeatedItemsAndIntegers(): void {
 	// Equal items and integers in a row, written by the helpers, are the types written out.
-	expectType<
-		Equal<
-			ArrayLength.Some,
-			[
-				string,
-				string?,
-				string?,
-				string?,
-				string?,
-				string?,
-				string?,
-				string?,
-				string?,
-				string?,
-				string?,
-				string?,
-			]
-		>
-	>();
+	expectType<Equal<ArrayLength.Hundred, string[] & { length: Below<101> }>>();
 	expectType<
 		Equal<
 			ArrayLength.Many,
@@ -1082,24 +1084,41 @@ export function repeatedItemsAndIntegers(): void {
 		>
 	>();
 	expectType<
-		Equal<ArrayLength.Objects, [{ name: string }?, { name: string }?]>
-	>();
-	expectType<
 		Equal<
 			ArrayLength.LongHead,
-			[
-				unknown?,
-				unknown?,
-				unknown?,
-				unknown?,
-				unknown?,
-				unknown?,
-				unknown?,
-				unknown?,
-				unknown?,
-				unknown?,
-				string?,
-			]
+			| []
+			| [unknown]
+			| [unknown, unknown]
+			| [unknown, unknown, unknown]
+			| [unknown, unknown, unknown, unknown]
+			| [unknown, unknown, unknown, unknown, unknown]
+			| [unknown, unknown, unknown, unknown, unknown, unknown]
+			| [unknown, unknown, unknown, unknown, unknown, unknown, unknown]
+			| [unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown]
+			| [
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+			  ]
+			| ([
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					unknown,
+					...string[],
+			  ] & { length: 10 | 11 })
 		>
 	>();
 	expectType<

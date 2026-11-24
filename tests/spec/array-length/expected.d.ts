@@ -10,6 +10,7 @@ export interface schemas {
   UpToTwo: UpToTwo;
   Few: Few;
   Some: Some;
+  Hundred: Hundred;
   Many: Many;
   Objects: Objects;
   Empty: Empty;
@@ -27,6 +28,7 @@ export interface schemas {
   SplitItems: SplitItems;
   SplitClosed: SplitClosed;
   SplitRef: SplitRef;
+  Alike: Alike;
   NotArray: NotArray;
 }
 
@@ -36,22 +38,25 @@ export type NonEmpty = [string, ...string[]];
 /** maxItems not past them closes the tuple. */
 export type Pair = [number, number];
 
-/** Items past minItems up to maxItems are optional. */
-export type UpToTwo = [string, string?];
+/** Items past minItems up to maxItems are optional: a tuple for each length. */
+export type UpToTwo = [string] | [string, string];
 
-/** maxItems alone too. */
-export type Few = [string?, string?, string?];
+/** maxItems alone too: the equal items one rest, bounded by length, where that is shorter. */
+export type Few = string[] & { length: 0 | 1 | 2 | 3 };
 
-/** Equal items in a row are repeated where that is shorter than writing each. */
-export type Some = [string, ...repeated<[string?], 11>];
+/** Equal optional items that end it are one rest, bounded by length, where that is shorter than a tuple for each length. */
+export type Some = [string, ...string[]] & { length: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 };
+
+/** The length is that of a tuple where that is shorter than listing each. */
+export type Hundred = string[] & { length: [...repeated<[unknown?], 100>]["length"] };
 
 /** Required ones too. */
 export type Many = [...repeated<[string], 12>, ...string[]];
 
 /** An object type is written once. */
-export type Objects = [...repeated<[{
+export type Objects = {
   name: string;
-}?], 2>];
+}[] & { length: 0 | 1 | 2 };
 
 /** maxItems 0 admits only the empty array. */
 export type Empty = [];
@@ -60,16 +65,16 @@ export type Empty = [];
 export type Contradiction = never;
 
 /** With prefixItems, maxItems not past them closes the tuple. */
-export type Head = [string?, number?];
+export type Head = [] | [string] | [string, number];
 
 /** maxItems inside prefixItems leaves out the rest of them. */
-export type Short = [string?];
+export type Short = [] | [string];
 
 /** maxItems past prefixItems adds optional items of the items schema. */
-export type HeadUpTo = [string, number?, number?];
+export type HeadUpTo = [string, ...number[]] & { length: 1 | 2 | 3 };
 
 /** prefixItems are repeated where they are equal. */
-export type LongHead = [...repeated<[unknown?], 10>, string?];
+export type LongHead = [] | [unknown] | [unknown, unknown] | [unknown, unknown, unknown] | [...repeated<[unknown], 4>] | [...repeated<[unknown], 5>] | [...repeated<[unknown], 6>] | [...repeated<[unknown], 7>] | [...repeated<[unknown], 8>] | [...repeated<[unknown], 9>] | [...repeated<[unknown], 10>, ...string[]] & { length: 10 | 11 };
 
 /** minItems past prefixItems requires items of the items schema. */
 export type Long = [string, number, number, ...number[]];
@@ -81,7 +86,7 @@ export type Unreachable = never;
 export type AtLeastTwo = [unknown, unknown, ...unknown[]];
 
 /** So is maxItems. */
-export type AtMostOne = [unknown?];
+export type AtMostOne = [] | [unknown];
 
 /** allOf members meet item by item. */
 export type Split = [string, string, ...string[]];
@@ -97,6 +102,9 @@ export type SplitClosed = never;
 
 /** A reference stays a reference. */
 export type SplitRef = NonEmpty & [string];
+
+/** Members written alike are written once, in parentheses where they bind looser than their place. */
+export type Alike = (string[] & { length: 0 | 1 | 2 | 3 })[];
 
 /** Array keywords constrain only arrays, so the strings type names pass them. */
 export type NotArray = string;

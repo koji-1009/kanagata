@@ -139,7 +139,7 @@ export type AnyMember = [unknown, ...unknown[]] | [] | {
 };
 
 /** So does then: if admits every array, so then's maxItems applies to them. */
-export type ThenSeveralKinds = [unknown?, unknown?] | {
+export type ThenSeveralKinds = unknown[] & { length: 0 | 1 | 2 } | {
   a: {} | null;
   b: {} | null;
 } | {

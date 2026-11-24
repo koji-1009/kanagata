@@ -116,7 +116,7 @@ export type ContainsNoA = ("b" | "c")[];
 export type Tags = string[];
 
 /** A not: { not: X } that admits arrays only is an array. */
-export type OneTag = Tags & [string?];
+export type OneTag = Tags & ([] | [string]);
 
 export type Pair = ["a", "b"];
 

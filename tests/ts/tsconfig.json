@@ -2,7 +2,8 @@
 	// src/client.ts and the generated declarations as a strict user project would compile
 	// them (bundler style, DOM types). Based on `tsc --init` (TypeScript 7.0); no
 	// skipLibCheck, because checking the expected .d.ts files is the point. ES2022, the
-	// baseline README states, so the client cannot use a newer API.
+	// baseline README states, so the client cannot use a newer API. test:types checks it
+	// again without exactOptionalPropertyTypes, which tsc --init sets but a project may not.
 	"compilerOptions": {
 		"module": "preserve",
 		"target": "es2022",

@@ -35,38 +35,38 @@ export type Tags = string[];
 export type Listed = string[];
 
 /** type that names array alone is an array. */
-export type OneListed = Listed & [string?];
+export type OneListed = Listed & ([] | [string]);
 
 export type Either = string[];
 
 /** So are members that all are. */
-export type OneEither = Either & [string?];
+export type OneEither = Either & ([] | [string]);
 
 export type Alias = Tags;
 
 /** So is a $ref to one, through another component. */
-export type OneAlias = Alias & [string?];
+export type OneAlias = Alias & ([] | [string]);
 
 /** Tags, described. */
 export type Wrapped = Tags;
 
 /** And an allOf member that is one. */
-export type OneWrapped = Wrapped & [string?];
+export type OneWrapped = Wrapped & ([] | [string]);
 
 export type Titled = Tags;
 
 /** Its other members need not be arrays. */
-export type OneTitled = Titled & [string?];
+export type OneTitled = Titled & ([] | [string]);
 
 export type Maybe = string[];
 
 /** A member that admits nothing (false, not: {}) leaves the others, arrays all. */
-export type OneMaybe = Maybe & [string?];
+export type OneMaybe = Maybe & ([] | [string]);
 
 export type NotOthers = string[];
 
 /** One keyword that names arrays is enough: a not that leaves arrays alone, */
-export type OneNotOthers = NotOthers & [string?];
+export type OneNotOthers = NotOthers & ([] | [string]);
 
 export type CountedEnum = ["a"] | "none";
 

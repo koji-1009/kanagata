@@ -25,16 +25,16 @@ export interface schemas {
 }
 
 /** A $ref to a schema that admits arrays among other kinds keeps its arrays beside it where an array meets it; the other kinds its type names pass the array keywords. */
-export type OneOrNull = TagsOrNull & ([string?] | null);
+export type OneOrNull = TagsOrNull & ([] | [string] | null);
 
 /** Where the other member admits arrays only, its arrays alone are beside it: its other kinds meet none of it. */
-export type OneArray = TagsOrNull & [string?];
+export type OneArray = TagsOrNull & ([] | [string]);
 
 /** Its keywords are read together: not leaves arrays only. */
-export type OneNotNull = NotNullTags & [string?];
+export type OneNotNull = NotNullTags & ([] | [string]);
 
 /** Its arrays are those of its members, through a $ref too. */
-export type OneOrEmpty = TagsOrEmpty & ([string?] | "");
+export type OneOrEmpty = TagsOrEmpty & ([] | [string] | "");
 
 /** And its array values. */
 export type OneMixed = Mixed & (["a"] | "none");
@@ -43,10 +43,10 @@ export type OneMixed = Mixed & (["a"] | "none");
 export type OneCounted = Counted & ([string] | string);
 
 /** An array among other kinds meets a $ref to an array too. */
-export type TagsBesideNullable = Tags & [string?];
+export type TagsBesideNullable = Tags & ([] | [string]);
 
 /** Where nothing it meets admits arrays only, its type is put beside it whole: null stays. */
-export type OneOrNullStill = TagsOrNull & ([string?] | null);
+export type OneOrNullStill = TagsOrNull & ([] | [string] | null);
 
 /** So for two such references: arrays of no item, or null. */
 export type BothOrNull = TagsOrNull & CountsOrNull & (never[] | null);

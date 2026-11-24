@@ -16,11 +16,11 @@ export type Two = [string, number];
 
 export type PastPrefix = [string, ...repeated<[unknown], 4>, ...unknown[]];
 
-export type Fraction = [string?, ...unknown[]];
+export type Fraction = [] | [string, ...unknown[]];
 
-export type Negative = [string?, ...unknown[]];
+export type Negative = [] | [string, ...unknown[]];
 
-export type NotNumber = [string?, ...unknown[]];
+export type NotNumber = [] | [string, ...unknown[]];
 
 /** `N` times the items of `T`, by the digits `D` of `N`: `repeated<[string?], 3>` is `[string?, string?, string?]`. */
 export type repeated<T extends unknown[], N extends number, D extends string = `${N}`, R extends unknown[] = []> = D extends `${infer F extends number}${infer E}`

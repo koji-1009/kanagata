@@ -21,7 +21,7 @@ export interface paths {
             album?: Blob[];
             either?: Blob | number;
             maybe?: Blob | null;
-            pair?: [Blob?, unknown?, ...unknown[]];
+            pair?: [] | [Blob, ...unknown[]];
           };
           "application/json": {
             data?: Upload;
@@ -100,7 +100,7 @@ export type Either = string | number;
 export type Maybe = string | null;
 
 /** And in prefixItems. */
-export type Pair = [Upload?, unknown?, ...unknown[]];
+export type Pair = [] | [Upload, ...unknown[]];
 
 /** Pattern properties are parts too. */
 export type Patterned = {

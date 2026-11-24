@@ -57,7 +57,7 @@ export type UnevaluatedSchema = {
 };
 
 /** unevaluatedItems is items. */
-export type UnevaluatedItems = [string?];
+export type UnevaluatedItems = [] | [string];
 
 /** not of a schema that admits everything admits nothing. */
 export type NotAnything = never;
@@ -130,7 +130,7 @@ export type ContainsNone = string[];
 export type ContainsEmpty = never;
 
 /** Every item matches contains: maxContains bounds the length. */
-export type ContainsAtMost = [string, string?];
+export type ContainsAtMost = [string] | [string, string];
 
 /** minContains above maxContains admits no array. */
 export type ContainsTooMany = never;
@@ -154,7 +154,7 @@ export type ContainsNoShort = "bb"[];
 export type ContainsNoObject = "a"[];
 
 /** Past prefixItems, whose items items does not list, the items are those it lists that contains rejects. */
-export type ContainsPastPrefix = [string?, ..."b"[]];
+export type ContainsPastPrefix = [] | [string, ..."b"[]];
 
 /** dependentRequired: without a, or with b, as the properties type them. */
 export type DepReq = {

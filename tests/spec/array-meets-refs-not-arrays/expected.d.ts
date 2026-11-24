@@ -19,10 +19,10 @@ export interface schemas {
 export type OneNamed = Named & (null | Record<string, unknown>);
 
 /** A $ref beside type: array is an array, read where it is met (its warning comes first), but its type is an intersection with the target's, which leaves no array type to put beside it. */
-export type OneRetyped = Retyped & [unknown?];
+export type OneRetyped = Retyped & ([] | [unknown]);
 
 /** Nor among the members of a union. */
-export type OneRetypedOrNull = RetypedOrNull & ([unknown?] | null);
+export type OneRetypedOrNull = RetypedOrNull & ([] | [unknown] | null);
 
 export type RetypedOrNull = Retyped | null;
 

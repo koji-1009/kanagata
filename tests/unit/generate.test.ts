@@ -266,7 +266,7 @@ export type Ok = string;
 
 export type Json = string | Json[] | {
   [key: string]: Json;
-} | [Json?, ...unknown[]];
+} | [] | [Json, ...unknown[]];
 `,
 	);
 });
