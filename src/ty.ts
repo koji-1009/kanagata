@@ -80,8 +80,9 @@ export type Ty =
 	| { readonly kind: "opRef"; readonly id: string }
 	| { readonly kind: "array"; readonly elem: Ty }
 	/**
-	 * `[A, B?, ...R[]]`: the first `min` items are required, the rest optional,
-	 * followed by any number of `rest` items when given.
+	 * The arrays of the first `min` items and any of the others after them, in order,
+	 * followed by any number of `rest` items when given: `[] | [A] | [A, B, ...R[]]` for
+	 * `min` 0 (written so by `emit`, since an optional item would admit `undefined`).
 	 */
 	| {
 			readonly kind: "tuple";
