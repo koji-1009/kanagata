@@ -20,6 +20,7 @@ export interface schemas {
   PatternShort: PatternShort;
   PatternLong: PatternLong;
   PatternNamed: PatternNamed;
+  PatternTemplateNamed: PatternTemplateNamed;
   NotAll: NotAll;
   PatternMinimum: PatternMinimum;
   EmptyKey: EmptyKey;
@@ -99,6 +100,12 @@ export type PatternLong = {
 /** Where the pattern names every key, the lengths leave out those they reject, with no warning. */
 export type PatternNamed = {
   a?: unknown;
+};
+
+/** So do the keys of a template of the pattern without any text. */
+export type PatternTemplateNamed = {
+  "x-a"?: unknown;
+  "x-b"?: unknown;
 };
 
 /** The keys are the strings propertyNames admits: not: {} admits none. */

@@ -81,6 +81,11 @@
         "type": "object",
         "propertyNames": { "pattern": "^(a|bb)$", "maxLength": 1 }
       },
+      "PatternTemplateNamed": {
+        "description": "So do the keys of a template of the pattern without any text.",
+        "type": "object",
+        "propertyNames": { "pattern": "^x-[ab]{1,2}$", "maxLength": 3 }
+      },
       "NotAll": {
         "description": "The keys are the strings propertyNames admits: not: {} admits none.",
         "type": "object",
