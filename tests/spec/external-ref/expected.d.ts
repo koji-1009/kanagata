@@ -18,6 +18,22 @@ export interface paths {
         204: {};
       };
     };
+    delete: {
+      parameters: {
+        path: {
+          id: number;
+        };
+      };
+      responses: {
+        409: {
+          content: {
+            "application/json": Error & {
+              reason: string;
+            };
+          };
+        };
+      };
+    };
   };
 }
 

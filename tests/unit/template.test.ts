@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the strings are TypeScript template literal types as printed, not JavaScript templates.
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
 	admits,
 	includes,
@@ -245,6 +245,12 @@ test("whether a pattern that is a regular expression matches all strings of a te
 	assert.equal(matchesAll("^x-[^a]", one("^x-b")), true, "a negated class");
 	assert.equal(matchesAll("^x-[^a]", one("^x-a")), false);
 	assert.equal(matchesAll("^x-\\D", one("^x-a")), true);
+	assert.equal(
+		matchesAll("^x-[^\\S\\r\\n]", one("^x- ")),
+		true,
+		"a negated class of a negated class escape: white space but line breaks",
+	);
+	assert.equal(matchesAll("^x-[^\\S\\r\\n]", one("^x-a")), false);
 	assert.equal(matchesAll("^x-[\\d\\-]", one("^x-1")), true);
 	assert.equal(matchesAll("^x-[0-9]", one("^x-1")), true);
 	assert.equal(matchesAll("^x\\.y$", one("^x\\.y$")), true, "an escape");

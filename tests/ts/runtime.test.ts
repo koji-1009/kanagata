@@ -2,7 +2,7 @@
 // Request the client built. Type-checked by the root tsconfig.
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { onTestFinished, test } from "vitest";
 
 import {
 	type ClientConfig,
@@ -1099,10 +1099,10 @@ test("a response without content-type is text", async () => {
 	assert.equal(res.data, "bytes");
 });
 
-test("the global fetch is used when config.fetch is not given", async (t) => {
+test("the global fetch is used when config.fetch is not given", async () => {
 	const rec = recorder();
 	const original = globalThis.fetch;
-	t.after(() => {
+	onTestFinished(() => {
 		globalThis.fetch = original;
 	});
 	globalThis.fetch = (input, init) => rec.fetch(new Request(input, init));

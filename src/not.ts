@@ -213,12 +213,10 @@ function declared(
 	};
 	for (const s of schemas)
 		cx.inOwnResource(s, () => {
-			// In 3.0 the keywords next to $ref are ignored; only the target counts.
-			if (cx.readsSiblings(s)) {
-				meet(listed(cx, get(get(s, "properties"), key), new Set()));
-				const allOf = get(s, "allOf");
-				if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
-			}
+			// Only `if` asks (3.1 and later), so the keywords next to a $ref are read.
+			meet(listed(cx, get(get(s, "properties"), key), new Set()));
+			const allOf = get(s, "allOf");
+			if (Array.isArray(allOf)) meet(declared(cx, allOf, key, seen));
 			for (const values of cx.eachTarget(s, seen, (t) =>
 				declared(cx, [t.value], key, seen),
 			))

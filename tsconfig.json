@@ -23,5 +23,11 @@
 		"moduleDetection": "force",
 		"skipLibCheck": true
 	},
-	"include": ["src", "tests/*.ts", "tests/unit", "tests/ts/runtime.test.ts"]
+	"include": [
+		"src",
+		"tests/*.ts",
+		"tests/unit",
+		"tests/ts/runtime.test.ts",
+		"vitest.config.ts"
+	]
 }

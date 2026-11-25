@@ -1,0 +1,5 @@
+{
+  "$id": "label.json",
+  "description": "A file whose $id is its own URL is that one resource.",
+  "type": "string"
+}

@@ -8,7 +8,10 @@
         "allOf": [{ "$ref": "#/components/schemas/Base" }],
         "type": "object",
         "required": ["name"],
-        "properties": { "name": { "type": "string" } }
+        "properties": {
+          "name": { "type": "string" },
+          "labels": { "type": "object", "additionalProperties": { "type": "string" } }
+        }
       }
     }
   }

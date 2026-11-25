@@ -33,5 +33,5 @@ export type Linked = {
   next?: Linked;
 };
 
-/** So reached through this resource, the next node is still Linked. */
+/** So reached through this resource, the next node is still Linked; a $dynamicRef in its examples is data. */
 export type StrictLinked = Linked;

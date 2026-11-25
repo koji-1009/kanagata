@@ -22,3 +22,16 @@ put:
   responses:
     "204":
       description: saved
+delete:
+  responses:
+    "409":
+      description: the user cannot be deleted
+      content:
+        application/json:
+          # Read here, it meets a schema of the main document.
+          schema:
+            allOf:
+              - $ref: ../input.yaml#/components/schemas/Error
+            required: [reason]
+            properties:
+              reason: { type: string }

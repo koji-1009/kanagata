@@ -459,13 +459,11 @@ export function withRefKinds(
 		case "inter": {
 			let items = t.items.map((u) => go(u, true));
 			// What a reference written out is made of may be written out in turn.
-			for (
-				let written = writtenOut(items, components);
-				written !== undefined;
-				written = writtenOut(items, components)
-			) {
+			let written = writtenOut(items, components);
+			while (written !== undefined) {
 				items = written.map((u) => go(u, true));
 				changed = true;
+				written = writtenOut(items, components);
 			}
 			if (changed) out = inter(items);
 			break;
@@ -1171,13 +1169,11 @@ function memberKinds(m: Ty): ValueKind[] | undefined {
 	const k =
 		kindsOf(m)?.[0] ??
 		valueKind(m) ??
-		(m.kind === "null"
-			? "null"
-			: m.kind === "array"
-				? "array"
-				: m.kind === "template"
-					? "string"
-					: undefined);
+		(m.kind === "array"
+			? "array"
+			: m.kind === "template"
+				? "string"
+				: undefined);
 	return k === undefined ? undefined : ONE_KIND[k];
 }
 

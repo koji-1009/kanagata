@@ -82,8 +82,9 @@ export function propertyNamesParts(
 	// outer reading warns of what it cannot say.
 	if (names === undefined || cx.readsKeysOf(names)) return [];
 	// The keys are the strings it admits; a type of strings says the lengths only by the
-	// keys it names (and `""`), not by templates or `string`, nor a pattern no template
-	// says (one every string matches is `string`, and asks nothing).
+	// keys it names (and `""`, and those of a template without any text), not by other
+	// templates or `string`, nor a pattern no template says (one every string matches is
+	// `string`, and asks nothing).
 	const read = keys();
 	// `true` has no keywords.
 	const s = names instanceof JsonObject ? names : new JsonObject();
@@ -102,7 +103,11 @@ export function propertyNamesParts(
 			child(at, "propertyNames"),
 			"propertyNames cannot be expressed in TypeScript; ignored",
 		);
-	else if (keyTerms(read).some((k) => k.kind === "template"))
+	else if (
+		keyTerms(read).some(
+			(k) => k.kind === "template" && strings(templateOf(k)) === undefined,
+		)
+	)
 		for (const key of lengths)
 			cx.warn(
 				child(child(at, "propertyNames"), key),

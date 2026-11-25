@@ -6,6 +6,8 @@ export interface operations {}
 
 export interface schemas {
   SignalStrength: SignalStrength;
+  Floor: Floor;
+  Rate: Rate;
   CloseCode: CloseCode;
   Score: Score;
   DaysOfMonth: DaysOfMonth;
@@ -13,6 +15,12 @@ export interface schemas {
 
 /** Integers in a row that end at 0 are spelled with 0 among them. */
 export type SignalStrength = integers<`-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-100` | `0`>;
+
+/** Integers in a row below 0 are spelled without 0. */
+export type Floor = integers<`-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-1${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-20`>;
+
+/** Integers in a row whose first digits are next to each other are spelled from the lower bound and up to the upper one, with no first digit between them. */
+export type Rate = integers<`1${5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `2${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`>;
 
 /** Integers in a row whose spelling is no shorter than the list are listed. */
 export type CloseCode = 1000 | 1001 | 1002 | 1003 | 1004 | 1005;
