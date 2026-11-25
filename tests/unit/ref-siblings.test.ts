@@ -5,8 +5,8 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { test } from "vitest";
 import { generate, type Options } from "../../src/index.ts";
 import { JsonObject, parse, toJson, type Value } from "../../src/json.ts";
 import { parseYaml } from "../../src/yaml.ts";

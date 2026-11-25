@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 import { type Io, IoError, main, run } from "../src/cli.ts";
 
 const SPEC = join(import.meta.dirname, "spec");

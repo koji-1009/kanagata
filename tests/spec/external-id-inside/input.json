@@ -8,7 +8,8 @@
         "type": "object",
         "properties": {
           "thing": { "$ref": "thing.json" },
-          "name": { "$ref": "thing.json#/$defs/name" }
+          "name": { "$ref": "thing.json#/$defs/name" },
+          "label": { "$ref": "label.json" }
         }
       }
     }

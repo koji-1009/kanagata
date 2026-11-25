@@ -4,6 +4,8 @@
   "components": {
     "schemas": {
       "SignalStrength": { "description": "Integers in a row that end at 0 are spelled with 0 among them.", "type": "integer", "minimum": -100, "maximum": 0 },
+      "Floor": { "description": "Integers in a row below 0 are spelled without 0.", "type": "integer", "minimum": -20, "maximum": -1 },
+      "Rate": { "description": "Integers in a row whose first digits are next to each other are spelled from the lower bound and up to the upper one, with no first digit between them.", "type": "integer", "minimum": 150, "maximum": 289 },
       "CloseCode": { "description": "Integers in a row whose spelling is no shorter than the list are listed.", "type": "integer", "minimum": 1000, "maximum": 1005 },
       "Score": { "description": "Numbers written with a fraction keep their notation, so they are listed, not spelled as integers.", "type": "number", "enum": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0] },
       "DaysOfMonth": { "description": "Spelled integers as array items need no parentheses.", "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 31 } }

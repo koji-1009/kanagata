@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { GenerateError, generate } from "../../src/index.ts";
 
 /** A 3.1 document with the given `components.schemas` body. */

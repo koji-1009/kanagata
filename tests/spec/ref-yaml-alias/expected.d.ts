@@ -8,6 +8,9 @@ export interface schemas {
   Money: Money;
   Price: Price;
   Order: Order;
+  Currency: Currency;
+  Code: Code;
+  Wallet: Wallet;
 }
 
 export type Money = {
@@ -22,4 +25,13 @@ export type Price = {
 export type Order = {
   price?: Price;
   total?: Money;
+};
+
+export type Currency = "EUR" | "USD";
+
+export type Code = "EUR" | "USD";
+
+/** A schema resource ($id) that is a YAML alias of another is that one resource. */
+export type Wallet = {
+  currency?: Currency;
 };

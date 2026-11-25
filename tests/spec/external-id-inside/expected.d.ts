@@ -8,6 +8,7 @@ export interface schemas {
   Holder: Holder;
   thing: Thing;
   name: Name;
+  label: Label;
   tag: Tag;
 }
 
@@ -15,6 +16,7 @@ export interface schemas {
 export type Holder = {
   thing?: Thing;
   name?: Name;
+  label?: Label;
 };
 
 /** A file's $ids are known inside it: its $refs reach its schemas by them. */
@@ -24,5 +26,8 @@ export type Thing = {
 };
 
 export type Name = string;
+
+/** A file whose $id is its own URL is that one resource. */
+export type Label = string;
 
 export type Tag = boolean;

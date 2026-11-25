@@ -1,18 +1,24 @@
 // The real Io: file system calls and their errors.
 
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+	closeSync,
+	mkdtempSync,
+	openSync,
+	readFileSync,
+	rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { onTestFinished, test } from "vitest";
 import { IoError } from "../src/cli.ts";
-import { nodeIo, plainMessage, writeAll } from "../src/node-io.ts";
+import { nodeIo, plainMessage, writeAll, writer } from "../src/node-io.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 
-test("files are read, written and checked for", (t) => {
+test("files are read, written and checked for", () => {
 	const dir = mkdtempSync(join(tmpdir(), "kanagata-"));
-	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
 	const file = join(dir, "a.txt");
 	assert.equal(nodeIo.exists(file), false);
 	nodeIo.write(file, "héllo");
@@ -24,6 +30,19 @@ test("files are read, written and checked for", (t) => {
 	assert.equal(nodeIo.exists(join(dir, "src", "api", "schema.d.ts")), true);
 	// A parent that is a file cannot be.
 	assert.throws(() => nodeIo.write(join(file, "inside.ts"), "x"), IoError);
+});
+
+test("stdout and stderr write all of the text to their file descriptor", () => {
+	const dir = mkdtempSync(join(tmpdir(), "kanagata-"));
+	onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
+	const file = join(dir, "out.txt");
+	const fd = openSync(file, "w");
+	writer(fd)("héllo\n");
+	writer(fd)("");
+	closeSync(fd);
+	assert.equal(readFileSync(file, "utf8"), "héllo\n");
+	// A descriptor that is closed cannot be written.
+	assert.throws(() => writer(fd)("x"), IoError);
 });
 
 test("assets come from the package root", () => {

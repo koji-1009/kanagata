@@ -12,8 +12,8 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { test } from "vitest";
 import { type Io, run } from "../src/cli.ts";
 import { generate, type Options } from "../src/index.ts";
 import { nodeIo } from "../src/node-io.ts";

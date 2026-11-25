@@ -38,6 +38,33 @@
         "type": "object",
         "properties": { "a": { "type": "string" } },
         "allOf": [{ "properties": { "a": { "$ref": "#/components/schemas/Anything" } }, "required": ["a"] }]
+      },
+      "List": {
+        "type": "array",
+        "items": { "type": "object", "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/Anything" } } }
+      },
+      "Pair": {
+        "type": "array",
+        "prefixItems": [{ "type": "object", "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/Anything" } } }],
+        "items": false
+      },
+      "Rows": {
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "items": { "type": "object", "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/Anything" } } }
+      },
+      "Extensions": {
+        "type": "object",
+        "patternProperties": {
+          "^x-": { "type": "object", "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/Anything" } } }
+        }
+      },
+      "OnlyExtensions": {
+        "type": "object",
+        "patternProperties": {
+          "^x-": { "type": "object", "required": ["a"], "properties": { "a": { "$ref": "#/components/schemas/Anything" } } }
+        },
+        "additionalProperties": false
       }
     }
   }

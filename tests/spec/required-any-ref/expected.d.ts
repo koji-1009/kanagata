@@ -29,6 +29,11 @@ export interface schemas {
   Name: Name;
   Box: Box;
   Narrowed: Narrowed;
+  List: List;
+  Pair: Pair;
+  Rows: Rows;
+  Extensions: Extensions;
+  OnlyExtensions: OnlyExtensions;
 }
 
 export type Anything = unknown;
@@ -48,4 +53,29 @@ export type Box = {
 
 export type Narrowed = {
   a: Anything & string;
+};
+
+export type List = {
+  a: Anything & ({} | null);
+}[];
+
+export type Pair = [] | [{
+  a: Anything & ({} | null);
+}];
+
+export type Rows = [] | [string, ...{
+  a: Anything & ({} | null);
+}[]];
+
+export type Extensions = {
+  [key: `x-${string}`]: {
+    a: Anything & ({} | null);
+  };
+  [key: string]: unknown;
+};
+
+export type OnlyExtensions = {
+  [key: `x-${string}`]: {
+    a: Anything & ({} | null);
+  };
 };

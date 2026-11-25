@@ -25,6 +25,7 @@ The exports of `src/index.ts` and `src/client.ts` are public API under semver.
 | `tsconfig.build.json`              | compiles `src/` into `dist/`                                                                                     |
 | `tests/ts/tsconfig.json`           | the client and expected declarations, as a strict browser project, with and without `exactOptionalPropertyTypes` |
 | `scripts/real-specs.tsconfig.json` | the `test:real` output, and a call through the built `kanagata/client`                                           |
+| `vitest.config.ts`                 | the tests, at 100% coverage of `src/` (lines, functions, and both sides of every branch)                         |
 
 ## Commands
 
@@ -73,7 +74,7 @@ pnpm build      # dist/
 1. **Test first.** Reproduce with a failing spec case, error case or unit test before touching `src/`.
 2. **Expectations are written by hand.** Check every line of `expected.d.ts` against JSON Schema semantics; when output and expectation differ, either may be wrong.
 3. **Types follow what the schema accepts**, as closely as TypeScript allows, never what another generator prints.
-4. **100% coverage with behaviour tests.** Remove a branch no input reaches instead of testing it artificially. `test:unit` runs in one process because merged coverage can hide unreached branches.
+4. **100% coverage with behaviour tests.** Remove a branch no input reaches instead of testing it artificially.
 5. **Real documents only.** Write code for documents as APIs publish them, not for pathological inputs. Show a pattern in a real document before calling it a defect. Unsupported or malformed input that real documents have is a located error (exit code 2) or a warning.
 6. **README and `docs/` are the contract.** A user-observable change (output, warnings, CLI, client) updates them in the same change: the full rules in `docs/cli.md`, `docs/client.md` or `docs/types.md`, and README where its summary changes.
 7. **Biome** formats and lints (`pnpm format`); a `biome-ignore` needs a reason that holds.

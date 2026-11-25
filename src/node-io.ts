@@ -27,22 +27,21 @@ export const nodeIo: Io = {
 			writeFileSync(path, text);
 		}),
 	exists: (path) => existsSync(path),
-	stdout: (text) =>
-		io(() =>
-			writeAll(
-				(bytes, offset) => writeSync(1, bytes, offset),
-				Buffer.from(text),
-			),
-		),
-	stderr: (text) =>
-		io(() =>
-			writeAll(
-				(bytes, offset) => writeSync(2, bytes, offset),
-				Buffer.from(text),
-			),
-		),
+	stdout: writer(1),
+	stderr: writer(2),
 	asset: (name) => readFileSync(join(packageRoot(), name), "utf8"),
 };
+
+/** Writes all of a text to an open file descriptor: 1 is stdout, 2 stderr. */
+export function writer(fd: number): (text: string) => void {
+	return (text) =>
+		io(() =>
+			writeAll(
+				(bytes, offset) => writeSync(fd, bytes, offset),
+				Buffer.from(text),
+			),
+		);
+}
 
 /** Runs a file system call, turning its error into an IoError with a plain message. */
 function io<T>(f: () => T): T {

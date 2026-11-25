@@ -15,4 +15,7 @@ export type Base = {
 
 export type Named = Base & {
   name: string;
+  labels?: {
+    [key: string]: string;
+  };
 };

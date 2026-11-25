@@ -13,3 +13,13 @@ components:
       properties:
         price: { $ref: "#/components/schemas/Price" }
         total: { $ref: "#/components/schemas/Money" }
+    Currency: &currency
+      $id: https://shop.example/currency
+      type: string
+      enum: [EUR, USD]
+    Code: *currency
+    Wallet:
+      description: A schema resource ($id) that is a YAML alias of another is that one resource.
+      type: object
+      properties:
+        currency: { $ref: "https://shop.example/currency" }

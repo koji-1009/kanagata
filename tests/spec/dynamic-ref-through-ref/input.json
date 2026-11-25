@@ -28,10 +28,11 @@
         "$id": "https://example.com/linked",
         "$dynamicAnchor": "node",
         "type": "object",
-        "properties": { "data": true, "next": { "$ref": "#node" } }
+        "properties": { "data": true, "next": { "$ref": "#node" } },
+        "examples": [{ "data": { "$dynamicRef": "#node" } }]
       },
       "StrictLinked": {
-        "description": "So reached through this resource, the next node is still Linked.",
+        "description": "So reached through this resource, the next node is still Linked; a $dynamicRef in its examples is data.",
         "$id": "https://example.com/strict-linked",
         "$dynamicAnchor": "node",
         "$ref": "linked",
