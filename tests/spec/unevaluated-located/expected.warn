@@ -4,3 +4,7 @@
 #/components/schemas/PrefixSchema/prefixItems/0/not: not cannot be expressed in TypeScript; ignored
 #/components/schemas/Conditional/then/properties/x/not: not cannot be expressed in TypeScript; ignored
 #/components/schemas/Conditional/else/properties/y/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/IfContains/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/IfContains/if/contains/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/ThenContains/then/contains/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/ElseContains/else/contains/not: not cannot be expressed in TypeScript; ignored

@@ -13,6 +13,28 @@
       "Cat": { "type": "object", "properties": { "kind": { "type": "string" } } },
       "Card": { "type": "object", "required": ["number"], "properties": { "number": { "type": "string" } } },
       "Bank": { "type": "object", "required": ["iban"], "properties": { "iban": { "type": "string" } } },
+      "OpenEither": {
+        "description": "unevaluatedProperties: true admits every key: it says nothing.",
+        "type": "object",
+        "oneOf": [{ "$ref": "#/components/schemas/Card" }, { "$ref": "#/components/schemas/Bank" }],
+        "unevaluatedProperties": true
+      },
+      "OpenUndecided": {
+        "description": "Nor beside an if TypeScript cannot say, where there is nothing to warn of.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "properties": { "x": { "type": "string" } } },
+        "else": { "properties": { "y": { "type": "string" } } },
+        "unevaluatedProperties": true
+      },
+      "Point": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }] },
+      "Label": { "type": "array", "prefixItems": [{ "type": "string" }] },
+      "Row": {
+        "description": "unevaluatedItems extends the tuples its members reach; with no items of their own, its items are an array.",
+        "anyOf": [{ "$ref": "#/components/schemas/Point" }, { "$ref": "#/components/schemas/Label" }],
+        "unevaluatedItems": { "type": "boolean" }
+      },
       "Extends": {
         "description": "allOf and $ref evaluate their properties: the type is what it is without the keyword.",
         "allOf": [{ "$ref": "#/components/schemas/Cat" }],

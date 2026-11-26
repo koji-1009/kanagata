@@ -21,6 +21,11 @@ export interface schemas {
   Cat: Cat;
   Card: Card;
   Bank: Bank;
+  OpenEither: OpenEither;
+  OpenUndecided: OpenUndecided;
+  Point: Point;
+  Label: Label;
+  Row: Row;
   Extends: Extends;
   Outside: Outside;
   Either: Either;
@@ -60,6 +65,21 @@ export type Card = {
 export type Bank = {
   iban: string;
 };
+
+/** unevaluatedProperties: true admits every key: it says nothing. */
+export type OpenEither = Record<string, unknown> & (Card | Bank);
+
+/** Nor beside an if TypeScript cannot say, where there is nothing to warn of. */
+export type OpenUndecided = {
+  kind?: string;
+};
+
+export type Point = [] | [number] | [number, number, ...unknown[]];
+
+export type Label = [] | [string, ...unknown[]];
+
+/** unevaluatedItems extends the tuples its members reach; with no items of their own, its items are an array. */
+export type Row = (Point | Label) & (boolean[] | Point & ([] | [unknown] | [unknown, unknown, ...boolean[]]) | Label & ([] | [unknown, ...boolean[]]));
 
 /** allOf and $ref evaluate their properties: the type is what it is without the keyword. */
 export type Extends = Cat & {

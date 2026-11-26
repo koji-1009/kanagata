@@ -67,6 +67,27 @@
         "maxContains": 0,
         "unevaluatedItems": { "type": "string" }
       },
+      "NoneMatchApart": {
+        "description": "Nor does it where it would match items of another type: no item is 1.",
+        "type": "array",
+        "contains": { "const": 1 },
+        "minContains": 0,
+        "maxContains": 0,
+        "unevaluatedItems": { "type": "string" }
+      },
+      "NoneMatchBeside": {
+        "description": "A member's contains with maxContains 0 evaluates none: the other contains alone evaluates the items, which it says.",
+        "type": "array",
+        "contains": { "type": "string" },
+        "allOf": [{ "contains": { "type": "number" }, "minContains": 0, "maxContains": 0 }],
+        "unevaluatedItems": false
+      },
+      "Untyped": {
+        "description": "Without type, the items contains evaluates are an array of them.",
+        "contains": { "type": "string" },
+        "minContains": 0,
+        "unevaluatedItems": false
+      },
       "InAllOf": {
         "description": "contains in an allOf member evaluates the items it matches.",
         "type": "array",

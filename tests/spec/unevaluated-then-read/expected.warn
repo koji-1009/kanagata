@@ -1,5 +1,6 @@
 #/components/schemas/ThenRequired/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
 #/components/schemas/InMember/allOf/0/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
+#/components/schemas/InDependent/dependentSchemas/card/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
 #/components/schemas/ThenEvaluatesNothing/if: if / then / else cannot be expressed in TypeScript; ignored
 #/components/schemas/NotRead/if: if / then / else cannot be expressed in TypeScript; ignored
 #/components/schemas/ThenPatterns/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
