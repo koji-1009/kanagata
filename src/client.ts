@@ -778,9 +778,7 @@ function serialize(
 /** One value as text: dates in ISO form, objects as JSON. */
 function scalar(value: unknown): string {
 	if (value instanceof Date) return value.toISOString();
-	return typeof value === "object" && value !== null
-		? JSON.stringify(value)
-		: String(value);
+	return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
 /**
@@ -817,7 +815,6 @@ function buildCookie(cookie: Record<string, unknown> = {}): string {
 }
 
 function copyHeaders(target: Headers, source: HeadersInit | undefined): void {
-	if (source === undefined) return;
 	for (const [name, value] of new Headers(source)) target.set(name, value);
 }
 

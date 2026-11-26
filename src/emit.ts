@@ -122,8 +122,9 @@ function lengths(lo: number, hi: number): { text: string; repeated: boolean } {
 	const tuple = `[${row.parts.join(", ")}]["length"]`;
 	let listed = String(lo);
 	let n = lo + 1;
+	// The list stops once it is the longer: then it is not written.
 	for (; n <= hi && listed.length <= tuple.length; n++) listed += ` | ${n}`;
-	return n > hi && listed.length <= tuple.length
+	return listed.length <= tuple.length
 		? { text: listed, repeated: false }
 		: { text: tuple, repeated: row.repeated };
 }

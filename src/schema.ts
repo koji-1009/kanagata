@@ -303,8 +303,9 @@ export function docText(
  * around it, but in 3.0, which ignores them next to `$ref`.
  */
 function referenced(cx: Ctx, v: JsonObject, ref: string, at: string): Ty {
-	// The keys left out beside the target: those it leaves out itself it is written without anyway.
-	const beside = leftOutGroup(cx, v, false);
+	// The keys left out beside the target, and those it leaves out itself, which it is
+	// written without anyway (`leftOutTarget` leaves them aside).
+	const beside = leftOutGroup(cx, v);
 	return cx.withAround(
 		cx.readsSiblings(v) ? v : undefined,
 		() => leftOutTarget(cx, ref, at, beside) ?? reference(cx, ref, at),
