@@ -26,6 +26,7 @@ export interface schemas {
   Typed: Typed;
   Closed: Closed;
   Open: Open;
+  Located: Located;
   Card: Card;
 }
 
@@ -54,6 +55,13 @@ export type Closed = {
 /** A schema every object matches asks nothing. */
 export type Open = {
   a?: string;
+};
+
+/** A schema of a key is located under dependentSchemas. */
+export type Located = {
+  a?: never;
+} | {
+  b?: string;
 };
 
 /** A key left out of the view is not asked for: id is not sent, created is not returned. */

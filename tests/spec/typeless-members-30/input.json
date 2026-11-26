@@ -16,6 +16,22 @@
         "type": "object",
         "nullable": true,
         "allOf": [{ "$ref": "#/components/schemas/Keyed", "minItems": 1 }]
+      },
+      "Sized": { "minItems": 1 },
+      "NotNullable": {
+        "description": "Without nullable, no null passes.",
+        "type": "string",
+        "allOf": [{ "minItems": 1 }]
+      },
+      "SizedMember": {
+        "description": "The strings pass a $ref to an array member; the keywords next to it, object ones among them, are ignored.",
+        "type": "string",
+        "allOf": [{ "$ref": "#/components/schemas/Sized", "required": ["a"] }]
+      },
+      "SizedBeside": {
+        "description": "type next to a $ref is ignored too.",
+        "$ref": "#/components/schemas/Sized",
+        "type": "string"
       }
     }
   }

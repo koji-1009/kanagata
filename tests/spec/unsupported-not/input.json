@@ -20,6 +20,11 @@
         "not": { "const": null }
       },
       "MaybeNull": { "description": "A schema that admits null among other values.", "not": { "type": "string" } },
+      "NestedIf": {
+        "description": "A $ref is resolved in a not that is ignored, but not in an if inside it, which is not read.",
+        "type": "string",
+        "not": { "minLength": 2, "if": { "$ref": "#/components/schemas/Missing" }, "then": { "maxLength": 1 } }
+      },
       "TwoViews": {
         "description": "A warning in a schema of two types is reported once.",
         "type": "object",

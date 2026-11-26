@@ -9,6 +9,9 @@ export interface schemas {
   InElse: InElse;
   InDependent: InDependent;
   InNestedMember: InNestedMember;
+  AmongMembers: AmongMembers;
+  Base: Base;
+  ClosedIntersection: ClosedIntersection;
 }
 
 /** additionalProperties sees only the properties next to it, so a closed object admits no key then names. */
@@ -43,3 +46,22 @@ export type InNestedMember = {
   b?: never;
   a?: string;
 };
+
+/** A closed oneOf member admits no key another member names, in an allOf member of it too. */
+export type AmongMembers = {
+  a?: string;
+  b?: never;
+} | {
+  b: string;
+};
+
+export type Base = Record<string, unknown>;
+
+/** A closed member that is an intersection keeps the keys it declares. */
+export type ClosedIntersection = Record<string, unknown> & (Base & {
+  a?: string;
+  b?: never;
+} | {
+  a?: string;
+  b?: string;
+});

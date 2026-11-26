@@ -7,7 +7,7 @@ components:
       description: |
         Numbers keep the notation they are written in.
         YAML-only forms become the number they mean.
-      enum: [1.50, 1e10, -0, 12345678901234567890, 0x1F, 0o17]
+      enum: [1.50, 1e10, 1e+2, -0, 12345678901234567890, 0x1F, 0o17]
     Strings:
       enum: ["1.50", yes, null, true, ~]
     Ordered:

@@ -7,6 +7,7 @@ export interface operations {}
 export interface schemas {
   Name: Name;
   Malformed: Malformed;
+  ThroughPointer: ThroughPointer;
 }
 
 /** An $id that is not a URI names no resource: the schema is read where it is. */
@@ -14,5 +15,10 @@ export type Name = string;
 
 /** Nor does one with a malformed percent-encoding: its $refs resolve against the document. */
 export type Malformed = {
+  name?: Name;
+};
+
+/** A pointer into it reaches a schema whose $refs resolve against the document too. */
+export type ThroughPointer = {
   name?: Name;
 };

@@ -14,6 +14,8 @@ export interface schemas {
   ByType: ByType;
   Nothing: Nothing;
   Open: Open;
+  ThenAlone: ThenAlone;
+  Either: Either;
 }
 
 export type Kind = "a" | "b" | "c";
@@ -76,4 +78,16 @@ export type Nothing = Record<string, unknown>;
 /** A value it cannot tell from the declared ones (any string) cannot be expressed. */
 export type Open = {
   kind?: string;
+};
+
+/** Nor does then without if. */
+export type ThenAlone = {
+  x?: string;
+};
+
+/** Nor can the values an if of other keywords does not admit, anyOf among them. */
+export type Either = {
+  a?: string;
+  b?: string;
+  c?: string;
 };

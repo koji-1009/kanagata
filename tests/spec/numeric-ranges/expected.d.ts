@@ -11,9 +11,17 @@ export interface schemas {
   Wide: Wide;
   Offset: Offset;
   Fractional: Fractional;
+  FractionalExclusive: FractionalExclusive;
+  TighterExclusive: TighterExclusive;
+  HighPorts: HighPorts;
+  Exponents: Exponents;
+  LargeExponent: LargeExponent;
   Step: Step;
   DecimalStep: DecimalStep;
   WholeDecimalStep: WholeDecimalStep;
+  AroundZero: AroundZero;
+  SmallStep: SmallStep;
+  Hundreds: Hundreds;
   NegativeStep: NegativeStep;
   OpenStep: OpenStep;
   NoStep: NoStep;
@@ -21,6 +29,7 @@ export interface schemas {
   Listed: Listed;
   Empty: Empty;
   Unbounded: Unbounded;
+  Typeless: Typeless;
 }
 
 export type Range = 1 | 2 | 3 | 4 | 5;
@@ -38,6 +47,20 @@ export type Offset = integers<`11${5 | 6 | 7 | 8 | 9}` | `1${2 | 3 | 4 | 5 | 6 |
 /** The integers between fractional bounds. */
 export type Fractional = 1 | 2 | 3;
 
+/** Exclusive bounds between integers leave none out. */
+export type FractionalExclusive = 1 | 2 | 3;
+
+/** The tighter of maximum and exclusiveMaximum applies. */
+export type TighterExclusive = 1 | 2 | 3 | 4;
+
+/** The count of values decides, not how large they are. */
+export type HighPorts = 60000 | 60001 | 60002 | 60003;
+
+/** Bounds in exponent notation are read exactly. */
+export type Exponents = 98 | 99 | 100;
+
+export type LargeExponent = 9999999998 | 9999999999 | 10000000000;
+
 export type Step = 0 | 5 | 10;
 
 /** multipleOf makes a number range finite. */
@@ -45,6 +68,15 @@ export type DecimalStep = 0 | 0.25 | 0.5 | 0.75 | 1;
 
 /** The integers that are multiples of 1.5. */
 export type WholeDecimalStep = 0 | 3 | 6;
+
+/** 0 is written without a sign. */
+export type AroundZero = -1 | -0.5 | 0 | 0.5 | 1;
+
+/** Zeros at the start of a fraction stay. */
+export type SmallStep = 0 | 0.05 | 0.1 | 0.15 | 0.2;
+
+/** A step in exponent notation is read exactly too. */
+export type Hundreds = 0 | 100 | 200 | 300;
 
 export type NegativeStep = -1 | -0.5 | 0;
 
@@ -61,6 +93,9 @@ export type Listed = 2;
 export type Empty = never;
 
 export type Unbounded = number;
+
+/** Without type, the numbers are those the keywords for numbers admit, and the other kinds pass. */
+export type Typeless = string | 0 | 0.5 | 1 | boolean | null | unknown[] | Record<string, unknown>;
 
 /** The integers the decimal texts `S` spell: ``integers<`1${0 | 1}`>`` is `10 | 11`. */
 export type integers<S extends string> = S extends `${infer N extends number}` ? N : never;

@@ -12,7 +12,7 @@ export interface paths {
   };
   "/regional": {
     get: {
-      servers: [`https://${string}.example.com`, `https://${"us" | "eu"}.example.com/${string}`, `${string}/local`, `${string}/v2/${"beta"}`, `https://x.example.com/\`$${string}\``];
+      servers: [`https://${string}.example.com`, `https://${"us" | "eu"}.example.com/${string}`, `${string}/local`, `${string}/v2/beta`, `${string}/v3`, `https://x.example.com/${"`$"}${string}${"`"}`, "https://ports.example.com:443"];
       responses: {
         204: {};
       };

@@ -197,17 +197,13 @@ function leftOutHere(cx: Ctx, s: JsonObject, seen: Set<string>): boolean {
 }
 
 /**
- * The properties left out of this view of the value a schema is: its own (`leftOutKeys`,
- * through its references unless `throughRef` is false), and those the other members of the
- * `allOf` it is in leave out (`Ctx.leftOutIn`). Every member is the same object: a property
- * one leaves out stays out where another lists it as required.
+ * The properties left out of this view of the value a schema is: its own (`leftOutKeys`),
+ * and those the other members of the `allOf` it is in leave out (`Ctx.leftOutIn`). Every
+ * member is the same object: a property one leaves out stays out where another lists it
+ * as required.
  */
-export function leftOutGroup(
-	cx: Ctx,
-	v: Value,
-	throughRef = true,
-): Set<string> {
-	const keys = leftOutKeys(cx, v, new Set(), throughRef);
+export function leftOutGroup(cx: Ctx, v: Value): Set<string> {
+	const keys = leftOutKeys(cx, v);
 	for (const k of cx.leftOutIn(v)) keys.add(k);
 	return keys;
 }
@@ -215,23 +211,17 @@ export function leftOutGroup(
 /**
  * The properties left out of this view: the schema's own, and those of its `allOf`
  * members, so that `required` next to `allOf` does not bring one back, and of its `$ref`
- * and `$dynamicRef` targets unless `throughRef` is false.
+ * and `$dynamicRef` targets.
  */
 export function leftOutKeys(
 	cx: Ctx,
 	v: Value,
 	seen = new Set<string>(),
-	throughRef = true,
 ): Set<string> {
-	return cx.inOwnResource(v, () => leftOutKeysHere(cx, v, seen, throughRef));
+	return cx.inOwnResource(v, () => leftOutKeysHere(cx, v, seen));
 }
 
-function leftOutKeysHere(
-	cx: Ctx,
-	v: Value,
-	seen: Set<string>,
-	throughRef: boolean,
-): Set<string> {
+function leftOutKeysHere(cx: Ctx, v: Value, seen: Set<string>): Set<string> {
 	const keys = new Set<string>();
 	// In 3.0 the keywords next to $ref are ignored; in 3.1 and 3.2 they and the target
 	// are one schema.
@@ -243,7 +233,6 @@ function leftOutKeysHere(
 		for (const m of Array.isArray(allOf) ? allOf : [])
 			for (const k of leftOutKeys(cx, m, seen)) keys.add(k);
 	}
-	if (!throughRef) return keys;
 	for (const reached of cx.eachTarget(v, seen, (t) =>
 		leftOutKeys(cx, t.value, seen),
 	))

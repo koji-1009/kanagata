@@ -12,7 +12,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { onTestFinished, test } from "vitest";
 import { IoError } from "../src/cli.ts";
-import { nodeIo, plainMessage, writeAll, writer } from "../src/node-io.ts";
+import {
+	nodeIo,
+	packageRoot,
+	plainMessage,
+	writeAll,
+	writer,
+} from "../src/node-io.ts";
 
 const ROOT = join(import.meta.dirname, "..");
 
@@ -46,6 +52,8 @@ test("stdout and stderr write all of the text to their file descriptor", () => {
 });
 
 test("assets come from the package root", () => {
+	// Wherever the process runs: the root is found from this module's own location.
+	assert.equal(packageRoot(), ROOT);
 	assert.equal(
 		nodeIo.asset("src/client.ts"),
 		readFileSync(join(ROOT, "src", "client.ts"), "utf8"),
@@ -61,7 +69,22 @@ test("Node's error text loses the code and the file name", () => {
 		"no such file or directory",
 	);
 	assert.equal(plainMessage(e("EPIPE: broken pipe, write")), "broken pipe");
+	assert.equal(
+		plainMessage(e("EACCES: permission denied")),
+		"permission denied",
+		"without the system call",
+	);
+	assert.equal(
+		plainMessage(e("ENOENT: no such file or directory, open 'a\nb.json'")),
+		"no such file or directory",
+		"a file name with a line break",
+	);
 	assert.equal(plainMessage(new Error("something else")), "something else");
+	assert.equal(
+		plainMessage(new Error("cannot read X: EACCES: permission denied")),
+		"cannot read X: EACCES: permission denied",
+		"a code only at the start",
+	);
 });
 
 test("writeAll continues after partial writes and a full pipe", () => {

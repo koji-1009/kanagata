@@ -13,6 +13,7 @@ export interface schemas {
   List: List;
   Map: Map;
   Ided: Ided;
+  IdedCode: IdedCode;
   Thing: Thing;
 }
 
@@ -46,6 +47,9 @@ export type Map = {
 export type Ided = {
   code?: Code;
 };
+
+/** Nor for a $ref a pointer into it reaches. */
+export type IdedCode = Code;
 
 /** Nor in another file. */
 export type Thing = {

@@ -9,16 +9,25 @@
       "Wide": { "description": "Integers in a row are spelled by their digits where that is shorter than listing each.", "type": "integer", "minimum": -12, "maximum": 345 },
       "Offset": { "description": "Digits past a bound's first are spelled from the bound.", "type": "integer", "minimum": 115, "maximum": 337 },
       "Fractional": { "description": "The integers between fractional bounds.", "type": "integer", "minimum": 0.5, "maximum": 3.5 },
+      "FractionalExclusive": { "description": "Exclusive bounds between integers leave none out.", "type": "integer", "exclusiveMinimum": 0.5, "exclusiveMaximum": 3.5 },
+      "TighterExclusive": { "description": "The tighter of maximum and exclusiveMaximum applies.", "type": "integer", "minimum": 1, "maximum": 10, "exclusiveMaximum": 5 },
+      "HighPorts": { "description": "The count of values decides, not how large they are.", "type": "integer", "minimum": 60000, "maximum": 60003 },
+      "Exponents": { "description": "Bounds in exponent notation are read exactly.", "type": "integer", "minimum": 98, "maximum": 1e+2 },
+      "LargeExponent": { "type": "integer", "minimum": 9999999998, "maximum": 1e10 },
       "Step": { "type": "integer", "minimum": 0, "maximum": 10, "multipleOf": 5 },
       "DecimalStep": { "description": "multipleOf makes a number range finite.", "type": "number", "minimum": 0, "maximum": 1, "multipleOf": 0.25 },
       "WholeDecimalStep": { "description": "The integers that are multiples of 1.5.", "type": "integer", "minimum": 0, "maximum": 7, "multipleOf": 1.5 },
+      "AroundZero": { "description": "0 is written without a sign.", "type": "number", "minimum": -1, "maximum": 1, "multipleOf": 0.5 },
+      "SmallStep": { "description": "Zeros at the start of a fraction stay.", "type": "number", "minimum": 0, "maximum": 0.2, "multipleOf": 0.05 },
+      "Hundreds": { "description": "A step in exponent notation is read exactly too.", "type": "number", "minimum": 0, "maximum": 300, "multipleOf": 1e2 },
       "NegativeStep": { "type": "number", "minimum": -1, "maximum": 0, "multipleOf": 0.5 },
       "OpenStep": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "multipleOf": 0.5 },
       "NoStep": { "description": "Any number between the bounds is no list.", "type": "number", "minimum": 0, "maximum": 1 },
       "TooMany": { "description": "TypeScript builds no union of 100,000 values.", "type": "integer", "minimum": 0, "maximum": 99999 },
       "Listed": { "type": "integer", "minimum": 1, "maximum": 3, "enum": [0, 2, 5] },
       "Empty": { "type": "number", "minimum": 0.1, "maximum": 0.2, "multipleOf": 0.25 },
-      "Unbounded": { "type": "integer", "minimum": 0 }
+      "Unbounded": { "type": "integer", "minimum": 0 },
+      "Typeless": { "description": "Without type, the numbers are those the keywords for numbers admit, and the other kinds pass.", "minimum": 0, "maximum": 1, "multipleOf": 0.5 }
     }
   }
 }

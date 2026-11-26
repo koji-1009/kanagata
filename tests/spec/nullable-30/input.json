@@ -14,6 +14,7 @@
       "Choice": { "type": "string", "enum": ["a", "b", null], "nullable": true },
       "Closed": { "description": "nullable adds null to the type; an enum without null still keeps it out (OAS 3.0.3).", "type": "string", "enum": ["a"], "nullable": true },
       "Untyped": { "description": "nullable without type takes no effect.", "enum": ["a"], "nullable": true },
+      "UntypedObject": { "description": "Nor beside object keywords.", "properties": { "a": { "type": "string" } }, "nullable": true },
       "Fixed": { "description": "A 3.0 Schema Object has no const: it says nothing.", "type": "string", "const": "a", "nullable": true },
       "NotNull": { "type": "string", "nullable": false },
       "MaybeNotNull": { "description": "3.0 ignores the keywords next to $ref, nullable among them.", "$ref": "#/components/schemas/NotNull", "nullable": true },

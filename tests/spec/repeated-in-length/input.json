@@ -1,0 +1,14 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Page": {
+        "description": "repeated is declared where only the length of a tuple uses it.",
+        "type": "array",
+        "items": { "type": "string" },
+        "maxItems": 100
+      }
+    }
+  }
+}

@@ -6,6 +6,11 @@ export interface operations {}
 
 export interface schemas {
   SignalStrength: SignalStrength;
+  Second: Second;
+  Tempo: Tempo;
+  Level: Level;
+  NegativeZero: NegativeZero;
+  Huge: Huge;
   Floor: Floor;
   Rate: Rate;
   CloseCode: CloseCode;
@@ -15,6 +20,21 @@ export interface schemas {
 
 /** Integers in a row that end at 0 are spelled with 0 among them. */
 export type SignalStrength = integers<`-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-100` | `0`>;
+
+/** Integers in a row from 0 are spelled with 0 among them, and no sign. */
+export type Second = integers<`${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2 | 3 | 4 | 5}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`>;
+
+/** Integers in a row whose first digits are the same are spelled from that digit. */
+export type Tempo = integers<`1${2 | 3 | 4 | 5 | 6 | 7}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `180`>;
+
+/** A row of integers after other values is spelled too. */
+export type Level = "off" | integers<`${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2 | 3}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `40`>;
+
+/** -0 is not an integer TypeScript reads back from its text, so it stays out of a row. */
+export type NegativeZero = -0 | integers<`${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2 | 3}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `40`>;
+
+/** Integers past those a number holds exactly are listed. */
+export type Huge = 9007199254740993 | 9007199254740994 | 9007199254740995 | 9007199254740996 | 9007199254740997 | 9007199254740998 | 9007199254740999 | 9007199254741000 | 9007199254741001 | 9007199254741002 | 9007199254741003 | 9007199254741004;
 
 /** Integers in a row below 0 are spelled without 0. */
 export type Floor = integers<`-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-1${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `-20`>;

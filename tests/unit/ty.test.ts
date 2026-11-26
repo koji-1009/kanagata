@@ -332,6 +332,45 @@ test("union keeps members that differ in structure and removes equal ones", () =
 	assert.deepEqual(union([...many, ...again]), { kind: "union", items: many });
 });
 
+test("types are equal where every part is, and unequal where one part differs", () => {
+	const field = (p: Partial<Prop>): Ty =>
+		object([{ key: "a", ty: STRING, optional: true, ...p }]);
+	const x: Ty = { kind: "template", text: '"x"', seq: [{ set: ["x"] }] };
+	const pairs: [Ty, Ty][] = [
+		[field({}), field({ optional: false })],
+		[field({}), field({ doc: "a" })],
+		[field({}), field({ present: true })],
+		[array(STRING), array(NUMBER)],
+		[tuple([STRING]), array(STRING)],
+		[
+			{ kind: "tuple", items: [STRING], min: 0 },
+			{ kind: "tuple", items: [STRING], min: 1 },
+		],
+		[
+			{ kind: "tuple", items: [STRING], min: 1 },
+			{ kind: "tuple", items: [STRING], min: 1, rest: STRING },
+		],
+		[
+			{ kind: "tuple", items: [STRING], min: 1, rest: STRING },
+			{ kind: "tuple", items: [STRING], min: 1, rest: NUMBER },
+		],
+		[lit('"x"'), x],
+		[
+			{ kind: "map", props: [], index: STRING },
+			{ kind: "map", props: [], index: NUMBER },
+		],
+		[
+			{ kind: "union", items: [STRING] },
+			{ kind: "union", items: [STRING, NUMBER] },
+		],
+	];
+	for (const [a, b] of pairs) {
+		assert.equal(equal(a, b), false, JSON.stringify([a, b]));
+		assert.equal(equal(a, structuredClone(a)), true, JSON.stringify(a));
+	}
+	assert.equal(equal(STRING, { kind: "string" }), true, "kinds without parts");
+});
+
 test("many members are told apart by their keys as one by one, every kind", () => {
 	const id = prop("id", STRING);
 	const name = prop("name", STRING);

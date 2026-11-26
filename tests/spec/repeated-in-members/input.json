@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Entry": {
+        "description": "repeated is declared where only some of the members use it.",
+        "prefixItems": [{}, {}, {}, {}, { "type": "string" }]
+      }
+    }
+  }
+}

@@ -16,7 +16,7 @@ export interface schemas {
  * Numbers keep the notation they are written in.
  * YAML-only forms become the number they mean.
  */
-export type Numbers = 1.50 | 1e10 | -0 | 12345678901234567890 | 31 | 15;
+export type Numbers = 1.50 | 1e10 | 1e+2 | -0 | 12345678901234567890 | 31 | 15;
 
 export type Strings = "1.50" | "yes" | null | true;
 

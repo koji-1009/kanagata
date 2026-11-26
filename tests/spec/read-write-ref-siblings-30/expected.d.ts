@@ -7,6 +7,7 @@ export interface operations {}
 export interface schemas {
   Item: Item;
   Nullable: Nullable;
+  Labeled: Labeled;
 }
 
 export type Item = {
@@ -23,3 +24,6 @@ export type Nullable = Item & {
 export type NullableInput = {
   name: string;
 };
+
+/** So are properties beside it: a readOnly there leaves nothing out. */
+export type Labeled = Item;

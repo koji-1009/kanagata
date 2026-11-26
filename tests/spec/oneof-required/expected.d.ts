@@ -13,6 +13,8 @@ export interface schemas {
   Mixed: Mixed;
   RefRequired: RefRequired;
   Alone: Alone;
+  AnnotatedKeys: AnnotatedKeys;
+  Annotated: Annotated;
   AnyObject: AnyObject;
   Declared: Declared;
   Restated: Restated;
@@ -106,6 +108,18 @@ export type RefRequired = ByC & {
 export type Alone = {
   a?: never;
 };
+
+/** Annotations beside required ask nothing more. */
+export type AnnotatedKeys = {
+  a: {} | null;
+  b?: never;
+} | {
+  b: {} | null;
+  a?: never;
+};
+
+/** Annotations alone admit every value, not only objects, so they ask for no key. */
+export type Annotated = unknown;
 
 /** type: object requires no key either: an object with a matches both. */
 export type AnyObject = {

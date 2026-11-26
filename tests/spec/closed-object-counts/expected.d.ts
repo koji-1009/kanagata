@@ -6,6 +6,9 @@ export interface operations {}
 
 export interface schemas {
   TwoOfThree: TwoOfThree;
+  RequiredAtMost: RequiredAtMost;
+  RequiredBetween: RequiredBetween;
+  AtLeastOne: AtLeastOne;
   Contradictory: Contradictory;
 }
 
@@ -22,6 +25,37 @@ export type TwoOfThree = {
   a?: string;
   b: string;
   c: string;
+};
+
+/** maxProperties leaves out the optional properties past it; the required ones stay. */
+export type RequiredAtMost = {
+  a: string;
+  b?: string;
+  c?: never;
+} | {
+  a: string;
+  b?: never;
+  c?: string;
+};
+
+/** A minProperties the required properties already meet asks nothing more. */
+export type RequiredBetween = {
+  a: string;
+  b?: string;
+  c?: never;
+} | {
+  a: string;
+  b?: never;
+  c?: string;
+};
+
+/** Nor does a maxProperties as many as the properties. */
+export type AtLeastOne = {
+  a: string;
+  b?: string;
+} | {
+  a?: string;
+  b: string;
 };
 
 /** minProperties above maxProperties admits nothing. */

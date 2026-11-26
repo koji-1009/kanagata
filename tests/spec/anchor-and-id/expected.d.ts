@@ -7,6 +7,7 @@ export interface operations {}
 export interface schemas {
   Node: Node;
   Tag: Tag;
+  Category: Category;
   Post: Post;
 }
 
@@ -16,6 +17,11 @@ export type Node = {
 };
 
 export type Tag = string;
+
+/** An $id with an empty fragment names the resource without it. */
+export type Category = {
+  parent?: Category;
+};
 
 export type Post = {
   tag?: Tag;

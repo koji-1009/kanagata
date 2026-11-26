@@ -46,6 +46,30 @@
         "if": { "properties": { "kind": { "enum": ["a", "b"], "not": { "const": "b" } } } },
         "then": { "required": ["x"] }
       },
+      "Narrowed": {
+        "description": "The values are those every schema that declares the property lists.",
+        "type": "object",
+        "properties": { "kind": { "enum": ["a", "b", "c"] }, "x": { "type": "string" }, "y": { "type": "string" } },
+        "allOf": [{ "properties": { "kind": { "enum": ["a", "b"] } } }],
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "Mode": { "type": "string" },
+      "Beside": {
+        "description": "An enum beside a $ref lists the values where its target lists none.",
+        "type": "object",
+        "properties": { "mode": { "$ref": "#/components/schemas/Mode", "enum": ["fast", "safe"] }, "limit": { "type": "integer" } },
+        "if": { "properties": { "mode": { "const": "fast" } } },
+        "then": { "required": ["limit"] }
+      },
+      "Level": {
+        "description": "type: string in if rejects the numbers among the values.",
+        "type": "object",
+        "properties": { "level": { "enum": ["auto", 1, 2] }, "manual": { "type": "string" } },
+        "if": { "properties": { "level": { "type": "string" } } },
+        "else": { "required": ["manual"] }
+      },
       "Amount": {
         "description": "Numbers, which type names beside objects, pass if and then, which have object keywords only.",
         "type": ["object", "number"],

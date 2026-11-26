@@ -8,6 +8,10 @@ export interface schemas {
   Pages: Pages;
   Keyed: Keyed;
   RefMember: RefMember;
+  Sized: Sized;
+  NotNullable: NotNullable;
+  SizedMember: SizedMember;
+  SizedBeside: SizedBeside;
 }
 
 /** In 3.0, nullable adds null to type, and null passes members without type. */
@@ -25,3 +29,14 @@ export type Keyed = {
 
 /** null passes a $ref to such a member; the keywords next to it are ignored. */
 export type RefMember = Keyed & Record<string, unknown> | null;
+
+export type Sized = [unknown, ...unknown[]];
+
+/** Without nullable, no null passes. */
+export type NotNullable = string;
+
+/** The strings pass a $ref to an array member; the keywords next to it, object ones among them, are ignored. */
+export type SizedMember = string;
+
+/** type next to a $ref is ignored too. */
+export type SizedBeside = Sized;

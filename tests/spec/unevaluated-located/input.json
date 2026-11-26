@@ -1,0 +1,44 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "PropertiesSchema": {
+        "description": "Next to an applicator, unevaluatedProperties is located where it is.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "allOf": [{ "properties": { "b": { "type": "string" } } }],
+        "unevaluatedProperties": { "type": "string", "not": { "const": "" } }
+      },
+      "ItemsSchema": {
+        "description": "So is unevaluatedItems.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "allOf": [{ "prefixItems": [{ "type": "string" }, { "type": "number" }] }],
+        "unevaluatedItems": { "type": "string", "not": { "const": "" } }
+      },
+      "ContainsSchema": {
+        "description": "And the contains whose items it says.",
+        "type": "array",
+        "contains": { "type": "string", "not": { "const": "" } },
+        "unevaluatedItems": false
+      },
+      "PrefixSchema": {
+        "description": "And the prefix items it tells match the contains or not.",
+        "type": "array",
+        "prefixItems": [{ "type": "string", "not": { "const": "" } }],
+        "contains": { "type": "number" },
+        "unevaluatedItems": false
+      },
+      "Conditional": {
+        "description": "And then and else, which evaluate where if admits the value or does not.",
+        "type": "object",
+        "properties": { "kind": { "enum": ["a", "b"] } },
+        "if": { "properties": { "kind": { "const": "a" } }, "required": ["kind"] },
+        "then": { "properties": { "x": { "type": "string", "not": { "const": "" } } } },
+        "else": { "properties": { "y": { "type": "string", "not": { "const": "" } } } },
+        "unevaluatedProperties": false
+      }
+    }
+  }
+}

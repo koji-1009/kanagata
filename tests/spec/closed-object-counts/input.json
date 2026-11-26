@@ -10,6 +10,31 @@
         "minProperties": 2,
         "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } }
       },
+      "RequiredAtMost": {
+        "description": "maxProperties leaves out the optional properties past it; the required ones stay.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["a"],
+        "maxProperties": 2,
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } }
+      },
+      "RequiredBetween": {
+        "description": "A minProperties the required properties already meet asks nothing more.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["a"],
+        "minProperties": 1,
+        "maxProperties": 2,
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } }
+      },
+      "AtLeastOne": {
+        "description": "Nor does a maxProperties as many as the properties.",
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 2,
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } }
+      },
       "Contradictory": {
         "description": "minProperties above maxProperties admits nothing.",
         "type": "object",

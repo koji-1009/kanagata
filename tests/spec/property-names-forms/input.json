@@ -60,6 +60,10 @@
         "properties": { "a": { "type": "string" } },
         "propertyNames": { "type": "number" }
       },
+      "NoKeysAlone": {
+        "description": "Without type, false says the value is an object without keys.",
+        "propertyNames": false
+      },
       "NotStringsAlone": {
         "description": "Without type, it says the value is an object without keys.",
         "propertyNames": { "type": ["integer", "null"] }

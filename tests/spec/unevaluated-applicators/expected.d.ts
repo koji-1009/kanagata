@@ -37,12 +37,16 @@ export interface schemas {
   BranchPattern: BranchPattern;
   Account: Account;
   Alone: Alone;
+  BesideNot: BesideNot;
+  ThenWithoutIf: ThenWithoutIf;
+  IfAlone: IfAlone;
   Prefix: Prefix;
   Alternatives: Alternatives;
   DeepItems: DeepItems;
   AllItems: AllItems;
   Contains: Contains;
   Undecided: Undecided;
+  RestItems: RestItems;
 }
 
 export type Cat = {
@@ -261,6 +265,25 @@ export type AccountInput = ({
 /** Without an applicator they are additionalProperties and items, which say the value is an object or an array. */
 export type Alone = Record<string, unknown> | unknown[];
 
+/** not evaluates nothing, so beside it they are additionalProperties too. */
+export type BesideNot = {
+  [key: string]: string;
+} & {
+  b?: never;
+};
+
+/** Nor does then without if, which is not read. */
+export type ThenWithoutIf = {
+  [key: string]: string;
+};
+
+/** if alone evaluates where it admits the value. */
+export type IfAlone = {
+  b?: string;
+} | {
+  b?: number;
+} | string | number | boolean | null | unknown[];
+
 /** Items past those prefixItems evaluate are not admitted. */
 export type Prefix = [] | [string] | [string, number];
 
@@ -280,3 +303,6 @@ export type Contains = [string, ...string[]];
 export type Undecided = {
   kind?: string;
 };
+
+/** unevaluatedItems is items where nothing evaluates the rest, located where it is. */
+export type RestItems = string[];

@@ -1,0 +1,6 @@
+#/components/schemas/PropertiesSchema/unevaluatedProperties/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/ItemsSchema/unevaluatedItems/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/ContainsSchema/contains/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/PrefixSchema/prefixItems/0/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/Conditional/then/properties/x/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/Conditional/else/properties/y/not: not cannot be expressed in TypeScript; ignored

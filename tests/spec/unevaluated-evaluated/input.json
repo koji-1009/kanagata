@@ -1,0 +1,38 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Patterned": {
+        "description": "A key a member's pattern matches is evaluated.",
+        "type": "object",
+        "required": ["x-id"],
+        "allOf": [{ "patternProperties": { "^x-": { "type": "string" } } }],
+        "unevaluatedProperties": false
+      },
+      "DependentKeys": {
+        "description": "The keys dependentRequired names are keys of the object, which nothing evaluates here.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "dependentRequired": { "c": ["b"] },
+        "allOf": [{ "properties": { "d": { "type": "string" } } }],
+        "unevaluatedProperties": false
+      },
+      "MemberItems": {
+        "description": "A member's own unevaluatedItems evaluates every item, for the unevaluatedItems around it.",
+        "type": "array",
+        "allOf": [{ "unevaluatedItems": { "type": "string" } }],
+        "unevaluatedItems": false
+      },
+      "NoneContained": {
+        "description": "contains evaluates no item where maxContains is 0.",
+        "type": "array",
+        "prefixItems": [{ "type": "number" }],
+        "contains": { "type": "string" },
+        "minContains": 0,
+        "maxContains": 0,
+        "unevaluatedItems": false
+      }
+    }
+  }
+}

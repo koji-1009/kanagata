@@ -2,3 +2,10 @@
 #/components/schemas/InMember/allOf/0/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
 #/components/schemas/ThenEvaluatesNothing/if: if / then / else cannot be expressed in TypeScript; ignored
 #/components/schemas/NotRead/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/ThenPatterns/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
+#/components/schemas/ThenMembers/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
+#/components/schemas/ThenPrefix/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
+#/components/schemas/ThenPrefix/if/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/ThenContains/if: if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates
+#/components/schemas/ThenContains/if/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/ThenContains/then/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
