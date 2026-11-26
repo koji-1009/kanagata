@@ -486,7 +486,8 @@ function saidHolders(
 			const within = cases.filter((c) => isHolder(c, h.schema));
 			if (always.has(h.schema)) return within.every((c) => sole(c, h));
 			if (ev.length > 0 || ev.contained.length > 0) return false;
-			if (within.every((c) => c.length === 0 && sole(c, h))) return true;
+			// Without items of its own (above), the holder is sole only where no items precede those it evaluates.
+			if (within.every((c) => sole(c, h))) return true;
 			const group = branches.find((b) => b.top && isHolder(b, h.schema))?.group;
 			return (
 				asksOne(h.schema) &&
@@ -513,8 +514,9 @@ function prefixMarks(
 	h: Holder,
 	length: number,
 ): boolean[] | undefined {
+	// The length is the schema's own prefixItems' at least, which it evaluates too.
 	const own = v.get("prefixItems");
-	const prefix = Array.isArray(own) ? own.slice(0, length) : [];
+	const prefix = Array.isArray(own) ? own : [];
 	if (prefix.length < length) return undefined;
 	const c = h.schema.get("contains") as Value;
 	if (negation(c) === NEVER) return prefix.map(() => true);
