@@ -38,6 +38,27 @@
         "then": { "properties": { "x": { "type": "string", "not": { "const": "" } } } },
         "else": { "properties": { "y": { "type": "string", "not": { "const": "" } } } },
         "unevaluatedProperties": false
+      },
+      "IfContains": {
+        "description": "And a contains in if, read for the items it evaluates.",
+        "type": "array",
+        "if": { "contains": { "type": "string", "not": { "pattern": "^a+b$" } } },
+        "then": { "minItems": 2 },
+        "unevaluatedItems": false
+      },
+      "ThenContains": {
+        "description": "And one in then.",
+        "type": "array",
+        "if": { "minItems": 2 },
+        "then": { "contains": { "type": "string", "not": { "pattern": "^x" } } },
+        "unevaluatedItems": false
+      },
+      "ElseContains": {
+        "description": "And one in else.",
+        "type": "array",
+        "if": { "maxItems": 0 },
+        "else": { "contains": { "type": "string", "not": { "const": "" } } },
+        "unevaluatedItems": false
       }
     }
   }

@@ -14,6 +14,9 @@ export interface schemas {
   Everything: Everything;
   NoneMatch: NoneMatch;
   NoneMatchUnsaid: NoneMatchUnsaid;
+  NoneMatchApart: NoneMatchApart;
+  NoneMatchBeside: NoneMatchBeside;
+  Untyped: Untyped;
   InAllOf: InAllOf;
   HasString: HasString;
   ViaRef: ViaRef;
@@ -48,6 +51,15 @@ export type NoneMatch = [];
 
 /** maxContains 0: the items are of the type unevaluatedItems says; the strings contains does not match no type says. */
 export type NoneMatchUnsaid = string[];
+
+/** Nor does it where it would match items of another type: no item is 1. */
+export type NoneMatchApart = string[];
+
+/** A member's contains with maxContains 0 evaluates none: the other contains alone evaluates the items, which it says. */
+export type NoneMatchBeside = [string, ...string[]];
+
+/** Without type, the items contains evaluates are an array of them. */
+export type Untyped = string[] | string | number | boolean | null | Record<string, unknown>;
 
 /** contains in an allOf member evaluates the items it matches. */
 export type InAllOf = [string] | [string, string];

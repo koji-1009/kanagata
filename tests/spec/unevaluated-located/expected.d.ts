@@ -10,6 +10,9 @@ export interface schemas {
   ContainsSchema: ContainsSchema;
   PrefixSchema: PrefixSchema;
   Conditional: Conditional;
+  IfContains: IfContains;
+  ThenContains: ThenContains;
+  ElseContains: ElseContains;
 }
 
 /** Next to an applicator, unevaluatedProperties is located where it is. */
@@ -51,3 +54,12 @@ export type Conditional = ({
   kind?: never;
   y?: string;
 });
+
+/** And a contains in if, read for the items it evaluates. */
+export type IfContains = [] | [string, string, ...string[]];
+
+/** And one in then. */
+export type ThenContains = [string, string, ...string[]] | [];
+
+/** And one in else. */
+export type ElseContains = [] | [string, ...string[]];

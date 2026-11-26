@@ -23,6 +23,15 @@
         ],
         "unevaluatedProperties": false
       },
+      "InDependent": {
+        "description": "So in a dependent schema.",
+        "type": "object",
+        "properties": { "card": { "type": "string" }, "country": { "type": "string" } },
+        "dependentSchemas": {
+          "card": { "if": { "properties": { "country": { "const": "US" } } }, "then": { "properties": { "zip": { "type": "string" } } } }
+        },
+        "unevaluatedProperties": false
+      },
       "ThenEvaluatesNothing": {
         "description": "A then that evaluates nothing is not read: it is ignored.",
         "type": "object",

@@ -7,6 +7,7 @@ export interface operations {}
 export interface schemas {
   ThenRequired: ThenRequired;
   InMember: InMember;
+  InDependent: InDependent;
   ThenEvaluatesNothing: ThenEvaluatesNothing;
   NotRead: NotRead;
   ThenPatterns: ThenPatterns;
@@ -38,6 +39,17 @@ export type InMember = {
 } | {
   kind?: "a";
   x?: string;
+};
+
+/** So in a dependent schema. */
+export type InDependent = {
+  card?: string;
+  country?: string;
+  zip?: never;
+} | {
+  card: string;
+  country?: "US";
+  zip?: string;
 };
 
 /** A then that evaluates nothing is not read: it is ignored. */
