@@ -75,5 +75,5 @@ export type TwoSources = [string | number, ...(string | number)[]];
 /** An anyOf member's contains evaluates the items it matches where the member matches, and both may. */
 export type Either = [string, ...string[]] | [number, ...number[]] | [string | number, ...(string | number)[]];
 
-/** else evaluates where if does not admit the value, which TypeScript cannot say here: unevaluatedItems is ignored, and so which items match contains is not typed. */
-export type Undecided = [unknown, ...unknown[]];
+/** else evaluates where if does not admit the value, which TypeScript cannot say here: wherever else matches. */
+export type Undecided = [string, ...string[]] | [number, ...string[]];

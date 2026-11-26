@@ -72,8 +72,7 @@ const MAX_CASES = MAX_UNION;
  * items or every item (`rest`), the items the `contains` of the schemas in `contained`
  * match; and what its `oneOf` / `anyOf` members (of `group`), `if` / `then` / `else` and
  * dependent schemas evaluate where they match, `cond` (`branches`). `keys` are the keys it names,
- * which a type can leave out. An `else` where TypeScript cannot say which values `if`
- * does not admit evaluates where no type says (`undecided`).
+ * which a type can leave out.
  */
 interface Evaluated {
 	names: Set<string>;
@@ -82,7 +81,6 @@ interface Evaluated {
 	length: number;
 	rest: boolean;
 	contained: Holder[];
-	undecided: boolean;
 	keys: Set<string>;
 	branches: { cond: () => Ty; ev: Evaluated; group: Value[] | undefined }[];
 }
@@ -101,7 +99,6 @@ const nothingEvaluated = (): Evaluated => ({
 	length: 0,
 	rest: false,
 	contained: [],
-	undecided: false,
 	keys: new Set(),
 	branches: [],
 });
@@ -114,7 +111,6 @@ function evaluateBoth(a: Evaluated, b: Evaluated): void {
 	a.length = Math.max(a.length, b.length);
 	a.rest ||= b.rest;
 	a.contained.push(...b.contained);
-	a.undecided ||= b.undecided;
 	for (const k of b.keys) a.keys.add(k);
 	a.branches.push(...b.branches);
 }
@@ -240,7 +236,6 @@ function evaluates(
 	// A member, if or dependent schema evaluates where it matches.
 	const branch = (cond: () => Ty, e: Evaluated, group?: Value[]): void => {
 		for (const k of e.keys) ev.keys.add(k);
-		ev.undecided ||= e.undecided;
 		ev.branches.push({ cond, ev: e, group });
 	};
 	for (const key of ["oneOf", "anyOf"]) {
@@ -275,12 +270,12 @@ function evaluates(
 		const thenEv = member(then, child(at, "then"));
 		evaluateBoth(both, thenEv);
 		branch(() => inter([tys()[0], tys()[1]]), both);
-		if (not !== undefined)
+		// Where no type says which values if does not admit, else evaluates wherever it matches.
+		if (not !== undefined || otherwise !== true)
 			branch(
-				() => inter([not, tys()[2]]),
+				() => inter([not ?? UNKNOWN, tys()[2]]),
 				member(otherwise, child(at, "else")),
 			);
-		else if (otherwise !== true) ev.undecided = true;
 		// Without else, then is read where it evaluates, though no type says where if fails.
 		else if (evaluatesAny(thenEv)) cx.thenRead(child(at, "if"));
 	}
@@ -434,7 +429,7 @@ export function saying(
 ): (() => ReadonlySet<JsonObject>) | undefined {
 	if (v.get("unevaluatedItems") !== false) return undefined;
 	const ev = e.evaluated();
-	const read = ev.undecided || ev.rest ? undefined : e.cases();
+	const read = ev.rest ? undefined : e.cases();
 	if (read === undefined) return undefined;
 	return later(cx, () => saidHolders(cx, v, at, ev, read.branches, read.cases));
 }
@@ -620,18 +615,6 @@ export function unevaluatedParts(
 	const asked = (x: Value | undefined) => x !== undefined && x !== true;
 	if (!asked(up) && !asked(ui)) return [];
 	const ev = e.evaluated();
-	const warn = (key: string, x: Value | undefined) => {
-		if (asked(x))
-			cx.warn(
-				child(at, key),
-				`${key} next to an applicator cannot be expressed in TypeScript; ignored`,
-			);
-	};
-	if (ev.undecided) {
-		warn("unevaluatedProperties", up);
-		warn("unevaluatedItems", ui);
-		return [];
-	}
 	const parts: Ty[] = [];
 	if (asked(up) && !ev.all) {
 		const ty = schema(cx, up as Value, child(at, "unevaluatedProperties"));
@@ -655,7 +638,11 @@ export function unevaluatedParts(
 		}
 	}
 	const read = asked(ui) && !ev.rest ? e.cases() : undefined;
-	if (asked(ui) && !ev.rest && read === undefined) warn("unevaluatedItems", ui);
+	if (asked(ui) && !ev.rest && read === undefined)
+		cx.warn(
+			child(at, "unevaluatedItems"),
+			"unevaluatedItems next to an applicator cannot be expressed in TypeScript; ignored",
+		);
 	if (read !== undefined) {
 		const ty = schema(cx, ui as Value, child(at, "unevaluatedItems"));
 		parts.push(

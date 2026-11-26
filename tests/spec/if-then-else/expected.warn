@@ -1,1 +1,3 @@
 #/components/schemas/Open/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/OpenElse/if: if / then / else: which values if does not admit cannot be expressed in TypeScript; else is read for every value
+#/components/schemas/OpenRef/if: if / then / else cannot be expressed in TypeScript; ignored

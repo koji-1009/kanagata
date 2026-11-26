@@ -1,2 +1,1 @@
-#/components/schemas/Unsaid/allOf/0/if: if / then / else cannot be expressed in TypeScript; ignored
-#/components/schemas/Unsaid/unevaluatedProperties: unevaluatedProperties next to an applicator cannot be expressed in TypeScript; ignored
+#/components/schemas/Unsaid/allOf/0/if: if / then / else: which values if does not admit cannot be expressed in TypeScript; else is read for every value

@@ -101,6 +101,11 @@
         "type": ["object", "string"],
         "allOf": [{ "required": ["a"], "if": { "required": ["b", "c"] }, "else": { "maxLength": 0 } }]
       },
+      "UnsaidElseInMember": {
+        "description": "Where no type says which values the member's if does not admit, else holds for every value, with a warning: a string is as then or as else says.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["a"], "if": { "minProperties": 2 }, "then": { "pattern": "^x" }, "else": { "pattern": "^y" } }]
+      },
       "Keys": { "minProperties": 1 },
       "Keyed": { "required": ["a"] },
       "RefInMember": {

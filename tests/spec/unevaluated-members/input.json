@@ -19,7 +19,7 @@
         "unevaluatedItems": false
       },
       "Unsaid": {
-        "description": "A member's else whose if TypeScript cannot negate leaves what is evaluated unsaid: the keyword is ignored.",
+        "description": "A member's else whose if TypeScript cannot negate evaluates wherever it matches.",
         "type": "object",
         "properties": { "id": { "type": "string" } },
         "allOf": [{ "if": { "minProperties": 2 }, "then": { "required": ["id"] }, "else": { "properties": { "extra": { "type": "string" } } } }],

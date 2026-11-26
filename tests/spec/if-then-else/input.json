@@ -70,6 +70,22 @@
         "properties": { "x": { "type": "string" } },
         "then": { "required": ["x"] }
       },
+      "OpenElse": {
+        "description": "With else, then holds where if admits the value, and else for every value, which it cannot tell apart.",
+        "type": "object",
+        "required": ["kind"],
+        "properties": { "kind": { "type": "string" }, "x": { "type": "string" }, "y": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "OpenRef": {
+        "description": "A $ref in an if / then that is ignored is resolved, wherever it points.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "$ref": "#/components/schemas/OpenElse/properties/x" }
+      },
       "Either": {
         "description": "An if of anyOf does not admit the values every member does not.",
         "type": "object",

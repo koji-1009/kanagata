@@ -515,9 +515,9 @@ function dependentParts(
 }
 
 /**
- * The value is as `then` says where `if` admits it, and as `else` says where it does not:
- * TypeScript can say so where it can say which values `if` does not admit. A warning
- * otherwise.
+ * The value is as `then` says where `if` admits it, and as `else` says where it does not.
+ * Where TypeScript cannot say which values `if` does not admit, `else` is read for every
+ * value, with a warning; without `else`, that asks nothing, and the warning says so.
  */
 function conditionalParts(
 	cx: Ctx,
@@ -527,12 +527,15 @@ function conditionalParts(
 ): Ty[] {
 	if (!conditional(v)) return [];
 	const cond = v.get("if") as Value;
-	const not = refuted(cx, cond, [v, ...cx.around]);
-	if (not === undefined) {
+	const said = refuted(cx, cond, [v, ...cx.around]);
+	const otherwise = v.get("else") ?? true;
+	if (said === undefined && otherwise === true) {
 		cx.ifIgnored(child(at, "if"));
 		for (const key of CONDITIONAL) resolveRefs(cx, v.get(key), child(at, key));
 		return [];
 	}
+	if (said === undefined) cx.elseRead(child(at, "if"));
+	const not = said ?? UNKNOWN;
 	const branches = [cond, v.get("then") ?? true, v.get("else") ?? true];
 	const [i, t, e] = membersIn(cx, v, branches, group, at, CONDITIONAL).map(
 		(ty, k) => anyKind(cx, v, branches[k] as Value, ty),

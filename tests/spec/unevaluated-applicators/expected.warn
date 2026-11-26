@@ -1,4 +1,3 @@
-#/components/schemas/OpenUndecided/if: if / then / else cannot be expressed in TypeScript; ignored
-#/components/schemas/Undecided/if: if / then / else cannot be expressed in TypeScript; ignored
-#/components/schemas/Undecided/unevaluatedProperties: unevaluatedProperties next to an applicator cannot be expressed in TypeScript; ignored
+#/components/schemas/OpenUndecided/if: if / then / else: which values if does not admit cannot be expressed in TypeScript; else is read for every value
+#/components/schemas/Undecided/if: if / then / else: which values if does not admit cannot be expressed in TypeScript; else is read for every value
 #/components/schemas/RestItems/unevaluatedItems/not: not cannot be expressed in TypeScript; ignored
