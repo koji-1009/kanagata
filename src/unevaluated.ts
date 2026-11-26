@@ -496,7 +496,24 @@ function saidHolders(
 			);
 		},
 	);
-	return new Set(said.map((h) => h.schema));
+	// The schema's own contains with maxContains 0 evaluates no item: the type says that none
+	// matches where the items are the schema's own prefix items alone, each told not to.
+	const none =
+		v.get("contains") !== undefined &&
+		count(v, "maxContains") === 0 &&
+		cases.every(
+			(c) =>
+				!c.rest &&
+				c.contained.length === 0 &&
+				prefixMarks(
+					cx,
+					v,
+					at,
+					{ schema: v, at, place: cx.place },
+					c.length,
+				)?.every((m) => !m) === true,
+		);
+	return new Set([...said.map((h) => h.schema), ...(none ? [v] : [])]);
 }
 
 /**

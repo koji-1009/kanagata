@@ -1,3 +1,5 @@
+#/components/schemas/NoneMaybe/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/NoneMaybe/maxContains: maxContains cannot be expressed in TypeScript; ignored
 #/components/schemas/Undecided/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/Mixed/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/Wider/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
