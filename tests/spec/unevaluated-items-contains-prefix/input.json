@@ -60,6 +60,35 @@
         "maxContains": 0,
         "unevaluatedItems": false
       },
+      "NoneBesideItems": {
+        "description": "Where a member evaluates every item, the items past the prefix item may match contains, which no type says.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "contains": { "type": "object", "required": ["x"] },
+        "minContains": 0,
+        "maxContains": 0,
+        "anyOf": [{ "items": {} }, { "maxItems": 1 }],
+        "unevaluatedItems": false
+      },
+      "NoneBesideContains": {
+        "description": "So may the items another contains evaluates.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "contains": { "type": "object", "required": ["x"] },
+        "minContains": 0,
+        "maxContains": 0,
+        "anyOf": [{ "contains": { "type": "object" } }, { "maxItems": 1 }],
+        "unevaluatedItems": false
+      },
+      "NoneMatchedPrefix": {
+        "description": "The second prefix item matches contains, which no type leaves out.",
+        "type": "array",
+        "prefixItems": [{ "type": "number" }, { "const": "abc" }],
+        "contains": { "type": "string", "minLength": 3 },
+        "minContains": 0,
+        "maxContains": 0,
+        "unevaluatedItems": false
+      },
       "NoneMaybe": {
         "description": "A string of three characters would match contains: which the prefix item cannot be no type says.",
         "type": "array",
