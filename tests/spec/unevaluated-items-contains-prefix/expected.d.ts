@@ -12,6 +12,7 @@ export interface schemas {
   MatchedFirst: MatchedFirst;
   AnyItem: AnyItem;
   NoneMatch: NoneMatch;
+  NoneMatchUnsaid: NoneMatchUnsaid;
   NoneBesideItems: NoneBesideItems;
   NoneBesideContains: NoneBesideContains;
   NoneMatchedPrefix: NoneMatchedPrefix;
@@ -44,11 +45,20 @@ export type AnyItem = [string, ...unknown[]] & { length: 1 | 2 | 3 };
 /** maxContains 0: no item matches contains, so it evaluates none, and the prefix item never does: the type says every item there can be. */
 export type NoneMatch = [] | [string];
 
-/** Where a member evaluates every item, the items past the prefix item may match contains, which no type says. */
-export type NoneBesideItems = [] | [string, ...unknown[]];
+/** So where no type says the values contains does not admit: the prefix item is none of them. */
+export type NoneMatchUnsaid = [] | [string];
 
-/** So may the items another contains evaluates. */
-export type NoneBesideContains = [string] | [string, Record<string, unknown>, ...Record<string, unknown>[]] | [];
+/** Where a member evaluates every item, the items past the prefix item are those contains does not admit. */
+export type NoneBesideItems = [] | [string, ...(string | number | boolean | null | unknown[] | {
+  x?: never;
+})[]];
+
+/** So are the items another contains evaluates. */
+export type NoneBesideContains = [string] | [string, {
+  x?: never;
+}, ...{
+  x?: never;
+}[]] | [];
 
 /** The second prefix item matches contains, which no type leaves out. */
 export type NoneMatchedPrefix = [] | [number] | [number, "abc"];

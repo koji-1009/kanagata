@@ -10,7 +10,7 @@
 import { JsonObject, type Value } from "./json.ts";
 import { dependencies, leftOutGroup, namedKeys, requiredKeys } from "./keys.ts";
 import { orOther } from "./kinds.ts";
-import { accepts, listed, negation, refuted } from "./not.ts";
+import { accepts, listed, refuted } from "./not.ts";
 import { containsBounds, count, matches } from "./number.ts";
 import { keyLiterals, propertyKeys } from "./object.ts";
 import { type Ctx, child, type Place } from "./pointer.ts";
@@ -536,13 +536,14 @@ function prefixMarks(
 	const prefix = Array.isArray(own) ? own : [];
 	if (prefix.length < length) return undefined;
 	const c = h.schema.get("contains") as Value;
-	if (negation(c) === NEVER) return prefix.map(() => true);
+	if (cx.inPlace(h.place, () => refuted(cx, c, [])) === NEVER)
+		return prefix.map(() => true);
 	const item = containsTy(cx, h);
 	const marks = prefix.map((p, i): boolean | undefined => {
 		const ty = schema(cx, p, child(child(at, "prefixItems"), String(i)));
 		const met = inter([ty, item]);
 		if (met.kind === "never") return false;
-		// negation reads every schema but an object and false (whose type meets nothing) as admitting all.
+		// refuted reads every schema but an object and false (whose type meets nothing) as admitting all.
 		const s = c as JsonObject;
 		const verdicts = listed(cx, p, new Set())?.map((x) => accepts(cx, s, x));
 		if (verdicts?.every((x) => x === true)) return true;

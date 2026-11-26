@@ -16,7 +16,7 @@
       "NotInteger": { "description": "But a number that is not an integer has no type.", "type": "number", "not": { "type": "integer" } },
       "NotRequired": { "description": "not required is the objects without one of the keys.", "type": "object", "properties": { "a": { "type": "string" } }, "not": { "required": ["a"] } },
       "NotEnum": { "description": "not enum leaves out the values it lists.", "enum": ["a", "b", "c"], "not": { "enum": ["b"] } },
-      "NotRef": { "description": "Other nots have no type.", "not": { "$ref": "#/components/schemas/NotNull" } },
+      "NotRef": { "description": "not $ref leaves what the schema it reaches leaves.", "not": { "$ref": "#/components/schemas/NotNull" } },
       "NotString": { "description": "An object is no string not could leave out.", "type": "object", "not": { "const": "x" } },
       "NotObject": { "description": "But an object type admits an object not lists.", "type": "object", "not": { "const": {} } },
       "NotTuple": { "description": "And an array type an array.", "type": "array", "not": { "enum": [[1]] } },

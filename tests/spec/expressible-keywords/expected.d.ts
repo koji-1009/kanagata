@@ -88,8 +88,8 @@ export type NotRequired = {
 /** not enum leaves out the values it lists. */
 export type NotEnum = "a" | "c";
 
-/** Other nots have no type. */
-export type NotRef = unknown;
+/** not $ref leaves what the schema it reaches leaves. */
+export type NotRef = number | boolean | unknown[] | Record<string, unknown> | null;
 
 /** An object is no string not could leave out. */
 export type NotString = Record<string, unknown>;

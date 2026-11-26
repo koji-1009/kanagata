@@ -38,7 +38,7 @@ import {
 	valueKinds,
 	widen,
 } from "./kinds.ts";
-import { excluded, mayAdmit, negation, notContained, refuted } from "./not.ts";
+import { excluded, mayAdmit, notContained, refuted } from "./not.ts";
 import { admitting, containsBounds, count, numeric } from "./number.ts";
 import {
 	object,
@@ -756,7 +756,7 @@ function containsParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 		});
 		if (max !== undefined && min > max)
 			parts.push(widen(cx, v, ["array"], NEVER));
-		else if (negation(contains) === NEVER) {
+		else if (refuted(cx, contains, []) === NEVER) {
 			// Every item matches: the length is from min to max.
 			if (max !== undefined)
 				parts.push(
@@ -785,14 +785,14 @@ function containsParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 }
 
 /**
- * The values `not` leaves, where TypeScript can say them (`negation`); a warning where it
+ * The values `not` leaves, where TypeScript can say them (`refuted`); a warning where it
  * cannot, but for `not: { enum }`, which `withoutRejected` reads.
  */
 function notParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 	const n = v.get("not");
 	if (n === undefined) return [];
 	resolveRefs(cx, n, child(at, "not"));
-	const t = negation(n);
+	const t = refuted(cx, n, [v, ...cx.around]);
 	if (t !== undefined) return [t];
 	if (excluded(v) === undefined)
 		cx.warn(child(at, "not"), "not cannot be expressed in TypeScript; ignored");

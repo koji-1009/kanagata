@@ -60,8 +60,17 @@
         "maxContains": 0,
         "unevaluatedItems": false
       },
+      "NoneMatchUnsaid": {
+        "description": "So where no type says the values contains does not admit: the prefix item is none of them.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "contains": { "type": "object", "minProperties": 1 },
+        "minContains": 0,
+        "maxContains": 0,
+        "unevaluatedItems": false
+      },
       "NoneBesideItems": {
-        "description": "Where a member evaluates every item, the items past the prefix item may match contains, which no type says.",
+        "description": "Where a member evaluates every item, the items past the prefix item are those contains does not admit.",
         "type": "array",
         "prefixItems": [{ "type": "string" }],
         "contains": { "type": "object", "required": ["x"] },
@@ -71,7 +80,7 @@
         "unevaluatedItems": false
       },
       "NoneBesideContains": {
-        "description": "So may the items another contains evaluates.",
+        "description": "So are the items another contains evaluates.",
         "type": "array",
         "prefixItems": [{ "type": "string" }],
         "contains": { "type": "object", "required": ["x"] },

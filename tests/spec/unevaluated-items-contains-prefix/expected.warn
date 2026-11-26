@@ -1,8 +1,4 @@
-#/components/schemas/NoneBesideItems/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
-#/components/schemas/NoneBesideItems/maxContains: maxContains cannot be expressed in TypeScript; ignored
 #/components/schemas/NoneBesideContains/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
-#/components/schemas/NoneBesideContains/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
-#/components/schemas/NoneBesideContains/maxContains: maxContains cannot be expressed in TypeScript; ignored
 #/components/schemas/NoneMatchedPrefix/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/NoneMatchedPrefix/maxContains: maxContains cannot be expressed in TypeScript; ignored
 #/components/schemas/NoneMaybe/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

@@ -8,7 +8,7 @@
 // is pass it as its keywords and its members' for them say (`passing`, `passed`).
 
 import { JsonObject, jsonKind, type Value } from "./json.ts";
-import { excluded, negation, refuted } from "./not.ts";
+import { excluded, refuted } from "./not.ts";
 import { count, numeric } from "./number.ts";
 import { shared } from "./oneof.ts";
 import type { Ctx, Located } from "./pointer.ts";
@@ -75,7 +75,7 @@ function ofKind(cx: Ctx, s: JsonObject, kind: string): Ty {
  * and `$dynamicRef` target,
  * all its `allOf` members, one of its `anyOf` members and one of its `oneOf` members (a
  * literal or `null` two of them admit is in none; see `shared`), and, where TypeScript
- * can say them, those its `not` leaves (`negation`, `excluded`) and its `if` / `then` /
+ * can say them, those its `not` leaves (`refuted`, `excluded`) and its `if` / `then` /
  * `else` admit (`refuted`). A `not` or `if` it cannot say is ignored, as the member's own
  * type ignores it, with a warning. `parents` are the schemas `m` is a member of (not
  * `Ctx.around`: `m` is not being converted).
@@ -118,7 +118,7 @@ function ownPassed(
 		...(one === undefined ? [] : [union(shared(one))]),
 	);
 	const n = m.get("not");
-	const left = n === undefined ? undefined : negation(n);
+	const left = n === undefined ? undefined : refuted(cx, n, [m, ...parents]);
 	if (left !== undefined) parts.push(left);
 	// As `then` says where `if` admits the value, and as `else` says where it does not.
 	const cond = m.get("if");
