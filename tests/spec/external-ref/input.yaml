@@ -8,3 +8,11 @@ components:
       $ref: schemas/User.yaml
     Error:
       $ref: common.json#/Error
+    Region:
+      type: object
+      properties:
+        country:
+          type: object
+          properties:
+            code: { $ref: "#/components/schemas/CountryCode" }
+    CountryCode: { type: string }

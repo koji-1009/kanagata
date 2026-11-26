@@ -21,6 +21,11 @@
       "Owned": { "type": "object", "properties": { "owner": { "type": "string" } } },
       "Code": { "type": "string", "maxLength": 8 },
       "Label": { "type": "string", "minLength": 1 },
+      "Count": { "type": "integer" },
+      "CountAndString": {
+        "description": "A reference to whole numbers met with a string: never.",
+        "allOf": [{ "$ref": "#/components/schemas/Count" }, { "type": "string" }]
+      },
       "MembersOfIntersections": {
         "description": "An anyOf member that is an allOf of references is kept, as are the references next to it.",
         "allOf": [

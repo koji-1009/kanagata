@@ -3,5 +3,8 @@ required: [city]
 properties:
   city:
     type: string
+  # Back into the main document, to a schema whose $ref resolves against it.
+  country:
+    $ref: ../input.yaml#/components/schemas/Region/properties/country
 not:
   type: "null"

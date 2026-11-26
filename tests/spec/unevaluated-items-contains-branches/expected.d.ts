@@ -13,6 +13,12 @@ export interface schemas {
   OnlyMember: OnlyMember;
   PrefixedMember: PrefixedMember;
   BesideOwn: BesideOwn;
+  BesideSizes: BesideSizes;
+  PrefixInOther: PrefixInOther;
+  OrAll: OrAll;
+  OrBoth: OrBoth;
+  PrefixTwo: PrefixTwo;
+  TwoStrings: TwoStrings;
 }
 
 /** Both members may match, and the first bounds its strings: ["a", "b"] matches neither, which no type says. */
@@ -38,3 +44,21 @@ export type PrefixedMember = [number, ...string[]] | [number, ...(string | boole
 
 /** contains of the schema and of a member: which items match each no type says. */
 export type BesideOwn = [string, ...string[]] | [string | number, ...(string | number)[]];
+
+/** Members that evaluate no item, of another applicator, change nothing: where one member's contains matches, it evaluates every item, and where both do, the items are of either. */
+export type BesideSizes = [string, ...string[]] | [number, ...number[]] | [string | number, ...(string | number)[]];
+
+/** A member of another applicator that evaluates the first item: where it matches, no contains alone evaluates every item, which no type says. */
+export type PrefixInOther = [unknown] | [string, ...string[]] | [unknown, ...string[]] | [number, ...number[]] | [unknown, ...number[]] | [string | number, ...(string | number)[]] | [unknown, ...(string | number)[]];
+
+/** Where the other member evaluates every item, the contains evaluates nothing more: it is typed. */
+export type OrAll = [number, ...number[]] | [string, ...string[]] | [] | number[];
+
+/** A member's items evaluates every item beside its contains: ["a"] matches its type, but not its contains, which no type says. */
+export type OrBoth = [string, ...string[]] | [number | string, ...(number | string)[]];
+
+/** Past the prefix the other member evaluates, its contains is not counted: the first is typed; the other asks for two numbers, which no type says of the items past the first. */
+export type PrefixTwo = [string, ...string[]] | [number, number, ...number[]] | [number, string | number, ...(string | number)[]];
+
+/** A member that asks for two matching items: ["a", 1] matches the other member alone, which leaves "a" unevaluated, but no type says so. */
+export type TwoStrings = [string, string, ...string[]] | [number, number, ...number[]] | [string | number, string | number, ...(string | number)[]] | [number, ...number[]];

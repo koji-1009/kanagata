@@ -5,6 +5,10 @@
     "schemas": {
       "Value": { "anyOf": [{ "type": "integer" }, { "type": "string" }, { "type": "integer" }] },
       "Anything": { "anyOf": [{ "type": "string" }, {}] },
+      "AnyString": {
+        "description": "string admits the strings of a pattern beside it.",
+        "anyOf": [{ "type": "string", "pattern": "^x-" }, { "type": "string" }]
+      },
       "Contact": {
         "type": "object",
         "properties": { "email": { "type": "string" }, "phone": { "type": "string" } },

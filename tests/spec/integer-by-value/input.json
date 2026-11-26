@@ -13,6 +13,10 @@
         "type": "integer",
         "enum": [1e-400, 2]
       },
+      "Decimals": {
+        "description": "Values meet by their exact value, whatever their notation: 1.25 is 1.250, 100 is 1e2.",
+        "allOf": [{ "enum": [1.25, 100, 7] }, { "enum": [1.250, 1e2, 8] }]
+      },
       "TinyMax": {
         "description": "A count that is not an integer is ignored.",
         "type": "array",

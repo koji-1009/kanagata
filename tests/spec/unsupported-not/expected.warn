@@ -5,3 +5,4 @@
 #/components/schemas/PartlyRef/not/const: not: leaving out this value cannot be expressed in TypeScript; ignored
 #/components/schemas/NestedIf/not: not cannot be expressed in TypeScript; ignored
 #/components/schemas/TwoViews/properties/x/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/Labels/unevaluatedProperties/not: not cannot be expressed in TypeScript; ignored

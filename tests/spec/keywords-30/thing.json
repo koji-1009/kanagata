@@ -1,1 +1,4 @@
-{ "type": "object", "properties": { "id": { "type": "string", "const": "a" } } }
+{
+  "type": "object",
+  "properties": { "id": { "type": "string", "const": "a" }, "code": { "$ref": "input.json#/components/schemas/Code" } }
+}

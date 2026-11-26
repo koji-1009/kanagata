@@ -29,6 +29,11 @@
         "description": "A warning in a schema of two types is reported once.",
         "type": "object",
         "properties": { "id": { "type": "integer", "readOnly": true }, "x": { "not": { "const": "a" } } }
+      },
+      "Labels": {
+        "description": "unevaluatedProperties with nothing beside it to evaluate is additionalProperties; the warning is where it is.",
+        "type": "object",
+        "unevaluatedProperties": { "type": "string", "not": { "pattern": "^x" } }
       }
     }
   }

@@ -27,6 +27,22 @@
             "properties": { "token": { "type": "string", "writeOnly": true }, "size": { "type": "integer" } }
           }
         ]
+      },
+      "Pair": {
+        "description": "Nor does a reference in a tuple's items, a map's properties, a key pattern's values, a union or an intersection.",
+        "type": "array",
+        "prefixItems": [{ "$ref": "#/components/schemas/Item" }],
+        "items": false
+      },
+      "Named": {
+        "type": "object",
+        "properties": { "first": { "$ref": "#/components/schemas/Item" } },
+        "patternProperties": { "^x-": { "type": "string" } }
+      },
+      "Keyed": { "type": "object", "patternProperties": { "^x-": { "$ref": "#/components/schemas/Item" } } },
+      "Either": { "oneOf": [{ "$ref": "#/components/schemas/Item" }, { "type": "string" }] },
+      "Both": {
+        "allOf": [{ "$ref": "#/components/schemas/Item" }, { "type": "object", "properties": { "note": { "type": "string" } } }]
       }
     },
     "x-parts": {

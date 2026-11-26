@@ -9,6 +9,11 @@ export interface schemas {
   Item: Item;
   Plain: Plain;
   Bundle: Bundle;
+  Pair: Pair;
+  Named: Named;
+  Keyed: Keyed;
+  Either: Either;
+  Both: Both;
 }
 
 /** No readOnly/writeOnly of its own, but Item has one, so Page has a write view too. */
@@ -55,4 +60,42 @@ export type Bundle = {
 export type BundleInput = {
   token?: string;
   size?: number;
+};
+
+/** Nor does a reference in a tuple's items, a map's properties, a key pattern's values, a union or an intersection. */
+export type Pair = [] | [Item];
+
+/** Nor does a reference in a tuple's items, a map's properties, a key pattern's values, a union or an intersection. */
+export type PairInput = [] | [ItemInput];
+
+export type Named = {
+  first?: Item;
+  [key: `x-${string}`]: string;
+};
+
+export type NamedInput = {
+  first?: ItemInput;
+  [key: `x-${string}`]: string;
+};
+
+export type Keyed = {
+  [key: `x-${string}`]: Item;
+  [key: string]: unknown;
+};
+
+export type KeyedInput = {
+  [key: `x-${string}`]: ItemInput;
+  [key: string]: unknown;
+};
+
+export type Either = Item | string;
+
+export type EitherInput = ItemInput | string;
+
+export type Both = Item & {
+  note?: string;
+};
+
+export type BothInput = ItemInput & {
+  note?: string;
 };

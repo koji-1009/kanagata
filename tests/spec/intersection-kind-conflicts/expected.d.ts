@@ -23,6 +23,8 @@ export interface schemas {
   Owned: Owned;
   Code: Code;
   Label: Label;
+  Count: Count;
+  CountAndString: CountAndString;
   MembersOfIntersections: MembersOfIntersections;
   MapOf: MapOf;
   KeyedMap: KeyedMap;
@@ -47,6 +49,11 @@ export type Owned = {
 export type Code = string;
 
 export type Label = string;
+
+export type Count = number;
+
+/** A reference to whole numbers met with a string: never. */
+export type CountAndString = never;
 
 /** An anyOf member that is an allOf of references is kept, as are the references next to it. */
 export type MembersOfIntersections = Named & Dated & Owned;

@@ -7,6 +7,7 @@ export interface operations {}
 export interface schemas {
   Huge: Huge;
   Tiny: Tiny;
+  Decimals: Decimals;
   TinyMax: TinyMax;
   TinyMaxProperties: TinyMaxProperties;
 }
@@ -16,6 +17,9 @@ export type Huge = 1e400 | 2;
 
 /** 1e-400 is not, though a JavaScript number rounds it to 0. */
 export type Tiny = 2;
+
+/** Values meet by their exact value, whatever their notation: 1.25 is 1.250, 100 is 1e2. */
+export type Decimals = 1.25 | 100;
 
 /** A count that is not an integer is ignored. */
 export type TinyMax = unknown[];
