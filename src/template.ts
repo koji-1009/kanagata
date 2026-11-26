@@ -399,7 +399,7 @@ const SPECIAL = /[`\\$\p{Cc}\p{Zl}\p{Zp}]+/gu;
  * A template written out: fixed text as it is (or as a string where it would be read),
  * sets as unions of strings; any text alone is `string`.
  */
-function render(seq: Seq): Ty {
+export function render(seq: Seq): Ty {
 	// Adjacent single characters are one piece of text, and adjacent any text is one.
 	const parts: (string | Segment)[] = [];
 	for (const s of seq) {

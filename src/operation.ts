@@ -4,9 +4,9 @@ import { isBinaryMedia, isFormMedia, isTextMedia, METHODS } from "./client.ts";
 import { get, JsonObject, str, stringsIn, type Value } from "./json.ts";
 import { type Ctx, child, DiagError } from "./pointer.ts";
 import { doc, docText, schema } from "./schema.ts";
+import { render } from "./template.ts";
 import {
 	BLOB,
-	lit,
 	object,
 	opRef,
 	type Prop,
@@ -486,32 +486,16 @@ function serverUrl(url: string, variables: Value | undefined): Ty {
 		? url
 		: url.replace(/^(\.{1,2}\/)+/, "").replace(/^\//, "");
 	if (!absolute && end === "") return STRING;
-	const parts = end.split(/\{([^}]*)\}/);
-	if (absolute && parts.length === 1) return lit(JSON.stringify(url));
-	const text = (s: string) =>
-		s.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
-	const values = (name: string) => stringsIn(get(get(variables, name), "enum"));
-	const hole = (name: string) => {
-		const vs = values(name);
-		return vs.length === 0
-			? "string"
-			: vs.map((x) => JSON.stringify(x)).join(" | ");
-	};
-	const body = parts
-		.map((p, j) => (j % 2 === 0 ? text(p) : `\${${hole(p)}}`))
-		.join("");
-	// A relative URL starts with whatever leads to where it ends.
-	const lead = absolute ? "" : `\${${"string"}}/`;
-	// The same strings as segments: the text, and each variable's values or any text.
-	const seq: Segment[] = [
+	// The text, and each variable's values or any text; a relative URL starts with
+	// whatever leads to where it ends.
+	return render([
 		...(absolute ? [] : [{ any: true as const }, { set: ["/"] }]),
-		...parts.flatMap((p, j): Segment[] => {
+		...end.split(/\{([^}]*)\}/).flatMap((p, j): Segment[] => {
 			if (j % 2 === 0) return p === "" ? [] : [{ set: [p] }];
-			const vs = values(p);
+			const vs = stringsIn(get(get(variables, p), "enum"));
 			return [vs.length === 0 ? { any: true } : { set: vs }];
 		}),
-	];
-	return { kind: "template", text: `\`${lead}${body}\``, seq };
+	]);
 }
 
 function collectParams(
