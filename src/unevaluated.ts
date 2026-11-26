@@ -497,11 +497,11 @@ function saidHolders(
 			);
 		},
 	);
-	// The schema's own contains with maxContains 0 evaluates no item: the type says that none
-	// matches where the items are the schema's own prefix items alone, each told not to.
+	// The schema's own contains with maxContains 0 evaluates no item (one that does is in every
+	// case): the type says that none matches where the items are the schema's own prefix items
+	// alone, each told not to.
 	const none =
 		v.get("contains") !== undefined &&
-		count(v, "maxContains") === 0 &&
 		cases.every(
 			(c) =>
 				!c.rest &&
