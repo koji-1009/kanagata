@@ -1,0 +1,97 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Neither": {
+        "description": "not anyOf leaves what each member's not leaves: the objects with neither key.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "not": { "anyOf": [{ "required": ["a"] }, { "required": ["b"] }] }
+      },
+      "NeitherTypeless": {
+        "description": "Without type too: values of the other kinds pass required, so they fail not.",
+        "not": { "anyOf": [{ "required": ["a"] }, { "required": ["b"] }] }
+      },
+      "OtherKinds": {
+        "description": "Each member's not of type leaves the other kinds.",
+        "type": ["string", "number", "null"],
+        "not": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+      },
+      "NotNotMember": {
+        "description": "A member's not is what it admits.",
+        "not": { "anyOf": [{ "not": { "type": "string" } }, { "type": "null" }] }
+      },
+      "AnyMemberAll": {
+        "description": "A member that admits every value leaves none.",
+        "type": "string",
+        "not": { "anyOf": [{ "type": "number" }, {}] }
+      },
+      "Unsaid": {
+        "description": "A member whose not has no type has none for the whole: not is ignored, with a warning.",
+        "type": "string",
+        "not": { "anyOf": [{ "type": "number" }, { "minLength": 1 }] }
+      },
+      "Empty": {
+        "description": "not minItems leaves the shorter arrays.",
+        "type": "array",
+        "items": { "type": "string" },
+        "not": { "minItems": 1 }
+      },
+      "Long": {
+        "description": "not maxItems the longer ones.",
+        "type": "array",
+        "items": { "type": "string" },
+        "not": { "maxItems": 1 }
+      },
+      "WithoutA": {
+        "description": "A not of several keywords leaves what any of them leaves.",
+        "type": ["object", "string"],
+        "properties": { "a": { "type": "string" } },
+        "not": { "type": "object", "required": ["a"] }
+      },
+      "OtherKind": {
+        "description": "not properties leaves the objects with a property of a value the schema declares and it rejects.",
+        "type": "object",
+        "properties": { "kind": { "enum": ["a", "b", "c"] } },
+        "not": { "properties": { "kind": { "const": "a" } }, "required": ["kind"] }
+      },
+      "NotBoth": {
+        "description": "not allOf leaves what any member's not leaves.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "not": { "allOf": [{ "required": ["a"] }, { "required": ["b"] }] }
+      },
+      "NoneOrBoth": {
+        "description": "not oneOf leaves what every member's not leaves, and what two members admit.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "not": { "oneOf": [{ "required": ["a"] }, { "required": ["b"] }] }
+      },
+      "OneOfUnsaid": {
+        "description": "Where what a member admits is not said exactly, not oneOf is ignored, with a warning.",
+        "type": "array",
+        "not": { "oneOf": [{ "minItems": 1 }, { "maxItems": 3 }] }
+      },
+      "HasA": { "required": ["a"] },
+      "NotRef": {
+        "description": "not $ref leaves what the schema it reaches leaves.",
+        "type": "object",
+        "properties": { "a": { "type": "string" } },
+        "not": { "$ref": "#/components/schemas/HasA" }
+      },
+      "NotRefBeside": {
+        "description": "With the keywords next to it.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "not": { "$ref": "#/components/schemas/HasA", "required": ["b"] }
+      },
+      "NotRefMember": {
+        "description": "A member's $ref too.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" } },
+        "not": { "anyOf": [{ "$ref": "#/components/schemas/HasA" }, { "required": ["b"] }] }
+      }
+    }
+  }
+}

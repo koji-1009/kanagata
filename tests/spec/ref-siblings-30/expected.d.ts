@@ -129,5 +129,7 @@ export type MaybeKeyed = Keyed & Record<string, unknown> | null;
 /** Nor does type next to it keep the arrays of a member that requires a key the closed object forbids. */
 export type ClosedKeyed = null;
 
-/** Nor are the $refs next to a $ref in a not that is ignored resolved. */
-export type NotBase = unknown;
+/** In a not, the keywords next to a $ref are ignored too, and their $refs not resolved: it leaves what the target leaves. */
+export type NotBase = string | number | boolean | null | unknown[] | {
+  id: number | boolean | null | unknown[] | Record<string, unknown>;
+};

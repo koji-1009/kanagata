@@ -23,8 +23,8 @@ export type Partly = false | string;
 /** null is left out; "a" and "b" are not, with a warning on each. */
 export type PartlyNull = string;
 
-/** null is left out of the member that lists it, not of the reference, which may admit it. */
-export type PartlyRef = MaybeNull;
+/** null is left out of the member that lists it, and of the reference too: not const null leaves every other kind. */
+export type PartlyRef = number | boolean | unknown[] | Record<string, unknown>;
 
 /** A schema that admits null among other values. */
 export type MaybeNull = number | boolean | null | unknown[] | Record<string, unknown>;

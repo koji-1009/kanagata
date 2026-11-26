@@ -79,7 +79,7 @@
         "allOf": [{ "$ref": "#/components/schemas/Keyed", "type": "array" }]
       },
       "NotBase": {
-        "description": "Nor are the $refs next to a $ref in a not that is ignored resolved.",
+        "description": "In a not, the keywords next to a $ref are ignored too, and their $refs not resolved: it leaves what the target leaves.",
         "not": { "$ref": "#/components/schemas/Base", "properties": { "id": { "$ref": "#/components/schemas/Missing" } } }
       }
     }

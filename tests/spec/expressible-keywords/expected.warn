@@ -1,6 +1,5 @@
 #/components/schemas/NotTwo/not: not cannot be expressed in TypeScript; ignored
 #/components/schemas/NotInteger/not: not cannot be expressed in TypeScript; ignored
-#/components/schemas/NotRef/not: not cannot be expressed in TypeScript; ignored
 #/components/schemas/NotObject/not: not cannot be expressed in TypeScript; ignored
 #/components/schemas/NotTuple/not: not cannot be expressed in TypeScript; ignored
 #/components/schemas/PatternNames/propertyNames: propertyNames cannot be expressed in TypeScript; ignored

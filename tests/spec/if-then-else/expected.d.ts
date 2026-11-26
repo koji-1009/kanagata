@@ -85,9 +85,17 @@ export type ThenAlone = {
   x?: string;
 };
 
-/** Nor can the values an if of other keywords does not admit, anyOf among them. */
+/** An if of anyOf does not admit the values every member does not. */
 export type Either = {
-  a?: string;
+  a: string;
   b?: string;
+  c: string;
+} | {
+  a?: string;
+  b: string;
+  c: string;
+} | {
+  a?: never;
+  b?: never;
   c?: string;
 };

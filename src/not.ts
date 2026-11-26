@@ -3,7 +3,7 @@
 //
 // TypeScript has no negated types: it says the values a schema does not admit only where
 // they are of other kinds, objects without a key, arrays of other lengths, or literals of
-// a list (`negation`, `refuted`, `excluded`). Whether a schema admits a literal is decided
+// a list (`refuted`, `excluded`). Whether a schema admits a literal is decided
 // by its keywords where they say (`accepts`).
 
 import {
@@ -19,6 +19,7 @@ import type { Ctx } from "./pointer.ts";
 import {
 	absent,
 	array as arrayTy,
+	BOOLEAN,
 	equalValues,
 	inter,
 	isValueKind,
@@ -26,41 +27,24 @@ import {
 	KIND_TY,
 	literal,
 	NEVER,
+	NULL,
+	NUMBER,
 	ofKinds,
 	present,
+	STRING,
 	type Ty,
 	UNKNOWN,
 	union,
 	type ValueKind,
 } from "./ty.ts";
-import { asserted, assertions, isAnnotation } from "./vocab.ts";
-
-/**
- * The values `not` leaves, where TypeScript can say them: none for a schema that admits
- * everything, the other kinds for `not: { type }`, the objects without a key for
- * `not: { required }`, and what X admits for `not: { not: X }`. undefined otherwise
- * (`not: false` leaves everything: unknown).
- */
-export function negation(n: Value): Ty | undefined {
-	if (n === false) return UNKNOWN;
-	// true, and anything else read as a schema that admits every value.
-	if (!(n instanceof JsonObject)) return NEVER;
-	const keys = asserted(n);
-	if (keys.length === 0) return NEVER;
-	if (keys.length !== 1) return undefined;
-	if (keys[0] === "type") return otherKinds(n.get("type"));
-	if (keys[0] === "not") return admitted(n.get("not") as Value);
-	const req = n.get("required");
-	if (keys[0] === "required" && Array.isArray(req)) return lacking(req);
-	return undefined;
-}
+import { asserted, assertions, isAnnotation, REFS } from "./vocab.ts";
 
 /**
  * The values a schema admits, where its keywords say them exactly: every value for one
  * without keywords, none for `false`, and the values each of `type`, `required`, `enum`,
- * `const` and `not` (as `negation` reads it) admits. undefined for any other keyword.
+ * `const` and `not` (as `refuted` reads it) admits. undefined for any other keyword.
  */
-function admitted(s: Value): Ty | undefined {
+function admitted(cx: Ctx, s: Value, parents: Value[]): Ty | undefined {
 	if (s === false) return NEVER;
 	if (!(s instanceof JsonObject)) return UNKNOWN;
 	const parts: Ty[] = [];
@@ -85,7 +69,7 @@ function admitted(s: Value): Ty | undefined {
 			]);
 		else if (k === "enum" && Array.isArray(x)) t = union(x.map(literal));
 		else if (k === "const") t = literal(x);
-		else if (k === "not") t = negation(x);
+		else if (k === "not") t = refuted(cx, x, parents);
 		if (t === undefined) return undefined;
 		parts.push(t);
 	}
@@ -112,64 +96,122 @@ function otherKinds(t: Value | undefined): Ty | undefined {
 	return union(kinds.filter((k) => !named.includes(k)).map((k) => KIND_TY[k]));
 }
 
+/**
+ * The values a list of them leaves, where they are of kinds TypeScript lists every value
+ * of: `null`, and booleans (the one not listed); the other kinds whole. undefined where a
+ * value is of another kind, which no type leaves out of its kind.
+ */
+function unlisted(values: Value[]): Ty | undefined {
+	if (!values.every((x) => x === null || typeof x === "boolean"))
+		return undefined;
+	const has = (x: Value) => values.some((y) => y === x);
+	const booleans = [true, false].filter((b) => !has(b));
+	return union([
+		STRING,
+		NUMBER,
+		...(booleans.length === 2 ? [BOOLEAN] : booleans.map(literal)),
+		...(has(null) ? [] : [NULL]),
+		KIND_TY.array,
+		KIND_TY.object,
+	]);
+}
+
 /** The objects without one of these keys. */
 function lacking(names: Value[]): Ty {
 	return union(stringsIn(names).map(absent));
 }
 
 /**
- * The values `if` does not admit, where TypeScript can say them: the other kinds for
- * `type`, the objects without a key for `required`, the shorter arrays for `minItems` and
- * the longer for `maxItems`, and for `properties` the objects with
- * a property it does not admit: of the other kinds for one with `type`, or of the values
- * the schemas `if` is in (`parents`: the schema and those around it) declare the property
- * with (`enum`, `const`) that it rejects. undefined for any other `if`.
+ * The values a schema does not admit (those `not` leaves, those `if` refutes), where
+ * TypeScript can say them: every value for `false`, none for a schema without keywords,
+ * and otherwise what any of its keywords leaves: the other kinds for `type`, the objects
+ * without a key for `required`, the shorter arrays for `minItems` and the longer for
+ * `maxItems`, what X admits for `not: X`, for `properties` the objects with a property it
+ * does not admit (`rejected`), what one member leaves for `allOf`, what every member
+ * leaves for `anyOf`, and for `oneOf` that or what two members admit; what the schemas a
+ * `$ref` or `$dynamicRef` reaches leave. `parents` are the schemas that read the same
+ * value (the schema `not` or `if` is in, and those around it), which declare the values
+ * of its properties. undefined where a keyword's are not said.
  */
 export function refuted(
 	cx: Ctx,
 	cond: Value,
 	parents: Value[],
+	seen: ReadonlySet<string> = new Set(),
 ): Ty | undefined {
 	if (cond === false) return UNKNOWN;
+	// true, and anything else read as a schema that admits every value.
 	if (!(cond instanceof JsonObject)) return NEVER;
-	const terms: Ty[] = [];
-	for (const [k, x] of cond.entries) {
-		if (isAnnotation(k)) continue;
-		if (k === "type") {
-			const t = otherKinds(x);
-			if (t === undefined) return undefined;
-			terms.push(t);
-		} else if (k === "required" && Array.isArray(x)) terms.push(lacking(x));
-		else if (k === "minItems" || k === "maxItems") {
-			// The arrays shorter or longer than it; a count that is none asks nothing.
-			const n = count(cond, k);
-			if (n !== undefined && k === "maxItems")
-				terms.push({
-					kind: "tuple",
-					items: Array(n + 1).fill(UNKNOWN),
-					min: n + 1,
-					rest: UNKNOWN,
-				});
-			else if (n !== undefined && n > 0)
-				terms.push({
-					kind: "tuple",
-					items: Array(n - 1).fill(UNKNOWN),
-					min: 0,
-				});
-		} else if (k === "not") {
-			const t = admitted(x);
-			if (t === undefined) return undefined;
-			terms.push(t);
-		} else if (k === "properties" && x instanceof JsonObject) {
-			for (const [p, s] of x.entries) {
-				const t = rejected(cx, s, declared(cx, parents, p));
-				if (t === undefined) return undefined;
-				if (t.kind !== "never")
-					terms.push({ kind: "object", props: [present(p, t)] });
-			}
-		} else return undefined;
+	return cx.inOwnResource(cond, () => {
+		// One reached again on the way to it is not said.
+		const terms = [
+			...cx.pathTargets(
+				cond,
+				seen,
+				(t, path) => refuted(cx, t.value, parents, path),
+				undefined,
+			),
+		];
+		if (cx.readsSiblings(cond))
+			for (const [k, x] of cond.entries)
+				if (!isAnnotation(k) && !REFS.has(k))
+					terms.push(leaves(cx, cond, k, x, parents, seen));
+		return terms.every((t) => t !== undefined) ? union(terms) : undefined;
+	});
+}
+
+/** What one keyword of a schema leaves (see `refuted`), where it is said. */
+function leaves(
+	cx: Ctx,
+	s: JsonObject,
+	k: string,
+	x: Value,
+	parents: Value[],
+	seen: ReadonlySet<string>,
+): Ty | undefined {
+	if (k === "type") return otherKinds(x);
+	if (k === "required" && Array.isArray(x)) return lacking(x);
+	if (k === "minItems" || k === "maxItems") {
+		// The arrays shorter or longer than it; a count that is none asks nothing.
+		const n = count(s, k);
+		if (n !== undefined && k === "maxItems")
+			return {
+				kind: "tuple",
+				items: Array(n + 1).fill(UNKNOWN),
+				min: n + 1,
+				rest: UNKNOWN,
+			};
+		return n !== undefined && n > 0
+			? { kind: "tuple", items: Array(n - 1).fill(UNKNOWN), min: 0 }
+			: NEVER;
 	}
-	return union(terms);
+	if (k === "not") return admitted(cx, x, parents);
+	if (k === "const") return unlisted([x]);
+	if (k === "enum" && Array.isArray(x)) return unlisted(x);
+	if (k === "properties" && x instanceof JsonObject) {
+		const terms: Ty[] = [];
+		for (const [p, ps] of x.entries) {
+			const t = rejected(cx, ps, declared(cx, parents, p));
+			if (t === undefined) return undefined;
+			if (t.kind !== "never")
+				terms.push({ kind: "object", props: [present(p, t)] });
+		}
+		return union(terms);
+	}
+	if ((k === "allOf" || k === "anyOf" || k === "oneOf") && Array.isArray(x)) {
+		const each = x.map((m) => refuted(cx, m, parents, seen));
+		if (!each.every((t) => t !== undefined)) return undefined;
+		if (k === "allOf") return union(each);
+		// A value fails anyOf where it fails every member, and oneOf there too, or where two admit it.
+		if (k === "anyOf") return inter(each);
+		const admits = x.map((m) => admitted(cx, m, parents));
+		if (!admits.every((t) => t !== undefined)) return undefined;
+		const both = admits.flatMap((a, i) =>
+			admits.slice(i + 1).map((b) => inter([a, b])),
+		);
+		return union([inter(each), ...both]);
+	}
+	return undefined;
 }
 
 /** The values a property schema rejects among those it can be, where TypeScript can say them. */
@@ -187,9 +229,7 @@ function rejected(
 		if (verdicts.every((a) => a !== undefined))
 			return union(values.filter((_, i) => !verdicts[i]).map(literal));
 	}
-	return keys.length === 1 && (keys[0] === "type" || keys[0] === "not")
-		? negation(s)
-		: undefined;
+	return refuted(cx, s, []);
 }
 
 /**
@@ -225,7 +265,11 @@ function declared(
 	return out;
 }
 
-/** The values a schema lists (`enum`, `const`, `type: boolean` or `null`), through its `$ref` and `$dynamicRef`. */
+/**
+ * The values a schema lists (`enum`, `const`, a `type` of `boolean` and `null` only), through
+ * its `$ref` and `$dynamicRef`, or those its `oneOf` / `anyOf` members all list together
+ * (`oneOf: [{ const: a, description }, …]`): a list every value it admits is in.
+ */
 export function listed(
 	cx: Ctx,
 	s: Value | undefined,
@@ -237,7 +281,15 @@ export function listed(
 			listed(cx, t.value, seen),
 		))
 			if (values !== undefined) return values;
-		return ownValues(s);
+		const own = ownValues(s);
+		if (own !== undefined) return own;
+		for (const key of ["oneOf", "anyOf"]) {
+			const members = s.get(key);
+			if (!Array.isArray(members)) continue;
+			const each = members.map((m) => listed(cx, m, seen));
+			if (each.every((v) => v !== undefined)) return each.flat();
+		}
+		return undefined;
 	});
 }
 
@@ -248,8 +300,10 @@ function ownValues(s: JsonObject): Value[] | undefined {
 	const e = s.get("enum");
 	if (Array.isArray(e)) return e;
 	const t = s.get("type");
-	if (t === "boolean") return [true, false];
-	return t === "null" ? [null] : undefined;
+	const named = Array.isArray(t) ? t : [t];
+	return named.every((n) => n === "boolean" || n === "null")
+		? named.flatMap((n) => (n === "boolean" ? [true, false] : [null]))
+		: undefined;
 }
 
 /** Keywords `accepts` decides for a literal value (see `admitting`). */
@@ -304,9 +358,9 @@ export function notContained(
 	v: JsonObject,
 	contains: Value,
 ): Ty | undefined {
-	const leaves = negation(contains);
-	if (leaves !== undefined) return arrayTy(leaves);
-	// negation reads every schema but an object.
+	const left = refuted(cx, contains, []);
+	if (left !== undefined) return arrayTy(left);
+	// refuted reads every schema but an object.
 	const s = contains as JsonObject;
 	const values = listed(cx, v.get("items"), new Set());
 	if (values === undefined) return undefined;
@@ -323,10 +377,14 @@ export function notContained(
 
 /**
  * The values `not: { enum }` or `not: { const }` leave out, each with where it is in
- * `not` (`enum/0`, `const`); undefined for any other `not`. `not: { not: { not: X } }`
- * is `not: X`.
+ * `not` (`enum/0`, `const`): those it lists that its keywords admit, where they decide
+ * each (`accepts`; `not: { const: a, type: string }`). undefined for any other `not`.
+ * `not: { not: { not: X } }` is `not: X`.
  */
-export function excluded(v: JsonObject): { ty: Ty; at: string }[] | undefined {
+export function excluded(
+	cx: Ctx,
+	v: JsonObject,
+): { ty: Ty; at: string }[] | undefined {
 	let n = v.get("not");
 	let path = "";
 	for (let x = notOnly(notOnly(n)); x !== undefined; x = notOnly(notOnly(n))) {
@@ -334,15 +392,22 @@ export function excluded(v: JsonObject): { ty: Ty; at: string }[] | undefined {
 		path += "not/not/";
 	}
 	if (!(n instanceof JsonObject)) return undefined;
-	const keys = asserted(n);
-	if (keys.length !== 1) return undefined;
-	const e = n.get("enum");
-	if (keys[0] === "enum" && Array.isArray(e))
-		return e.map((x, i) => ({ ty: literal(x), at: `${path}enum/${i}` }));
 	const c = n.get("const");
-	return keys[0] === "const" && c !== undefined
-		? [{ ty: literal(c), at: `${path}const` }]
-		: undefined;
+	const e = n.get("enum");
+	const values: [Value, string][] | undefined =
+		c !== undefined
+			? [[c, "const"]]
+			: Array.isArray(e)
+				? e.map((x, i) => [x, `enum/${i}`])
+				: undefined;
+	if (values === undefined) return undefined;
+	const out: { ty: Ty; at: string }[] = [];
+	for (const [x, at] of values) {
+		const a = accepts(cx, n, x);
+		if (a === undefined) return undefined;
+		if (a) out.push({ ty: literal(x), at: `${path}${at}` });
+	}
+	return out;
 }
 
 /** X for a schema that has no keyword but `not: X`; undefined for any other. */
