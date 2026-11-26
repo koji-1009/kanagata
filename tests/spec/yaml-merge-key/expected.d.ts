@@ -7,9 +7,15 @@ export interface operations {}
 export interface schemas {
   B: B;
   A: A;
+  Quoted: Quoted;
 }
 
 export type B = string;
 
 /** The merge key is YAML 1.1's; in YAML 1.2 it is a key named <<, no keyword, so A admits any value. */
 export type A = unknown;
+
+/** A quoted << is a key named << in YAML 1.1 too, so it has no warning. */
+export type Quoted = {
+  "<<"?: string;
+};

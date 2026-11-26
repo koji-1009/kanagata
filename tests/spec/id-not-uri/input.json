@@ -9,6 +9,11 @@
         "$id": "schemas/v%zz/malformed.json",
         "type": "object",
         "properties": { "name": { "$ref": "#/components/schemas/Name" } }
+      },
+      "ThroughPointer": {
+        "description": "A pointer into it reaches a schema whose $refs resolve against the document too.",
+        "type": "object",
+        "properties": { "name": { "$ref": "#/components/schemas/Malformed/properties/name" } }
       }
     }
   }

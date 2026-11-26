@@ -11,6 +11,7 @@ export interface schemas {
   Choice: Choice;
   Closed: Closed;
   Untyped: Untyped;
+  UntypedObject: UntypedObject;
   Fixed: Fixed;
   NotNull: NotNull;
   MaybeNotNull: MaybeNotNull;
@@ -34,6 +35,11 @@ export type Closed = "a";
 
 /** nullable without type takes no effect. */
 export type Untyped = "a";
+
+/** Nor beside object keywords. */
+export type UntypedObject = {
+  a?: string;
+};
 
 /** A 3.0 Schema Object has no const: it says nothing. */
 export type Fixed = string | null;

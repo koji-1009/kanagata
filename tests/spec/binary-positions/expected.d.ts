@@ -43,6 +43,19 @@ export interface paths {
       };
     };
   };
+  "/digest": {
+    /** A JSON body of bytes is a string: only a wildcard's body is sent as it is. */
+    post: {
+      requestBody?: {
+        content: {
+          "application/json": string;
+        };
+      };
+      responses: {
+        204: {};
+      };
+    };
+  };
   "/forms": {
     post: {
       requestBody: {

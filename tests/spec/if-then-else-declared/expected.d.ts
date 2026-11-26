@@ -12,6 +12,10 @@ export interface schemas {
   Size: Size;
   Version: Version;
   Undecided: Undecided;
+  Narrowed: Narrowed;
+  Mode: Mode;
+  Beside: Beside;
+  Level: Level;
   Amount: Amount;
 }
 
@@ -68,6 +72,37 @@ export type Version = {
 export type Undecided = {
   kind?: "a" | "b" | "c";
   x?: string;
+};
+
+/** The values are those every schema that declares the property lists. */
+export type Narrowed = {
+  kind?: "a";
+  x: string;
+  y?: string;
+} | {
+  kind: "b";
+  x?: string;
+  y: string;
+};
+
+export type Mode = string;
+
+/** An enum beside a $ref lists the values where its target lists none. */
+export type Beside = {
+  mode?: Mode & "fast";
+  limit: number;
+} | {
+  mode: Mode & "safe";
+  limit?: number;
+};
+
+/** type: string in if rejects the numbers among the values. */
+export type Level = {
+  level?: "auto";
+  manual?: string;
+} | {
+  level: 1 | 2;
+  manual: string;
 };
 
 /** Numbers, which type names beside objects, pass if and then, which have object keywords only. */

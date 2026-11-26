@@ -14,6 +14,21 @@ export interface paths {
       };
     };
   };
+  "/b": {
+    /** Other names are case-sensitive, so ID is another query parameter; and only a header named Accept is left out. */
+    get: {
+      parameters: {
+        query?: {
+          id?: number;
+          ID?: string;
+          Accept?: string;
+        };
+      };
+      responses: {
+        200: {};
+      };
+    };
+  };
 }
 
 export interface operations {}

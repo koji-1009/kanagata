@@ -37,6 +37,36 @@
         "properties": { "kind": { "type": "string" } },
         "if": { "properties": { "kind": { "const": "a" } } },
         "then": { "properties": { "x": { "type": "string" } } }
+      },
+      "ThenPatterns": {
+        "description": "A then that evaluates by its patterns is read.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "patternProperties": { "^x-": { "type": "string" } } },
+        "unevaluatedProperties": false
+      },
+      "ThenMembers": {
+        "description": "So is one whose members evaluate.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "oneOf": [{ "properties": { "x": { "type": "string" } } }] },
+        "unevaluatedProperties": false
+      },
+      "ThenPrefix": {
+        "description": "And one that evaluates items, by prefixItems.",
+        "type": "array",
+        "if": { "contains": { "type": "string" } },
+        "then": { "prefixItems": [{ "type": "string" }] },
+        "unevaluatedItems": false
+      },
+      "ThenContains": {
+        "description": "Or by contains.",
+        "type": "array",
+        "if": { "contains": { "type": "string" } },
+        "then": { "contains": { "type": "number" } },
+        "unevaluatedItems": false
       }
     }
   }

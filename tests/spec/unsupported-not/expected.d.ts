@@ -10,6 +10,7 @@ export interface schemas {
   PartlyNull: PartlyNull;
   PartlyRef: PartlyRef;
   MaybeNull: MaybeNull;
+  NestedIf: NestedIf;
   TwoViews: TwoViews;
 }
 
@@ -26,6 +27,9 @@ export type PartlyRef = MaybeNull;
 
 /** A schema that admits null among other values. */
 export type MaybeNull = number | boolean | null | unknown[] | Record<string, unknown>;
+
+/** A $ref is resolved in a not that is ignored, but not in an if inside it, which is not read. */
+export type NestedIf = string;
 
 /** A warning in a schema of two types is reported once. */
 export type TwoViews = {

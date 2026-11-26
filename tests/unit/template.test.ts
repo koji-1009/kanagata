@@ -116,6 +116,15 @@ test("classes", () => {
 		undefined,
 		"a negated class with such a range",
 	);
+	assert.equal(
+		printed("^[\\u{1F600}-\\u{1F602}]$"),
+		'`${"😀" | "😁" | "😂"}`',
+		"a range of few characters past U+FFFF",
+	);
+	assert.ok(printed("^\\w$")?.endsWith('"9" | "_"}`'), "\\w has _");
+	assert.equal(printed("^[\\D]*$"), undefined, "a negated escape alone");
+	assert.equal(printed("^[^\\S]*$"), undefined, "a negated class of one");
+	assert.equal(printed("^\\p{Lu}$"), undefined, "a property escape");
 });
 
 test("templates write text a template would read as a string", () => {
@@ -183,6 +192,8 @@ test("whether a template admits every string another does", () => {
 	assert.equal(includes(one("^x-a"), one("^x-")), false, "any text is not a");
 	assert.equal(includes(one("^x-a"), one("^x-b")), false);
 	assert.equal(includes(one("^x-[\\s\\S]*z"), one("^x-")), false);
+	assert.equal(includes(one("^x-$"), one("^x-a$")), false, "a longer text");
+	assert.equal(includes(one("^[ab]$"), one("^[bc]$")), false, "sets apart");
 });
 
 test("whether a template admits a string", () => {
@@ -220,6 +231,13 @@ test("the strings two templates admit, as templates", () => {
 		"each order",
 	);
 	assert.deepEqual(met("^a$", "a"), ['"a"'], "text within any text");
+	assert.deepEqual(
+		met("a", "a"),
+		["`${string}a${string}`"],
+		"the ways another includes are left out",
+	);
+	assert.deepEqual(met("ab", "b"), ["`${string}ab${string}`"]);
+	assert.deepEqual(met("x", "^x-"), ["`x-${string}`"], "and those it includes");
 	assert.equal(
 		met(`a${"[\\s\\S]*a".repeat(6)}`, `b${"[\\s\\S]*b".repeat(6)}`),
 		undefined,
@@ -242,6 +260,15 @@ test("whether a pattern that is a regular expression matches all strings of a te
 	assert.equal(matchesAll("^(?<p>x)-", one("^x-")), true, "a named group");
 	assert.equal(matchesAll("^x-a?b*c{0,2}d{0,}", one("^x-")), true);
 	assert.equal(matchesAll("^x-a{2}", one("^x-aa")), true);
+	assert.equal(matchesAll("^x{1,2}$", one("^xx$")), true);
+	assert.equal(matchesAll("^x{1,2}$", one("^xxx$")), false, "past the bound");
+	assert.equal(
+		matchesAll("^x-[^a-zx]", one("^x-y")),
+		false,
+		"a negated class of a range and a character in it",
+	);
+	assert.equal(matchesAll("^x-[^a-zx]", one("^x-!")), true);
+	assert.equal(matchesAll("^\\w+$", one("^a_b$")), true);
 	assert.equal(matchesAll("^x-[^a]", one("^x-b")), true, "a negated class");
 	assert.equal(matchesAll("^x-[^a]", one("^x-a")), false);
 	assert.equal(matchesAll("^x-\\D", one("^x-a")), true);

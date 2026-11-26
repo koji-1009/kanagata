@@ -354,12 +354,13 @@ test("a form body that is not an object throws TypeError", async () => {
 		"multipart/form-data",
 		"multipart/mixed",
 		"application/x-www-form-urlencoded",
-	]) {
-		await assert.rejects(client(rec).post("/f", { body: null, contentType }), {
-			name: "TypeError",
-			message: `a ${contentType} body must be an object: null`,
-		});
-	}
+	])
+		for (const body of [null, 42, true]) {
+			await assert.rejects(client(rec).post("/f", { body, contentType }), {
+				name: "TypeError",
+				message: `a ${contentType} body must be an object: ${JSON.stringify(body)}`,
+			});
+		}
 	assert.equal(rec.requests.length, 0);
 });
 
@@ -414,6 +415,20 @@ test("a baseUrl with a query keeps it, and the path goes before it", async () =>
 		"/x",
 	);
 	assert.equal(rec.request(1).url, "https://api.test/x?key=k");
+});
+
+test("trailing slashes of a baseUrl make no difference", async () => {
+	const rec = recorder();
+	for (const baseUrl of [
+		"https://api.test/v1",
+		"https://api.test/v1/",
+		"https://api.test/v1//",
+	])
+		await loose({ baseUrl, fetch: rec.fetch }).get("/r");
+	assert.deepEqual(
+		rec.requests.map((r) => r.url),
+		["https://api.test/v1/r", "https://api.test/v1/r", "https://api.test/v1/r"],
+	);
 });
 
 test("a call's baseUrl (an operation's own server) replaces the client's", async () => {
@@ -543,7 +558,7 @@ test("contentType: an object body is URL-encoded", async () => {
 			body: { file: new Blob(["x"]) },
 			contentType: "application/x-www-form-urlencoded",
 		}),
-		TypeError,
+		{ name: "TypeError", message: "a Blob cannot be URL-encoded: file" },
 	);
 	assert.equal(rec.requests.length, 1);
 });

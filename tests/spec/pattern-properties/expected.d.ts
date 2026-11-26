@@ -7,6 +7,7 @@ export interface operations {}
 export interface schemas {
   Q: Q;
   R: R;
+  Extensions: Extensions;
   Tagged: Tagged;
 }
 
@@ -16,6 +17,12 @@ export type Q = {
 
 export type R = {
   [key: `s${string}`]: string;
+  [key: string]: unknown;
+};
+
+/** A pattern's schema is located under patternProperties. */
+export type Extensions = {
+  [key: `x-${string}`]: string;
   [key: string]: unknown;
 };
 

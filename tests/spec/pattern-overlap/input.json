@@ -25,6 +25,11 @@
         "patternProperties": { "^x-": { "type": ["string", "number"] }, "-y$": { "type": ["number", "boolean"] } },
         "additionalProperties": false
       },
+      "Alternatives": {
+        "description": "A pattern with alternatives applies to the keys any of its templates admits.",
+        "type": "object",
+        "patternProperties": { "^(x-|y-)": { "type": "string" }, "^x-a": { "minLength": 1 } }
+      },
       "WithProperty": {
         "type": "object",
         "properties": { "x-id": { "type": "string" } },

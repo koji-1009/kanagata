@@ -5,6 +5,14 @@ export interface paths {
     get: operations["listPets"];
     post: operations["addPet"];
   };
+  "/cats": {
+    get: {
+      servers: ["https://cats.example.com"];
+      responses: {
+        200: {};
+      };
+    };
+  };
 }
 
 export interface operations {

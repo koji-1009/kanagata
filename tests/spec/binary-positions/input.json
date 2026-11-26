@@ -33,6 +33,13 @@
         }
       }
     },
+    "/digest": {
+      "post": {
+        "description": "A JSON body of bytes is a string: only a wildcard's body is sent as it is.",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "string", "format": "binary" } } } },
+        "responses": { "204": { "description": "ok" } }
+      }
+    },
     "/forms": {
       "post": {
         "requestBody": {

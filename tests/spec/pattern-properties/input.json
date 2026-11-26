@@ -5,6 +5,11 @@
     "schemas": {
       "Q": { "type": "object", "patternProperties": { "^n": { "type": "integer" } }, "additionalProperties": false },
       "R": { "patternProperties": { "^s": { "type": "string" } } },
+      "Extensions": {
+        "description": "A pattern's schema is located under patternProperties.",
+        "type": "object",
+        "patternProperties": { "^x-": { "type": "string", "not": { "const": "" } } }
+      },
       "Tagged": {
         "type": "object",
         "patternProperties": {

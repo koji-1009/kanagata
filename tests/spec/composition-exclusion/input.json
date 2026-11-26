@@ -8,6 +8,7 @@
       "Literals": { "description": "So does a literal two members list.", "oneOf": [{ "enum": ["a", "b"] }, { "enum": ["b", "c"] }] },
       "ByKind": { "description": "TypeScript has no string but one literal.", "oneOf": [{ "type": "string" }, { "const": "a" }] },
       "Booleans": { "description": "Booleans and numbers are literals too.", "oneOf": [{ "enum": [true, 1] }, { "enum": [true, 2] }] },
+      "FalseTwice": { "description": "boolean is true or false, so it leaves out a false another member lists.", "oneOf": [{ "type": "boolean" }, { "const": false }] },
       "Integers": { "description": "An integer type admits the whole numbers by its kind, not 1.5.", "oneOf": [{ "type": "integer" }, { "enum": [1.5, 2, "x"] }, { "enum": [1.5, 2] }] },
       "Anything": { "description": "A member that admits any value admits null by its kind.", "oneOf": [{}, { "type": ["string", "null"] }, { "type": ["integer", "null"] }] },
       "AnyOf": { "description": "anyOf admits a value several members admit.", "anyOf": [{ "type": ["string", "null"] }, { "type": ["integer", "null"] }] },

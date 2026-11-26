@@ -123,6 +123,21 @@
         "description": "Without an applicator they are additionalProperties and items, which say the value is an object or an array.",
         "oneOf": [{ "unevaluatedProperties": { "type": "string" } }, { "unevaluatedItems": { "type": "number" } }]
       },
+      "BesideNot": {
+        "description": "not evaluates nothing, so beside it they are additionalProperties too.",
+        "not": { "required": ["b"] },
+        "unevaluatedProperties": { "type": "string" }
+      },
+      "ThenWithoutIf": {
+        "description": "Nor does then without if, which is not read.",
+        "then": { "properties": { "b": { "type": "number" } } },
+        "unevaluatedProperties": { "type": "string" }
+      },
+      "IfAlone": {
+        "description": "if alone evaluates where it admits the value.",
+        "if": { "properties": { "b": { "type": "number" } } },
+        "unevaluatedProperties": { "type": "string" }
+      },
       "Prefix": {
         "description": "Items past those prefixItems evaluate are not admitted.",
         "type": "array",
@@ -162,6 +177,12 @@
         "then": { "properties": { "x": { "type": "string" } } },
         "else": { "properties": { "y": { "type": "string" } } },
         "unevaluatedProperties": false
+      },
+      "RestItems": {
+        "description": "unevaluatedItems is items where nothing evaluates the rest, located where it is.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "unevaluatedItems": { "type": "string", "not": { "const": "" } }
       }
     }
   }

@@ -8,6 +8,17 @@
         "parameters": [{ "name": "X-Id", "in": "header", "schema": { "type": "string" } }],
         "responses": { "200": { "description": "ok" } }
       }
+    },
+    "/b": {
+      "parameters": [{ "name": "id", "in": "query", "schema": { "type": "integer" } }],
+      "get": {
+        "description": "Other names are case-sensitive, so ID is another query parameter; and only a header named Accept is left out.",
+        "parameters": [
+          { "name": "ID", "in": "query", "schema": { "type": "string" } },
+          { "name": "Accept", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
     }
   }
 }

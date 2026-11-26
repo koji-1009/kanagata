@@ -32,6 +32,21 @@
         "properties": { "a": { "type": "string" } },
         "additionalProperties": false,
         "allOf": [{ "oneOf": [{ "properties": { "b": { "type": "string" } } }] }]
+      },
+      "AmongMembers": {
+        "description": "A closed oneOf member admits no key another member names, in an allOf member of it too.",
+        "oneOf": [
+          { "type": "object", "properties": { "a": { "type": "string" } }, "additionalProperties": false },
+          { "type": "object", "allOf": [{ "properties": { "b": { "type": "string" } }, "required": ["b"] }] }
+        ]
+      },
+      "Base": { "type": "object" },
+      "ClosedIntersection": {
+        "description": "A closed member that is an intersection keeps the keys it declares.",
+        "oneOf": [
+          { "allOf": [{ "$ref": "#/components/schemas/Base" }], "properties": { "a": { "type": "string" } }, "additionalProperties": false },
+          { "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } } }
+        ]
       }
     }
   }

@@ -14,10 +14,21 @@
         "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } } } },
         "responses": { "201": { "description": "Created." } }
       }
+    },
+    "/cats": {
+      "$ref": "#/components/pathItems/Cats"
     }
   },
   "components": {
     "pathItems": {
+      "Cats": {
+        "description": "A Path Item that refers to another: each $ref is read through, and the servers are those of the item that has them.",
+        "$ref": "#/components/pathItems/CatsBase"
+      },
+      "CatsBase": {
+        "servers": [{ "url": "https://cats.example.com" }],
+        "get": { "responses": { "200": { "description": "The cats." } } }
+      },
       "Pets": {
         "description": "description is in both, and kanagata does not read it.",
         "summary": "Pets",

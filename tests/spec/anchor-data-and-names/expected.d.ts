@@ -24,7 +24,9 @@ export interface operations {}
 export interface schemas {
   FieldSchemas: FieldSchemas;
   Sku: Sku;
+  default: Default;
   Branch: Branch;
+  Settings: Settings;
   Order: Order;
 }
 
@@ -33,16 +35,25 @@ export type FieldSchemas = Record<string, unknown>[];
 
 export type Sku = string;
 
+/** A component named default is a schema, so its $anchor is found. */
+export type Default = string;
+
 /** A property named default in an allOf member is a schema, so its $anchor is found. */
 export type Branch = {
   default?: boolean;
 };
 
-/** $refs to an $anchor in a component, in a property named default, and in a webhook named default. */
+/** Schemas named default or example in $defs and definitions are schemas, so their $anchors are found. */
+export type Settings = Record<string, unknown>;
+
+/** $refs to an $anchor in a component, in a property named default, in a webhook named default, and in $defs and definitions. */
 export type Order = {
   sku?: Sku;
   isDefault?: boolean;
   event?: {
     id?: string;
   };
+  settings?: string;
+  sample?: number;
+  fallback?: Default;
 };

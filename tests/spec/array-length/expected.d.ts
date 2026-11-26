@@ -11,6 +11,13 @@ export interface schemas {
   Few: Few;
   Some: Some;
   Hundred: Hundred;
+  Ten: Ten;
+  NonEmptyHundred: NonEmptyHundred;
+  Rows: Rows;
+  Groups: Groups;
+  PaymentMethodItem: PaymentMethodItem;
+  PaymentMethods: PaymentMethods;
+  ShortNonEmpty: ShortNonEmpty;
   Many: Many;
   Objects: Objects;
   Empty: Empty;
@@ -20,6 +27,8 @@ export interface schemas {
   HeadUpTo: HeadUpTo;
   LongHead: LongHead;
   Long: Long;
+  ClosedLonger: ClosedLonger;
+  ClosedShorter: ClosedShorter;
   Unreachable: Unreachable;
   AtLeastTwo: AtLeastTwo;
   AtMostOne: AtMostOne;
@@ -29,6 +38,15 @@ export interface schemas {
   SplitClosed: SplitClosed;
   SplitRef: SplitRef;
   Alike: Alike;
+  AlikeAlone: AlikeAlone;
+  Language: Language;
+  Languages: Languages;
+  Lines: Lines;
+  TupleOrArray: TupleOrArray;
+  Amount: Amount;
+  IntegerOrNumber: IntegerOrNumber;
+  Tags: Tags;
+  AlikeInIntersection: AlikeInIntersection;
   NotArray: NotArray;
 }
 
@@ -49,6 +67,26 @@ export type Some = [string, ...string[]] & { length: 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 
 /** The length is that of a tuple where that is shorter than listing each. */
 export type Hundred = string[] & { length: [...repeated<[unknown?], 100>]["length"] };
+
+/** The lengths are listed only where the whole list is no longer than the tuple. */
+export type Ten = string[] & { length: [...repeated<[unknown?], 10>]["length"] };
+
+/** The tuple of the lengths has the required items, then the optional ones. */
+export type NonEmptyHundred = [string, ...string[]] & { length: [unknown, ...repeated<[unknown?], 99>]["length"] };
+
+/** A tuple bounded by length is parenthesized as array items. */
+export type Rows = (string[] & { length: 0 | 1 | 2 | 3 })[];
+
+/** One that is not needs no parentheses. */
+export type Groups = [string, ...string[]][];
+
+export type PaymentMethodItem = string;
+
+/** Two equal items are repeated where that is shorter than writing both. */
+export type PaymentMethods = [...repeated<[PaymentMethodItem], 2>, ...PaymentMethodItem[]];
+
+/** A tuple bounded by length needs no parentheses in an intersection. */
+export type ShortNonEmpty = NonEmpty & [string, ...string[]] & { length: 1 | 2 | 3 | 4 | 5 };
 
 /** Required ones too. */
 export type Many = [...repeated<[string], 12>, ...string[]];
@@ -79,6 +117,12 @@ export type LongHead = [] | [unknown] | [unknown, unknown] | [unknown, unknown, 
 /** minItems past prefixItems requires items of the items schema. */
 export type Long = [string, number, number, ...number[]];
 
+/** maxItems past prefixItems with items false adds no item. */
+export type ClosedLonger = [] | [string];
+
+/** maxItems inside them leaves out the rest of them. */
+export type ClosedShorter = [] | [string];
+
 /** minItems past prefixItems with items false admits nothing. */
 export type Unreachable = never;
 
@@ -105,6 +149,31 @@ export type SplitRef = NonEmpty & [string];
 
 /** Members written alike are written once, in parentheses where they bind looser than their place. */
 export type Alike = (string[] & { length: 0 | 1 | 2 | 3 })[];
+
+/** Alone, the member left needs no parentheses. */
+export type AlikeAlone = string[] & { length: 0 | 1 | 2 | 3 };
+
+export type Language = string;
+
+/** Where a tuple for each length is just longer than the rest bounded by length, the rest is written. */
+export type Languages = Language[] & { length: 0 | 1 | 2 | 3 };
+
+/** A tuple whose items are all the rest's is an array, which needs no parentheses as array items. */
+export type Lines = string[][];
+
+/** Nor does a member written alike that is not an intersection. */
+export type TupleOrArray = string[][];
+
+/** Any value. */
+export type Amount = unknown;
+
+/** Intersections written alike leave one, in parentheses as array items. */
+export type IntegerOrNumber = (Amount & number)[];
+
+export type Tags = string[];
+
+/** In an intersection, the member left needs no parentheses. */
+export type AlikeInIntersection = Tags & string[] & { length: 0 | 1 | 2 | 3 };
 
 /** Array keywords constrain only arrays, so the strings type names pass them. */
 export type NotArray = string;

@@ -40,6 +40,7 @@
         "type": "object",
         "properties": { "code": { "$ref": "#/components/schemas/Code" } }
       },
+      "IdedCode": { "description": "Nor for a $ref a pointer into it reaches.", "$ref": "#/components/schemas/Ided/properties/code" },
       "Thing": { "description": "Nor in another file.", "$ref": "thing.json" }
     }
   }

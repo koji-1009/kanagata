@@ -16,6 +16,7 @@ export interface schemas {
   Short: Short;
   Prefixed: Prefixed;
   NotStrings: NotStrings;
+  NoKeysAlone: NoKeysAlone;
   NotStringsAlone: NotStringsAlone;
   PatternShort: PatternShort;
   PatternLong: PatternLong;
@@ -77,6 +78,11 @@ export type Prefixed = {
 
 /** A type that does not name string admits no key: every key is a string. */
 export type NotStrings = {
+  [key: string]: never;
+};
+
+/** Without type, false says the value is an object without keys. */
+export type NoKeysAlone = {
   [key: string]: never;
 };
 

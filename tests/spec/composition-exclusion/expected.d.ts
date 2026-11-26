@@ -10,6 +10,7 @@ export interface schemas {
   Literals: Literals;
   ByKind: ByKind;
   Booleans: Booleans;
+  FalseTwice: FalseTwice;
   Integers: Integers;
   Anything: Anything;
   AnyOf: AnyOf;
@@ -38,6 +39,9 @@ export type ByKind = string;
 
 /** Booleans and numbers are literals too. */
 export type Booleans = 1 | 2;
+
+/** boolean is true or false, so it leaves out a false another member lists. */
+export type FalseTwice = true;
 
 /** An integer type admits the whole numbers by its kind, not 1.5. */
 export type Integers = number | "x";

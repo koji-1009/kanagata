@@ -1,0 +1,11 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/subscriptions": {
+      "post": {
+        "callbacks": [],
+        "responses": { "201": { "description": "subscribed" } }
+      }
+    }
+  }
+}

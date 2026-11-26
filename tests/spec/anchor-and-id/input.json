@@ -10,6 +10,12 @@
         "properties": { "next": { "$ref": "#node" } }
       },
       "Tag": { "$id": "https://example.com/schemas/tag", "type": "string" },
+      "Category": {
+        "description": "An $id with an empty fragment names the resource without it.",
+        "$id": "https://example.com/schemas/category#",
+        "type": "object",
+        "properties": { "parent": { "$ref": "https://example.com/schemas/category" } }
+      },
       "Post": {
         "type": "object",
         "properties": {

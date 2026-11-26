@@ -8,6 +8,7 @@ export interface schemas {
   Base: Base;
   Dated: Dated;
   Plain: Plain;
+  EmptyFragment: EmptyFragment;
 }
 
 /** The OAS dialect is JSON Schema 2020-12. */
@@ -18,3 +19,6 @@ export type Dated = string;
 
 /** And JSON Schema 2020-12 itself. */
 export type Plain = 1 | 2;
+
+/** With an empty fragment too. */
+export type EmptyFragment = string;

@@ -9,6 +9,10 @@ export interface schemas {
   InMember: InMember;
   ThenEvaluatesNothing: ThenEvaluatesNothing;
   NotRead: NotRead;
+  ThenPatterns: ThenPatterns;
+  ThenMembers: ThenMembers;
+  ThenPrefix: ThenPrefix;
+  ThenContains: ThenContains;
 }
 
 /** then holds where it evaluates a property; where it evaluates none, its required is not read. */
@@ -46,3 +50,23 @@ export type ThenEvaluatesNothing = {
 export type NotRead = {
   kind?: string;
 };
+
+/** A then that evaluates by its patterns is read. */
+export type ThenPatterns = {
+  kind?: string;
+};
+
+/** So is one whose members evaluate. */
+export type ThenMembers = {
+  kind?: string;
+  x?: never;
+} | {
+  kind?: "a";
+  x?: string;
+};
+
+/** And one that evaluates items, by prefixItems. */
+export type ThenPrefix = [] | [string, ...string[]];
+
+/** Or by contains. */
+export type ThenContains = [] | [string | number, ...(string | number)[]];

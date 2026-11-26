@@ -9,7 +9,7 @@
             "content": {
               "application/jsonl": { "itemSchema": { "$ref": "#/components/schemas/Event" } },
               "text/event-stream": {
-                "itemSchema": { "type": "object", "required": ["data"], "properties": { "data": { "type": "string" }, "event": { "type": "string" } } }
+                "itemSchema": { "type": "object", "required": ["data"], "properties": { "data": { "type": "string" }, "event": { "type": "string" } }, "not": { "minProperties": 3 } }
               },
               "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Event" } } }
             }

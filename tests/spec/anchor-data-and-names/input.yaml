@@ -22,16 +22,30 @@ components:
         type: object
         example: { $anchor: sku, type: integer }
     Sku: { $anchor: sku, type: string }
+    default:
+      description: A component named default is a schema, so its $anchor is found.
+      $anchor: fallback
+      type: string
     Branch:
       description: A property named default in an allOf member is a schema, so its $anchor is found.
       allOf:
         - type: object
           properties:
             default: { $anchor: default-branch, type: boolean }
+    Settings:
+      description: Schemas named default or example in $defs and definitions are schemas, so their $anchors are found.
+      type: object
+      $defs:
+        default: { $anchor: default-settings, type: string }
+      definitions:
+        example: { $anchor: example-settings, type: integer }
     Order:
-      description: $refs to an $anchor in a component, in a property named default, and in a webhook named default.
+      description: $refs to an $anchor in a component, in a property named default, in a webhook named default, and in $defs and definitions.
       type: object
       properties:
         sku: { $ref: "#sku" }
         isDefault: { $ref: "#default-branch" }
         event: { $ref: "#event" }
+        settings: { $ref: "#default-settings" }
+        sample: { $ref: "#example-settings" }
+        fallback: { $ref: "#fallback" }

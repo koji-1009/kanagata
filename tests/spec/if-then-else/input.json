@@ -63,6 +63,19 @@
         "properties": { "kind": { "type": "string" } },
         "if": { "properties": { "kind": { "const": "a" } } },
         "then": { "required": ["x"] }
+      },
+      "ThenAlone": {
+        "description": "Nor does then without if.",
+        "type": "object",
+        "properties": { "x": { "type": "string" } },
+        "then": { "required": ["x"] }
+      },
+      "Either": {
+        "description": "Nor can the values an if of other keywords does not admit, anyOf among them.",
+        "type": "object",
+        "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } },
+        "if": { "anyOf": [{ "required": ["a"] }, { "required": ["b"] }] },
+        "then": { "required": ["c"] }
       }
     }
   }

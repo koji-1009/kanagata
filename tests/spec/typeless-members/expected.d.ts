@@ -35,6 +35,13 @@ export interface schemas {
   PairOrNull: PairOrNull;
   Typed: Typed;
   OnlyObject: OnlyObject;
+  StepOrObject: StepOrObject;
+  NotX: NotX;
+  Prefixed: Prefixed;
+  KeyedOrPrefixed: KeyedOrPrefixed;
+  KeyedOrSized: KeyedOrSized;
+  MeetTypes: MeetTypes;
+  IntegerWithinNumber: IntegerWithinNumber;
   Cat: Cat;
   ObjectOrString: ObjectOrString;
 }
@@ -199,6 +206,30 @@ export type Typed = {
 export type OnlyObject = {
   a: {} | null;
 };
+
+/** The numbers pass the member as its keywords for numbers say. */
+export type StepOrObject = {
+  a: {} | null;
+} | 0 | 0.5 | 1;
+
+/** The strings pass the member but the one its not lists, which TypeScript cannot leave out of string. */
+export type NotX = {
+  a: {} | null;
+} | string;
+
+export type Prefixed = `a${string}` | number | boolean | null | unknown[] | Record<string, unknown>;
+
+/** Without type, the keywords of the schemas its members reach say what the value is. */
+export type KeyedOrPrefixed = Keyed & Record<string, unknown> | `a${string}`;
+
+/** The keywords next to a $ref say what the value is with its target's. */
+export type KeyedOrSized = Keyed & Record<string, unknown> | [unknown, ...unknown[]];
+
+/** The kinds are those every member's type names. */
+export type MeetTypes = [unknown, ...unknown[]] | string;
+
+/** integer is within number. */
+export type IntegerWithinNumber = [unknown, ...unknown[]] | number;
 
 export type Cat = {
   kind?: string;

@@ -8,6 +8,8 @@ export interface schemas {
   Children: Children;
   Tree: Tree;
   StrictTree: StrictTree;
+  Forest: Forest;
+  StrictForest: StrictForest;
   Linked: Linked;
   StrictLinked: StrictLinked;
 }
@@ -25,6 +27,18 @@ export type Tree = {
 export type StrictTree = {
   data?: unknown;
   children?: StrictTree[];
+};
+
+/** A $dynamicRef in a list of schemas. */
+export type Forest = {
+  data?: unknown;
+  first?: [] | [Forest, ...unknown[]];
+};
+
+/** Reached through this resource, it reaches this one's node there too. */
+export type StrictForest = {
+  data?: unknown;
+  first?: [] | [StrictForest, ...unknown[]];
 };
 
 /** A $ref to a $dynamicAnchor reaches it as an $anchor does, wherever the schema is used. */

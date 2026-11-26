@@ -9,6 +9,7 @@ export interface schemas {
   WideAndNarrowOthers: WideAndNarrowOthers;
   SameKeys: SameKeys;
   SomeKeysOfBoth: SomeKeysOfBoth;
+  Alternatives: Alternatives;
   WithProperty: WithProperty;
   NamesWithinPattern: NamesWithinPattern;
   NamesWithinPatternClosed: NamesWithinPatternClosed;
@@ -36,6 +37,14 @@ export type SameKeys = {
 export type SomeKeysOfBoth = {
   [key: `x-${string}`]: string | number;
   [key: `${string}-y`]: number | boolean;
+};
+
+/** A pattern with alternatives applies to the keys any of its templates admits. */
+export type Alternatives = {
+  [key: `x-${string}`]: string;
+  [key: `y-${string}`]: string;
+  [key: `x-a${string}`]: string;
+  [key: string]: unknown;
 };
 
 export type WithProperty = {

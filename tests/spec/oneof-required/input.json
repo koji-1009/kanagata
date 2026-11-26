@@ -46,6 +46,17 @@
       "Alone": {
         "oneOf": [{ "required": [] }, { "required": ["a"] }]
       },
+      "AnnotatedKeys": {
+        "description": "Annotations beside required ask nothing more.",
+        "oneOf": [
+          { "required": ["a"], "$comment": "by a", "default": { "a": 1 }, "externalDocs": { "url": "https://example.com/a" }, "xml": { "name": "A" } },
+          { "required": ["b"] }
+        ]
+      },
+      "Annotated": {
+        "description": "Annotations alone admit every value, not only objects, so they ask for no key.",
+        "oneOf": [{ "required": ["a"] }, { "description": "Any other value." }]
+      },
       "AnyObject": {
         "description": "type: object requires no key either: an object with a matches both.",
         "oneOf": [{ "type": "object" }, { "required": ["a"] }]

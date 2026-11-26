@@ -153,6 +153,36 @@
         "type": "object",
         "allOf": [{ "required": ["a"] }]
       },
+      "StepOrObject": {
+        "description": "The numbers pass the member as its keywords for numbers say.",
+        "type": ["object", "number"],
+        "allOf": [{ "required": ["a"], "minimum": 0, "maximum": 1, "multipleOf": 0.5 }]
+      },
+      "NotX": {
+        "description": "The strings pass the member but the one its not lists, which TypeScript cannot leave out of string.",
+        "type": ["object", "string"],
+        "allOf": [{ "required": ["a"], "not": { "const": "x" } }]
+      },
+      "Prefixed": { "pattern": "^a" },
+      "KeyedOrPrefixed": {
+        "description": "Without type, the keywords of the schemas its members reach say what the value is.",
+        "allOf": [{ "$ref": "#/components/schemas/Keyed" }, { "$ref": "#/components/schemas/Prefixed" }]
+      },
+      "KeyedOrSized": {
+        "description": "The keywords next to a $ref say what the value is with its target's.",
+        "$ref": "#/components/schemas/Keyed",
+        "minItems": 1
+      },
+      "MeetTypes": {
+        "description": "The kinds are those every member's type names.",
+        "minItems": 1,
+        "allOf": [{ "type": ["array", "string", "number"] }, { "type": ["array", "string"] }]
+      },
+      "IntegerWithinNumber": {
+        "description": "integer is within number.",
+        "minItems": 1,
+        "allOf": [{ "type": ["array", "integer"] }, { "type": ["array", "number"] }]
+      },
       "Cat": { "type": "object", "properties": { "kind": { "type": "string" } } },
       "ObjectOrString": {
         "description": "An object meets only the object members of a union.",

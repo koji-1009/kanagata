@@ -106,6 +106,12 @@ test("syntax errors", () => {
 		["@", [1, 1], 'unexpected character "@"'],
 		["[1,\n  2,\n]", [3, 1], "trailing comma"],
 		// errors inside nested values propagate unchanged
+		["+1", [1, 1], 'unexpected character "+"'],
+		["[-,1]", [1, 2], "invalid number"],
+		["1.", [1, 1], "invalid number"],
+		["1e", [1, 1], "invalid number"],
+		["{} x", [1, 4], "unexpected characters after the JSON value"],
+		['"a\tb"', [1, 3], "control character in string"],
 		['{"a":tru}', [1, 6], 'unexpected character "t"'],
 		['{"\\q":1}', [1, 3], "invalid escape sequence"],
 		['["\\q"]', [1, 3], "invalid escape sequence"],
@@ -125,6 +131,13 @@ test("error message", () => {
 	assert.equal(parseError("[1,]").message, "1:4: trailing comma");
 });
 
+test("white space is space, tab, line feed and carriage return, inside empty objects and arrays too", () => {
+	assert.deepEqual(
+		parse('{ \t"a" :\r\n[ ] ,"b":{\t}\r}'),
+		obj(["a", []], ["b", obj()]),
+	);
+});
+
 test("byte order mark is skipped", () => {
 	assert.deepEqual(parse("\u{FEFF}{}"), obj());
 });
@@ -140,13 +153,16 @@ test("accessors", () => {
 });
 
 test("pointer into a scalar or with bad syntax", () => {
-	const v = parse('{"a":1,"l":[true]}');
+	const v = parse('{"a":1,"b":2,"l":[true]}');
 	assert.equal(pointer(v, "#/a/b"), undefined);
 	assert.equal(pointer(v, "#a"), undefined);
+	assert.equal(pointer(v, "#ab"), undefined, "a pointer starts with /");
 	assert.equal(pointer(v, "#/l/x"), undefined);
 	assert.equal(pointer(v, "#/l/"), undefined);
 	assert.equal(pointer(v, "#/l/0"), true);
 	assert.equal(pointer(v, "#/l/5"), undefined); // out of range
+	const long = parse("[0,1,2,3,4,5,6,7,8,9,10,11]");
+	assert.deepEqual(pointer(long, "#/10"), n("10"));
 });
 
 test("number notation is kept", () => {
@@ -187,6 +203,8 @@ test("columns count characters, not UTF-16 units", () => {
 	// The first and last characters past U+FFFF, whose low surrogates are U+DC00 and U+DFFF.
 	assert.deepEqual(err('"\u{10000}" x'), [1, 5]);
 	assert.deepEqual(err('"\u{10FFFF}" x'), [1, 5]);
+	// Characters past the surrogates, U+E000 to U+FFFF: a half-width katakana among them.
+	assert.deepEqual(err('"\u{FF71}" x'), [1, 5]);
 });
 
 test("trailing garbage", () => {

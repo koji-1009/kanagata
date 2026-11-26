@@ -1,0 +1,1 @@
+#/paths/~1items~1{id}/get: the path has {id}, which no path parameter declares; OpenAPI requires one for each

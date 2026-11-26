@@ -10,10 +10,12 @@ export interface schemas {
   Status: Status;
   Tally: Tally;
   Total: Total;
+  Price: Price;
   Order2: Order2;
   "Line Item": LineItem;
   "order-status": OrderStatus;
   Order3: Order3;
+  Amount: Amount;
 }
 
 export type Order = string;
@@ -26,6 +28,8 @@ export type Box = {
   d?: OrderStatus;
   e?: Order3;
   f?: Tally;
+  g?: Amount;
+  h?: Price;
 };
 
 /** Not only a $ref, so it does not name order-status.yml. */
@@ -36,6 +40,8 @@ export type Tally = number;
 /** Only a $ref too; the first such component gives the name. */
 export type Total = Tally;
 
+export type Price = number;
+
 export type Order2 = Record<string, unknown>;
 
 export type LineItem = number;
@@ -43,3 +49,5 @@ export type LineItem = number;
 export type OrderStatus = "open" | "closed";
 
 export type Order3 = boolean;
+
+export type Amount = number;

@@ -1,1 +1,2 @@
 #/components/schemas/Open/if: if / then / else cannot be expressed in TypeScript; ignored
+#/components/schemas/Either/if: if / then / else cannot be expressed in TypeScript; ignored

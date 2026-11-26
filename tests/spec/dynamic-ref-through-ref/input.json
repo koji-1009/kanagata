@@ -23,6 +23,20 @@
         "$ref": "tree",
         "unevaluatedProperties": false
       },
+      "Forest": {
+        "description": "A $dynamicRef in a list of schemas.",
+        "$id": "https://example.com/forest",
+        "$dynamicAnchor": "node",
+        "type": "object",
+        "properties": { "data": true, "first": { "type": "array", "prefixItems": [{ "$dynamicRef": "#node" }] } }
+      },
+      "StrictForest": {
+        "description": "Reached through this resource, it reaches this one's node there too.",
+        "$id": "https://example.com/strict-forest",
+        "$dynamicAnchor": "node",
+        "$ref": "forest",
+        "unevaluatedProperties": false
+      },
       "Linked": {
         "description": "A $ref to a $dynamicAnchor reaches it as an $anchor does, wherever the schema is used.",
         "$id": "https://example.com/linked",

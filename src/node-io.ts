@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { type Io, IoError } from "./cli.ts";
 
 /** The package root: the nearest directory above this file with a package.json (above src/ in development, dist/ when built). */
-function packageRoot(): string {
+export function packageRoot(): string {
 	let dir = dirname(fileURLToPath(import.meta.url));
 	while (!existsSync(join(dir, "package.json"))) dir = dirname(dir);
 	return dir;

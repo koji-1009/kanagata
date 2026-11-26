@@ -34,6 +34,11 @@
         "properties": { "a": { "type": "string" } },
         "dependentSchemas": { "a": true }
       },
+      "Located": {
+        "description": "A schema of a key is located under dependentSchemas.",
+        "type": "object",
+        "dependentSchemas": { "a": { "properties": { "b": { "type": "string", "not": { "const": "" } } } } }
+      },
       "Card": {
         "description": "A key left out of the view is not asked for: id is not sent, created is not returned.",
         "type": "object",

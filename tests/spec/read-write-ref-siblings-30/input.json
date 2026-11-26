@@ -7,6 +7,11 @@
       "Nullable": {
         "description": "In 3.0 the keywords beside a $ref are ignored, nullable among them: the member is the $ref alone.",
         "allOf": [{ "$ref": "#/components/schemas/Item", "nullable": true }, { "properties": { "id": { "readOnly": true } } }]
+      },
+      "Labeled": {
+        "description": "So are properties beside it: a readOnly there leaves nothing out.",
+        "$ref": "#/components/schemas/Item",
+        "properties": { "id": { "readOnly": true } }
       }
     }
   }
