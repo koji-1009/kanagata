@@ -29,22 +29,23 @@ import { asserted, isAnnotation, REFS, refsAndAnnotations } from "./vocab.ts";
  */
 export function shared(tys: Ty[]): Ty[] {
 	const listed = (t: Ty): Ty[] => (t.kind === "union" ? t.items : [t]);
-	const same = (a: Ty, b: Ty) =>
-		a.kind === b.kind &&
-		(a.kind !== "lit" || a.text === (b as { text: string }).text);
+	// A literal or null by its text, so that each is counted once per member.
+	const key = (m: Ty): string | undefined =>
+		m.kind === "null" ? "null" : m.kind === "lit" ? `lit:${m.text}` : undefined;
 	const values = tys
 		.flatMap(listed)
 		.filter((m) => m.kind === "lit" || m.kind === "null");
 	const members = tys.map((t) => booleansListed(listed(t), values));
-	const out = new Set<Ty>();
-	for (const value of values) {
-		if (members.filter((ms) => ms.some((m) => same(m, value))).length > 1)
-			out.add(value);
-	}
-	if (out.size === 0) return tys;
-	const drop = [...out];
+	const counts = new Map<string, number>();
+	for (const ms of members)
+		for (const k of new Set(ms.map(key)))
+			if (k !== undefined) counts.set(k, (counts.get(k) ?? 0) + 1);
+	const drop = new Set(
+		values.map(key).filter((k) => (counts.get(k as string) as number) > 1),
+	);
+	if (drop.size === 0) return tys;
 	return members.map((ms) =>
-		union(ms.filter((m) => !drop.some((d) => same(m, d)))),
+		union(ms.filter((m) => !drop.has(key(m) as string))),
 	);
 }
 
