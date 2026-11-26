@@ -51,6 +51,24 @@
         "maxContains": 3,
         "unevaluatedItems": false
       },
+      "NoneMatch": {
+        "description": "maxContains 0: no item matches contains, so it evaluates none, and the prefix item never does: the type says every item there can be.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "contains": { "type": "object", "required": ["x"] },
+        "minContains": 0,
+        "maxContains": 0,
+        "unevaluatedItems": false
+      },
+      "NoneMaybe": {
+        "description": "A string of three characters would match contains: which the prefix item cannot be no type says.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "contains": { "type": "string", "minLength": 3 },
+        "minContains": 0,
+        "maxContains": 0,
+        "unevaluatedItems": false
+      },
       "Undecided": {
         "description": "A string may or may not have three characters: whether the prefix item matches contains no type says.",
         "type": "array",

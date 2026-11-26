@@ -11,6 +11,8 @@ export interface schemas {
   Fewer: Fewer;
   MatchedFirst: MatchedFirst;
   AnyItem: AnyItem;
+  NoneMatch: NoneMatch;
+  NoneMaybe: NoneMaybe;
   Undecided: Undecided;
   Mixed: Mixed;
   Wider: Wider;
@@ -35,6 +37,12 @@ export type MatchedFirst = ["a"];
 
 /** contains: true matches every item, the prefix item too: three at most. */
 export type AnyItem = [string, ...unknown[]] & { length: 1 | 2 | 3 };
+
+/** maxContains 0: no item matches contains, so it evaluates none, and the prefix item never does: the type says every item there can be. */
+export type NoneMatch = [] | [string];
+
+/** A string of three characters would match contains: which the prefix item cannot be no type says. */
+export type NoneMaybe = [] | [string];
 
 /** A string may or may not have three characters: whether the prefix item matches contains no type says. */
 export type Undecided = [string, ...string[]];
