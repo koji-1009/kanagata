@@ -545,8 +545,8 @@ function containsCount(
 	max: number | undefined,
 ): Ty {
 	const length = marks.length;
-	const matching = (n: number) =>
-		marks.slice(0, n).filter(Boolean).length + Math.max(0, n - length);
+	// Of the first n items, within the prefix.
+	const matching = (n: number) => marks.slice(0, n).filter(Boolean).length;
 	const at = (i: number) => (i < length ? UNKNOWN : item);
 	// The fewest items with min matching: within the prefix, or past it one by one.
 	let lo = 0;
