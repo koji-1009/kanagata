@@ -39,6 +39,7 @@ import {
 	union,
 } from "./ty.ts";
 import { additional as additionalKeys } from "./unevaluated.ts";
+import { asserted } from "./vocab.ts";
 
 /**
  * The keys an object's `propertyNames` admits: every key is a string it must admit, so
@@ -57,11 +58,42 @@ export function propertyKeys(
 	// Reached again while it is read, it keys an object inside the value read, whose
 	// strings that reading says; here it asks nothing more.
 	if (cx.readsKeysOf(names)) return STRING;
+	// Any string but some: those are no keys (see `object`).
+	if (namesLeftOut(names) !== undefined) return STRING;
 	// Its references are written out: a key is one of the strings their targets admit.
 	const values = cx.withKeysRead(names, () =>
 		cx.withRaw(undefined, () => schema(cx, names, child(at, "propertyNames"))),
 	);
 	return meetKeys(inter([STRING, values]));
+}
+
+/**
+ * The keys a `propertyNames` of any string but some leaves out: `{ not: { enum: [id, type] } }`
+ * or `{ not: { const: id } }`, with `type: string` at most beside it. undefined for any other.
+ */
+function namesLeftOut(names: Value): string[] | undefined {
+	if (!(names instanceof JsonObject)) return undefined;
+	const keys = asserted(names);
+	const n = names.get("not");
+	if (
+		!keys.includes("not") ||
+		!keys.every((k) => k === "not" || k === "type") ||
+		(keys.includes("type") && names.get("type") !== "string") ||
+		!(n instanceof JsonObject)
+	)
+		return undefined;
+	const [only, ...more] = asserted(n);
+	const listed =
+		more.length > 0
+			? undefined
+			: only === "const"
+				? [n.get("const")]
+				: only === "enum"
+					? n.get("enum")
+					: undefined;
+	return Array.isArray(listed) && listed.every((x) => typeof x === "string")
+		? listed
+		: undefined;
 }
 
 /**
@@ -259,6 +291,14 @@ export function object(
 			.filter(([k]) => matches(k, p.key))
 			.map(([, t]) => t);
 		if (matched.length > 0) p.ty = inter([p.ty, ...matched]);
+	}
+	// The keys propertyNames leaves out of any string are none, as `properties: { k: false }` is.
+	for (const name of namesLeftOut(v.get("propertyNames") as Value) ?? []) {
+		if (required.includes(name)) return NEVER;
+		const p = props.find((q) => q.key === name);
+		if (p !== undefined) p.ty = NEVER;
+		else props.push({ key: name, ty: NEVER, optional: true });
+		d.absent.add(name);
 	}
 	// A required key without a property schema must be present, with that value.
 	for (const name of required) {

@@ -15,7 +15,7 @@
         "not": { "enum": [null, "a", "b"] }
       },
       "PartlyRef": {
-        "description": "null is left out of the member that lists it, not of the reference, which may admit it.",
+        "description": "null is left out of the member that lists it, and of the reference too: not const null leaves every other kind.",
         "anyOf": [{ "type": "null" }, { "$ref": "#/components/schemas/MaybeNull" }],
         "not": { "const": null }
       },

@@ -1,0 +1,92 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "NotNull": {
+        "description": "not const null leaves every other kind, as not type null does.",
+        "not": { "const": null }
+      },
+      "IfNull": {
+        "description": "An if of a property's const null does not admit the other kinds of it.",
+        "type": "object",
+        "required": ["p"],
+        "properties": { "p": { "type": ["string", "null"] }, "x": { "type": "string" } },
+        "if": { "properties": { "p": { "const": null } } },
+        "then": { "required": ["x"] }
+      },
+      "IfTrue": {
+        "description": "A type of booleans and null lists its values, so if const true does not admit the others.",
+        "type": "object",
+        "required": ["on"],
+        "properties": { "on": { "type": ["boolean", "null"] }, "x": { "type": "string" } },
+        "if": { "properties": { "on": { "const": true } } },
+        "then": { "required": ["x"] }
+      },
+      "Described": {
+        "description": "oneOf members that each list values list them together: an if on them is read.",
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": { "oneOf": [{ "const": "a", "description": "The first." }, { "const": "b", "description": "The second." }] },
+          "x": { "type": "string" },
+          "y": { "type": "string" }
+        },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] },
+        "else": { "required": ["y"] }
+      },
+      "DescribedOpen": {
+        "description": "Where a member lists no values, none are listed: an if on any string is ignored, with a warning.",
+        "type": "object",
+        "properties": { "kind": { "oneOf": [{ "const": "a" }, { "type": "string", "minLength": 2 }] }, "x": { "type": "string" } },
+        "if": { "properties": { "kind": { "const": "a" } } },
+        "then": { "required": ["x"] }
+      },
+      "DescribedItems": {
+        "description": "So are items of such values that contains with maxContains 0 rejects.",
+        "type": "array",
+        "items": { "anyOf": [{ "const": "a" }, { "const": "b" }, { "const": "c" }] },
+        "contains": { "const": "a" },
+        "minContains": 0,
+        "maxContains": 0
+      },
+      "NotTyped": {
+        "description": "not of values with other keywords leaves out the values they admit.",
+        "type": ["string", "integer"],
+        "enum": ["a", "b", 1],
+        "not": { "enum": ["a", 1], "type": "string" }
+      },
+      "NotUndecided": {
+        "description": "Where the other keywords do not say whether they admit a value, not is ignored, with a warning.",
+        "type": "string",
+        "enum": ["a", "b"],
+        "not": { "enum": ["a"], "minProperties": 1 }
+      },
+      "NamesLeftOut": {
+        "description": "propertyNames of any string but some makes those keys none.",
+        "type": "object",
+        "additionalProperties": { "type": "string" },
+        "propertyNames": { "not": { "enum": ["id", "type"] } }
+      },
+      "NameLeftOut": {
+        "description": "A property it leaves out is none too, with type string beside not.",
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "name": { "type": "string" } },
+        "propertyNames": { "type": "string", "not": { "const": "id" } }
+      },
+      "NamesAndMore": {
+        "description": "A not of more than values is read as any propertyNames is.",
+        "type": "object",
+        "additionalProperties": { "type": "string" },
+        "propertyNames": { "not": { "enum": ["id"], "maxLength": 1 } }
+      },
+      "RequiredLeftOut": {
+        "description": "One required admits no object.",
+        "type": "object",
+        "required": ["id"],
+        "propertyNames": { "not": { "const": "id" } }
+      }
+    }
+  }
+}

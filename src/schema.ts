@@ -549,7 +549,11 @@ function conditionalParts(
  * keywords reject, and those `not: { enum }` lists.
  */
 function withoutRejected(cx: Ctx, v: JsonObject, at: string, t: Ty): Ty {
-	const not = excluded(v) ?? NOTHING_EXCLUDED;
+	// A not whose values left TypeScript says is one of the parts already (`notParts`).
+	const n = v.get("not");
+	if (n !== undefined && refuted(cx, n, [v, ...cx.around]) !== undefined)
+		return t;
+	const not = excluded(cx, v) ?? NOTHING_EXCLUDED;
 	const out = not === NOTHING_EXCLUDED ? NO_TYS : not.map((x) => x.ty);
 	const members = booleansListed(t.kind === "union" ? t.items : [t], out);
 	const listed = (m: Ty) =>
@@ -794,7 +798,7 @@ function notParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 	resolveRefs(cx, n, child(at, "not"));
 	const t = refuted(cx, n, [v, ...cx.around]);
 	if (t !== undefined) return [t];
-	if (excluded(v) === undefined)
+	if (excluded(cx, v) === undefined)
 		cx.warn(child(at, "not"), "not cannot be expressed in TypeScript; ignored");
 	return [];
 }

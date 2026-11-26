@@ -138,7 +138,7 @@ function ownPassed(
 		);
 	const t = inter(parts);
 	// `not: { enum }` and `not: { const }` leave out the literals they list.
-	const out = excluded(m)?.map((x) => x.ty);
+	const out = excluded(cx, m)?.map((x) => x.ty);
 	if (out === undefined) return t;
 	return union(
 		(t.kind === "union" ? t.items : [t]).filter(
