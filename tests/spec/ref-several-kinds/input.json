@@ -29,6 +29,19 @@
         "type": "object",
         "properties": { "y": { "type": "string" } },
         "allOf": [{ "$ref": "#/components/schemas/Maybe" }]
+      },
+      "Extended": {
+        "description": "So is one beside an object type in an allOf.",
+        "allOf": [{ "$ref": "#/components/schemas/Value" }, { "type": "object", "properties": { "y": { "type": "string" } } }]
+      },
+      "OrNull": {
+        "description": "And beside string | null: only its string meets it.",
+        "allOf": [{ "$ref": "#/components/schemas/Value" }, { "type": ["string", "null"] }]
+      },
+      "Meta": { "description": "Annotations only: any value." },
+      "Annotated": {
+        "description": "Beside a schema of no kind it stays: no kind meets it as TypeScript does not read it.",
+        "allOf": [{ "$ref": "#/components/schemas/Value" }, { "$ref": "#/components/schemas/Meta" }]
       }
     }
   }

@@ -9,6 +9,8 @@ export interface schemas {
   Never: Never;
   OfKind: OfKind;
   Fewer: Fewer;
+  MatchedFirst: MatchedFirst;
+  AnyItem: AnyItem;
   Undecided: Undecided;
   Mixed: Mixed;
   Wider: Wider;
@@ -27,6 +29,12 @@ export type OfKind = [string];
 
 /** Both prefix items match contains, which admits one at most: the second is not admitted. */
 export type Fewer = [] | ["abc"];
+
+/** The first two prefix items match contains, which admits one at most, and the third does not: only the first is admitted. */
+export type MatchedFirst = ["a"];
+
+/** contains: true matches every item, the prefix item too: three at most. */
+export type AnyItem = [string, ...unknown[]] & { length: 1 | 2 | 3 };
 
 /** A string may or may not have three characters: whether the prefix item matches contains no type says. */
 export type Undecided = [string, ...string[]];

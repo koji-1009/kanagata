@@ -16,6 +16,12 @@
         "oneOf": [{ "type": "string", "const": "a" }, { "type": "integer", "if": { "minimum": 1 }, "then": { "maximum": 9 }, "else": false }]
       },
       "Nothing": { "description": "not: { const } is not: {}, which admits no value.", "not": { "const": "x" } },
+      "OneOfKinds": {
+        "description": "Nor in members' properties: without const both members admit every object, so oneOf admits none.",
+        "type": "object",
+        "properties": { "kind": { "type": "string" } },
+        "oneOf": [{ "properties": { "kind": { "const": "a" } } }, { "properties": { "kind": { "const": "b" } } }]
+      },
       "List": {
         "description": "Nor do the array keywords 3.0 does not define.",
         "type": "array",

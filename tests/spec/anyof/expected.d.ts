@@ -7,12 +7,16 @@ export interface operations {}
 export interface schemas {
   Value: Value;
   Anything: Anything;
+  AnyString: AnyString;
   Contact: Contact;
 }
 
 export type Value = number | string;
 
 export type Anything = unknown;
+
+/** string admits the strings of a pattern beside it. */
+export type AnyString = string;
 
 export type Contact = {
   email: string;

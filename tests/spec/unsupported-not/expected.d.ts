@@ -12,6 +12,7 @@ export interface schemas {
   MaybeNull: MaybeNull;
   NestedIf: NestedIf;
   TwoViews: TwoViews;
+  Labels: Labels;
 }
 
 export type NonEmpty = string;
@@ -40,4 +41,9 @@ export type TwoViews = {
 /** A warning in a schema of two types is reported once. */
 export type TwoViewsInput = {
   x?: unknown;
+};
+
+/** unevaluatedProperties with nothing beside it to evaluate is additionalProperties; the warning is where it is. */
+export type Labels = {
+  [key: string]: string;
 };

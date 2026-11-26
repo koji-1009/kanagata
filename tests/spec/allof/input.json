@@ -7,7 +7,13 @@
       "Extra": { "type": "object", "properties": { "note": { "type": "string" } } },
       "Both": { "allOf": [{ "$ref": "#/components/schemas/Base" }, { "$ref": "#/components/schemas/Extra" }] },
       "Single": { "allOf": [{ "$ref": "#/components/schemas/Base" }] },
-      "Dup": { "allOf": [{ "$ref": "#/components/schemas/Base" }, { "$ref": "#/components/schemas/Base" }, {}] }
+      "Dup": { "allOf": [{ "$ref": "#/components/schemas/Base" }, { "$ref": "#/components/schemas/Base" }, {}] },
+      "Described": {
+        "allOf": [
+          { "type": "object", "properties": { "id": { "type": "string", "description": "The first description of a property is kept." } } },
+          { "type": "object", "properties": { "id": { "description": "Not this one." } } }
+        ]
+      }
     }
   }
 }

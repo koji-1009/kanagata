@@ -35,6 +35,22 @@
         "maxContains": 1,
         "unevaluatedItems": false
       },
+      "MatchedFirst": {
+        "description": "The first two prefix items match contains, which admits one at most, and the third does not: only the first is admitted.",
+        "type": "array",
+        "prefixItems": [{ "const": "a" }, { "const": "b" }, { "type": "number" }],
+        "contains": { "type": "string" },
+        "maxContains": 1,
+        "unevaluatedItems": false
+      },
+      "AnyItem": {
+        "description": "contains: true matches every item, the prefix item too: three at most.",
+        "type": "array",
+        "prefixItems": [{ "type": "string" }],
+        "contains": true,
+        "maxContains": 3,
+        "unevaluatedItems": false
+      },
       "Undecided": {
         "description": "A string may or may not have three characters: whether the prefix item matches contains no type says.",
         "type": "array",

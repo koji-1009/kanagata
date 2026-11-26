@@ -10,6 +10,7 @@ export interface schemas {
   Kind: Kind;
   Either: Either;
   Nothing: Nothing;
+  OneOfKinds: OneOfKinds;
   List: List;
   Map: Map;
   Ided: Ided;
@@ -35,6 +36,9 @@ export type Either = string | number;
 /** not: { const } is not: {}, which admits no value. */
 export type Nothing = never;
 
+/** Nor in members' properties: without const both members admit every object, so oneOf admits none. */
+export type OneOfKinds = never;
+
 /** Nor do the array keywords 3.0 does not define. */
 export type List = string[];
 
@@ -54,4 +58,5 @@ export type IdedCode = Code;
 /** Nor in another file. */
 export type Thing = {
   id?: string;
+  code?: Code;
 };

@@ -10,3 +10,9 @@
 #/components/schemas/PrefixedMember/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/BesideOwn/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/BesideOwn/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/PrefixInOther/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/PrefixInOther/anyOf/1/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/OrBoth/anyOf/1/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/PrefixTwo/anyOf/1/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/TwoStrings/anyOf/0/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/TwoStrings/anyOf/1/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed

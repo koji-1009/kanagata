@@ -62,6 +62,8 @@ export interface operations {
 export interface schemas {
   User: User;
   Error: Error;
+  Region: Region;
+  CountryCode: CountryCode;
   Address: Address;
 }
 
@@ -84,6 +86,17 @@ export type Error = {
   message: string;
 };
 
+export type Region = {
+  country?: {
+    code?: CountryCode;
+  };
+};
+
+export type CountryCode = string;
+
 export type Address = {
   city: string;
+  country?: {
+    code?: CountryCode;
+  };
 };

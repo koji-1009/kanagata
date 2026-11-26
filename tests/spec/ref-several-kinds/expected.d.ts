@@ -13,6 +13,10 @@ export interface schemas {
   ValueOrNull: ValueOrNull;
   Twice: Twice;
   Kept: Kept;
+  Extended: Extended;
+  OrNull: OrNull;
+  Meta: Meta;
+  Annotated: Annotated;
 }
 
 export type Value = {
@@ -48,3 +52,18 @@ export type Twice = {
 export type Kept = Maybe & {
   y?: string;
 };
+
+/** So is one beside an object type in an allOf. */
+export type Extended = {
+  x?: number;
+  y?: string;
+};
+
+/** And beside string | null: only its string meets it. */
+export type OrNull = string;
+
+/** Annotations only: any value. */
+export type Meta = unknown;
+
+/** Beside a schema of no kind it stays: no kind meets it as TypeScript does not read it. */
+export type Annotated = Value & Meta;

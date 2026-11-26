@@ -392,18 +392,28 @@ test("many members are told apart by their keys as one by one, every kind", () =
 		]),
 		{ kind: "map", props: [], index: NEVER },
 		{ kind: "map", props: [], keyed: [{ key: x, ty: STRING }] },
+		{ kind: "map", props: [], keyed: [{ key: x, ty: STRING }], index: NUMBER },
 		{
 			kind: "map",
 			props: [id, name],
 			index: STRING,
 			keyed: [{ key: x, ty: NUMBER }],
 		},
+		object([{ ...id, optional: !id.optional }]),
+		object([{ ...id, present: true }]),
+		object([{ ...id, doc: "An id" }]),
+		{ kind: "map", props: [], index: STRING },
 		array(STRING),
+		array(NUMBER),
 		{ kind: "tuple", items: [STRING], min: 1, rest: NUMBER },
+		{ kind: "tuple", items: [STRING], min: 1 },
+		{ kind: "tuple", items: [STRING, STRING], min: 1 },
 		{ kind: "inter", items: [schemaRef("B"), object([id])] },
 		tuple([union([lit('"x"'), lit('"y"')])]),
 		lit("1"),
 	];
+	// Past the first members, which are compared one by one, the rest are told apart by their keys.
+	const first = Array.from({ length: 16 }, (_, i) => tuple([lit(String(i))]));
 	const equalOnes: Ty[] = [
 		object([name, id]),
 		{
@@ -419,6 +429,10 @@ test("many members are told apart by their keys as one by one, every kind", () =
 	assert.deepEqual(union([...distinctOnes, ...equalOnes]), {
 		kind: "union",
 		items: distinctOnes,
+	});
+	assert.deepEqual(union([...first, ...distinctOnes, ...equalOnes]), {
+		kind: "union",
+		items: [...first, ...distinctOnes],
 	});
 });
 

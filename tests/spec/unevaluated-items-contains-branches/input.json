@@ -58,6 +58,47 @@
         "contains": { "type": "string" },
         "anyOf": [{ "contains": { "type": "number" } }],
         "unevaluatedItems": false
+      },
+      "BesideSizes": {
+        "description": "Members that evaluate no item, of another applicator, change nothing: where one member's contains matches, it evaluates every item, and where both do, the items are of either.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" } }, { "contains": { "type": "number" } }],
+        "oneOf": [{ "minItems": 1 }, { "maxItems": 0 }],
+        "unevaluatedItems": false
+      },
+      "PrefixInOther": {
+        "description": "A member of another applicator that evaluates the first item: where it matches, no contains alone evaluates every item, which no type says.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" } }, { "contains": { "type": "number" } }],
+        "oneOf": [{ "prefixItems": [{}] }, { "maxItems": 0 }],
+        "unevaluatedItems": false
+      },
+      "OrAll": {
+        "description": "Where the other member evaluates every item, the contains evaluates nothing more: it is typed.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" } }, { "items": { "type": "number" } }],
+        "unevaluatedItems": false
+      },
+      "OrBoth": {
+        "description": "A member's items evaluates every item beside its contains: [\"a\"] matches its type, but not its contains, which no type says.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" } }, { "contains": { "type": "number" }, "items": { "type": ["number", "string"] } }],
+        "unevaluatedItems": false
+      },
+      "PrefixTwo": {
+        "description": "Past the prefix the other member evaluates, its contains is not counted: the first is typed; the other asks for two numbers, which no type says of the items past the first.",
+        "type": "array",
+        "anyOf": [
+          { "contains": { "type": "string" } },
+          { "prefixItems": [{ "type": "number" }], "contains": { "type": "number" }, "minContains": 2 }
+        ],
+        "unevaluatedItems": false
+      },
+      "TwoStrings": {
+        "description": "A member that asks for two matching items: [\"a\", 1] matches the other member alone, which leaves \"a\" unevaluated, but no type says so.",
+        "type": "array",
+        "anyOf": [{ "contains": { "type": "string" }, "minContains": 2 }, { "contains": { "type": "number" } }],
+        "unevaluatedItems": false
       }
     }
   }

@@ -10,6 +10,7 @@ export interface schemas {
   Both: Both;
   Single: Single;
   Dup: Dup;
+  Described: Described;
 }
 
 export type Base = {
@@ -25,3 +26,8 @@ export type Both = Base & Extra;
 export type Single = Base;
 
 export type Dup = Base;
+
+export type Described = {
+  /** The first description of a property is kept. */
+  id?: string;
+};
