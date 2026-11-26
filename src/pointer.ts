@@ -34,6 +34,8 @@ const IF_IGNORED =
 	"if / then / else cannot be expressed in TypeScript; ignored";
 const THEN_READ =
 	"if / then cannot be expressed in TypeScript; then is read only for the properties and items it evaluates";
+const ELSE_READ =
+	"if / then / else: which values if does not admit cannot be expressed in TypeScript; else is read for every value";
 
 /** A fatal problem at a location in the document. */
 export class DiagError extends GenerateError {
@@ -374,6 +376,14 @@ export class Ctx {
 	 */
 	ifIgnored(at: string): void {
 		this.warn(at, IF_IGNORED);
+	}
+
+	/**
+	 * Warns that the `else` of the `if` at `at` is read for every value: TypeScript has no
+	 * type for the values `if` does not admit, and its type admits every value `else` does.
+	 */
+	elseRead(at: string): void {
+		this.warn(at, ELSE_READ);
 	}
 
 	/** Records that an `unevaluated*` reads the `then` of the `if` at `at` for what it evaluates (see `ifIgnored`). */

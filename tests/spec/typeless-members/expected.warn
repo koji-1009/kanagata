@@ -1,1 +1,2 @@
 #/components/schemas/NotUnread/allOf/0/not: not cannot be expressed in TypeScript; ignored
+#/components/schemas/UnsaidElseInMember/allOf/0/if: if / then / else: which values if does not admit cannot be expressed in TypeScript; else is read for every value

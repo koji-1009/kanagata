@@ -24,6 +24,7 @@ export interface schemas {
   NotUnread: NotUnread;
   IfInMember: IfInMember;
   IfElseInMember: IfElseInMember;
+  UnsaidElseInMember: UnsaidElseInMember;
   Keys: Keys;
   Keyed: Keyed;
   RefInMember: RefInMember;
@@ -155,6 +156,11 @@ export type IfElseInMember = {
   a: {} | null;
   c?: never;
 } | string;
+
+/** Where no type says which values the member's if does not admit, else holds for every value, with a warning: a string is as then or as else says. */
+export type UnsaidElseInMember = {
+  a: {} | null;
+} | `x${string}` | `y${string}`;
 
 export type Keys = unknown;
 

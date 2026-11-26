@@ -21,7 +21,14 @@ export type Strings = {
 /** A boolean member evaluates no item. */
 export type First = [] | [string];
 
-/** A member's else whose if TypeScript cannot negate leaves what is evaluated unsaid: the keyword is ignored. */
-export type Unsaid = {
+/** A member's else whose if TypeScript cannot negate evaluates wherever it matches. */
+export type Unsaid = ({
+  extra?: never;
+} | {
+  extra?: string;
+}) & ({
+  id: string;
+} | {
   id?: string;
-};
+  extra?: string;
+});

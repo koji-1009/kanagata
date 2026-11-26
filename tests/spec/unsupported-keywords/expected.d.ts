@@ -9,11 +9,6 @@ export interface schemas {
   Contains: Contains;
 }
 
-export type Cond = {
-  kind?: never;
-} | {
-  kind?: string;
-  x: {} | null;
-};
+export type Cond = never;
 
 export type Contains = [string | number, ...(string | number)[]];

@@ -119,7 +119,7 @@
         "unevaluatedItems": false
       },
       "Undecided": {
-        "description": "else evaluates where if does not admit the value, which TypeScript cannot say here: unevaluatedItems is ignored, and so which items match contains is not typed.",
+        "description": "else evaluates where if does not admit the value, which TypeScript cannot say here: wherever else matches.",
         "type": "array",
         "contains": { "type": "string" },
         "if": { "uniqueItems": true },

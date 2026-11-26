@@ -15,6 +15,8 @@ export interface schemas {
   Nothing: Nothing;
   Open: Open;
   ThenAlone: ThenAlone;
+  OpenElse: OpenElse;
+  OpenRef: OpenRef;
   Either: Either;
 }
 
@@ -83,6 +85,22 @@ export type Open = {
 /** Nor does then without if. */
 export type ThenAlone = {
   x?: string;
+};
+
+/** With else, then holds where if admits the value, and else for every value, which it cannot tell apart. */
+export type OpenElse = {
+  kind: "a";
+  x: string;
+  y?: string;
+} | {
+  kind: string;
+  x?: string;
+  y: string;
+};
+
+/** A $ref in an if / then that is ignored is resolved, wherever it points. */
+export type OpenRef = {
+  kind?: string;
 };
 
 /** An if of anyOf does not admit the values every member does not. */

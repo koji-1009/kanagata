@@ -21,6 +21,7 @@ import {
 	NEVER,
 	STRING,
 	type Ty,
+	UNKNOWN,
 	union,
 	type ValueKind,
 } from "./ty.ts";
@@ -120,13 +121,15 @@ function ownPassed(
 	const n = m.get("not");
 	const left = n === undefined ? undefined : refuted(cx, n, [m, ...parents]);
 	if (left !== undefined) parts.push(left);
-	// As `then` says where `if` admits the value, and as `else` says where it does not.
+	// As `then` says where `if` admits the value, and as `else` says where it does not: for
+	// every value where TypeScript cannot say which `if` does not admit (see `conditionalParts`).
 	const cond = m.get("if");
 	const not =
 		cond === undefined ||
 		(m.get("then") === undefined && m.get("else") === undefined)
 			? undefined
-			: refuted(cx, cond, [m, ...parents]);
+			: (refuted(cx, cond, [m, ...parents]) ??
+				((m.get("else") ?? true) === true ? undefined : UNKNOWN));
 	if (not !== undefined)
 		parts.push(
 			union([

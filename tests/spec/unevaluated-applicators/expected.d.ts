@@ -69,9 +69,13 @@ export type Bank = {
 /** unevaluatedProperties: true admits every key: it says nothing. */
 export type OpenEither = Record<string, unknown> & (Card | Bank);
 
-/** Nor beside an if TypeScript cannot say, where there is nothing to warn of. */
+/** Nor beside an if whose else is read for every value, TypeScript not saying which values if does not admit. */
 export type OpenUndecided = {
+  kind?: "a";
+  x?: string;
+} | {
   kind?: string;
+  y?: string;
 };
 
 export type Point = [] | [number] | [number, number, ...unknown[]];
@@ -319,10 +323,23 @@ export type AllItems = string[];
 /** contains evaluates the items that match it, and no other item is admitted: every item is a string. */
 export type Contains = [string, ...string[]];
 
-/** else evaluates where if does not admit the value, which TypeScript cannot say here. */
-export type Undecided = {
+/** else evaluates where if does not admit the value, which TypeScript cannot say here: wherever else matches. */
+export type Undecided = ({
+  x?: never;
+} | {
+  kind?: "a";
+  x?: string;
+}) & ({
+  y?: never;
+} | {
+  y?: string;
+}) & ({
+  kind?: "a";
+  x?: string;
+} | {
   kind?: string;
-};
+  y?: string;
+});
 
 /** unevaluatedItems is items where nothing evaluates the rest, located where it is. */
 export type RestItems = string[];
