@@ -48,7 +48,7 @@ import {
 } from "./not.ts";
 import {
 	admitting,
-	boundsTooWide,
+	boundsPast,
 	containsBounds,
 	count,
 	numeric,
@@ -74,6 +74,7 @@ import {
 	leavingOut,
 	literal,
 	MANY_ITEMS,
+	MAX_INTEGERS,
 	MAX_ITEMS,
 	MAX_VALUES,
 	MAX_WRITTEN,
@@ -415,8 +416,9 @@ function ownParts(cx: Ctx, v: JsonObject, at: string, read: Reading): Ty {
 
 /**
  * Notes the keywords of a schema typed wider for their size: a pattern of more strings
- * and bounds of more values than `MAX_VALUES`, a `const` or `enum` value with an array of
- * more items than `MAX_ITEMS` (an array of their values; see `emit`).
+ * than `MAX_VALUES`, bounds of more values than kanagata writes (`boundsPast`), a `const`
+ * or `enum` value with an array of more items than `MAX_ITEMS` (an array of their values;
+ * see `emit`).
  */
 function noteSizes(cx: Ctx, v: JsonObject, at: string): void {
 	const pattern = v.str("pattern");
@@ -425,8 +427,16 @@ function noteSizes(cx: Ctx, v: JsonObject, at: string): void {
 			child(at, "pattern"),
 			manyNote(MAX_VALUES, "strings", "typed wider"),
 		);
-	if (boundsTooWide(v))
-		cx.info(at, manyNote(MAX_VALUES, "values", "typed as a number"));
+	const most = boundsPast(v);
+	if (most !== undefined)
+		cx.info(
+			at,
+			manyNote(
+				most,
+				most === MAX_INTEGERS ? "integers in a row" : "values",
+				"typed as a number",
+			),
+		);
 	const long = (x: Value | undefined): boolean =>
 		Array.isArray(x)
 			? x.length > MAX_ITEMS || x.some(long)
