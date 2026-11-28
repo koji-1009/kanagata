@@ -829,6 +829,50 @@ function dependentRequiredParts(
 }
 
 /**
+ * The arrays of a closed tuple (`maxItems`, or `prefixItems` and `items: false`) with an
+ * item `contains` admits: for each length and each item, the tuple of that length whose
+ * item is one `contains` admits as well; `"many"`, with a note, where their items are
+ * more than kanagata writes (`MAX_WRITTEN`). undefined for any other array, and where the
+ * type of the schema with an `unevaluatedItems` says which items match (`saidHolders`).
+ */
+function matchedOne(
+	cx: Ctx,
+	v: JsonObject,
+	at: string,
+	contains: Value,
+): Ty | "many" | undefined {
+	if (cx.containsSaid(v)) return undefined;
+	const t = array(cx, v, at);
+	if (t.kind !== "tuple" || t.rest !== undefined) return undefined;
+	const n = t.items.length;
+	const from = Math.max(t.min, 1);
+	let written = 0;
+	for (let length = from; length <= n; length++) written += length * length;
+	if (written > MAX_WRITTEN) {
+		cx.info(
+			child(at, "contains"),
+			manyNote(
+				MAX_WRITTEN,
+				"items in the tuples of each place of its item",
+				"only how many is typed",
+			),
+		);
+		return "many";
+	}
+	const m = schema(cx, contains, child(at, "contains"));
+	const out: Ty[] = [];
+	for (let length = from; length <= n; length++)
+		for (let i = 0; i < length; i++) {
+			const items = t.items.slice(0, length);
+			items[i] = inter([items[i] as Ty, m]);
+			// An item contains admits none of is in no array.
+			if (items[i]?.kind !== "never")
+				out.push({ kind: "tuple", items, min: length });
+		}
+	return union(out);
+}
+
+/**
  * contains requires from minContains (1 if not given) to maxContains items that match it;
  * TypeScript can say how many, and which where every item matches or, for none, where it
  * can say the values contains does not admit. An `unevaluatedItems: false` beside it may
@@ -853,6 +897,12 @@ function containsParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 			fits("minContains", min)
 				? { kind: "tuple", items: items(min), min, rest: UNKNOWN }
 				: arrayTy(UNKNOWN);
+		// One matching item at least, of a closed tuple: at one of its items.
+		const one = once(() =>
+			min === 1 && max === undefined
+				? matchedOne(cx, v, at, contains)
+				: undefined,
+		);
 		if (max !== undefined && min > max)
 			parts.push(widen(cx, v, ["array"], NEVER));
 		else if (refuted(cx, contains, []) === NEVER) {
@@ -863,6 +913,9 @@ function containsParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 				);
 			else if (min > 0) parts.push(widen(cx, v, ["array"], atLeast()));
 		} else if (none !== undefined) parts.push(widen(cx, v, ["array"], none));
+		else if (one() === "many") parts.push(widen(cx, v, ["array"], atLeast()));
+		else if (one() !== undefined)
+			parts.push(widen(cx, v, ["array"], one() as Ty));
 		else {
 			if (min > 0) parts.push(widen(cx, v, ["array"], atLeast()));
 			// minContains 0 without maxContains asks nothing; the type of the schema with the
