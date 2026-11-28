@@ -38,7 +38,7 @@ import {
 	union,
 	type ValueKind,
 } from "./ty.ts";
-import { asserted, assertions, isAnnotation, REFS } from "./vocab.ts";
+import { asserted, assertions, isAnnotation, onlyOf, REFS } from "./vocab.ts";
 
 /**
  * The values a schema admits, where its keywords say them exactly: every value for one
@@ -339,11 +339,18 @@ const VALUE_KEYWORDS = new Set([
 	...assertions("number"),
 ]);
 
+/** Keywords of objects, of arrays: values of other kinds pass them. */
+const OBJECT_KEYWORDS = new Set(onlyOf("object"));
+const ARRAY_KEYWORDS = new Set(onlyOf("array"));
+
 /** Whether a schema admits a value; undefined where it says what this cannot decide. */
 export function accepts(cx: Ctx, s: JsonObject, x: Value): boolean | undefined {
 	const t = literal(x);
+	const kind = jsonKind(x);
 	for (const [k, y] of s.entries) {
 		if (isAnnotation(k) || VALUE_KEYWORDS.has(k)) continue;
+		if (OBJECT_KEYWORDS.has(k) && kind !== "object") continue;
+		if (ARRAY_KEYWORDS.has(k) && kind !== "array") continue;
 		if (k === "type") {
 			const named = Array.isArray(y) ? y : [y];
 			if (!named.some((n) => typeof n === "string" && isOfKind(x, n)))

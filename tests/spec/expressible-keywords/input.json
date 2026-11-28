@@ -34,7 +34,10 @@
       "ContainsNoX": { "description": "As is maxContains 0 with a contains TypeScript cannot leave out.", "type": "array", "items": { "type": "string" }, "contains": { "const": "x" }, "minContains": 0, "maxContains": 0 },
       "ContainsNoA": { "description": "maxContains 0: the values items lists that contains rejects.", "type": "array", "items": { "enum": ["a", "b", "c"] }, "contains": { "const": "a" }, "minContains": 0, "maxContains": 0 },
       "ContainsNoShort": { "description": "As contains's keywords read them.", "type": "array", "items": { "enum": ["a", "bb"] }, "contains": { "maxLength": 1 }, "minContains": 0, "maxContains": 0 },
-      "ContainsNoObject": { "description": "Not where they cannot tell.", "type": "array", "items": { "enum": ["a"] }, "contains": { "minProperties": 1 }, "minContains": 0, "maxContains": 0 },
+      "ContainsNoObject": { "description": "Not where they cannot tell.", "type": "array", "items": { "enum": [{ "a": 1 }] }, "contains": { "minProperties": 1 }, "minContains": 0, "maxContains": 0 },
+      "ContainsOtherKind": { "description": "Keywords of other kinds pass a value: contains admits every string, so no item can be one.", "type": "array", "items": { "enum": ["a"] }, "contains": { "minProperties": 1 }, "minContains": 0, "maxContains": 0 },
+      "ContainsNoArray": { "description": "Nor where array keywords cannot tell.", "type": "array", "items": { "enum": [[1]] }, "contains": { "contains": { "const": 2 } }, "minContains": 0, "maxContains": 0 },
+      "ContainsOtherArray": { "description": "Array keywords a string passes too.", "type": "array", "items": { "enum": ["a"] }, "contains": { "contains": { "const": 2 } }, "minContains": 0, "maxContains": 0 },
       "ContainsPastPrefix": { "description": "Past prefixItems, whose items items does not list, the items are those it lists that contains rejects.", "type": "array", "prefixItems": [{ "type": "string" }], "items": { "enum": ["a", "b"] }, "contains": { "const": "a" }, "minContains": 0, "maxContains": 0 },
       "DepReq": {
         "description": "dependentRequired: without a, or with b, as the properties type them.",

@@ -37,6 +37,9 @@ export interface schemas {
   ContainsNoA: ContainsNoA;
   ContainsNoShort: ContainsNoShort;
   ContainsNoObject: ContainsNoObject;
+  ContainsOtherKind: ContainsOtherKind;
+  ContainsNoArray: ContainsNoArray;
+  ContainsOtherArray: ContainsOtherArray;
   ContainsPastPrefix: ContainsPastPrefix;
   DepReq: DepReq;
   NoDeps: NoDeps;
@@ -153,7 +156,18 @@ export type ContainsNoA = ("b" | "c")[];
 export type ContainsNoShort = "bb"[];
 
 /** Not where they cannot tell. */
-export type ContainsNoObject = "a"[];
+export type ContainsNoObject = {
+  a: 1;
+}[];
+
+/** Keywords of other kinds pass a value: contains admits every string, so no item can be one. */
+export type ContainsOtherKind = never[];
+
+/** Nor where array keywords cannot tell. */
+export type ContainsNoArray = [1][];
+
+/** Array keywords a string passes too. */
+export type ContainsOtherArray = never[];
 
 /** Past prefixItems, whose items items does not list, the items are those it lists that contains rejects. */
 export type ContainsPastPrefix = [] | [string, ..."b"[]];
