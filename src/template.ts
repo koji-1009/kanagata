@@ -5,13 +5,15 @@
 // text, finite sets of characters, any text), the pattern is that type; anything else
 // (`.`, `+`, a negated class, lookarounds, …) is no type.
 
-import { inTemplate, lit, type Segment, STRING, type Ty, union } from "./ty.ts";
-
-/**
- * The most strings TypeScript builds into one union from a template: it rejects 100,000
- * ("Expression produces a union type that is too complex to represent", TS2590).
- */
-export const MAX_UNION = 99_999;
+import {
+	inTemplate,
+	lit,
+	MAX_VALUES,
+	type Segment,
+	STRING,
+	type Ty,
+	union,
+} from "./ty.ts";
 
 const ANY: Segment = { any: true };
 
@@ -21,8 +23,17 @@ type Seq = Segment[];
 /** Strings: the union of some templates. */
 type Lang = Seq[];
 
-/** No type says the strings: a reason not to read further. */
-class NoType extends Error {}
+/**
+ * No type says the strings: a reason not to read further. `many` where templates would,
+ * of more strings than kanagata writes (`MAX_VALUES`).
+ */
+class NoType extends Error {
+	readonly many: boolean;
+	constructor(many = false) {
+		super();
+		this.many = many;
+	}
+}
 
 /** How many strings of fixed length a template's sets make. */
 function count(seq: Seq): number {
@@ -37,9 +48,9 @@ function size(lang: Lang): number {
 	return n;
 }
 
-/** Strings no more than TypeScript builds into a union. */
+/** Strings no more than kanagata writes a union of. */
 function bounded(lang: Lang): Lang {
-	if (size(lang) > MAX_UNION) throw new NoType();
+	if (size(lang) > MAX_VALUES) throw new NoType(true);
 	return lang;
 }
 
@@ -125,11 +136,12 @@ function escaped(cls: string): Chars {
 /**
  * Characters a pattern matches at one place, and how a template reads them: the
  * characters in the order the pattern lists them, any character (`[\s\S]`, `[^]`), or
- * none it can write (`.`, `\D`, `[^a]`, a range too wide for a union).
+ * none it can write (`.`, `\D`, `[^a]`, more than `MAX_VALUES`: `many`).
  */
 interface Letters {
 	chars: Chars;
 	text: string[] | "any" | undefined;
+	many?: true;
 }
 
 /** A pattern read: characters, a sequence, alternatives, a repetition. */
@@ -145,6 +157,23 @@ const ANY_TEXT: Re = {
 	max: Infinity,
 	star: true,
 };
+
+/**
+ * Reads the repetitions from `items[i]` inward (`step` 0 from the start, -1 from the end),
+ * next to any text: one of none or more is no more than that text, and is left out; one of
+ * `min` or more is `min` of it, and ends the reading.
+ */
+function absorb(items: Re[], i: number, step: 0 | -1): void {
+	for (let at = i; at >= 0 && at < items.length; at += step) {
+		const r = items[at] as Re;
+		if (!("rep" in r)) return;
+		if (r.min > 0) {
+			items[at] = { rep: r.rep, min: r.min, max: r.min };
+			return;
+		}
+		items.splice(at, 1);
+	}
+}
 
 /**
  * A parser over a pattern's code points (the `u` flag: JSON Schema patterns are Unicode),
@@ -201,6 +230,10 @@ class Parser {
 		// A `$` before the sequence ends anchors what neither a template nor a machine says.
 		if (end && !this.done && this.peek() !== "|") throw new NoType();
 		if (top && !end) items.push(ANY_TEXT);
+		// Next to the any text of an end without `^` / `$`, a repetition matches no more than
+		// its fewest: `^x-.*` is `^x-`, and `^v\d+` is `^v\d`.
+		if (top && !start) absorb(items, 1, 0);
+		if (top && !end) absorb(items, items.length - 2, -1);
 		return { seq: items };
 	}
 
@@ -308,8 +341,8 @@ class Parser {
 		const set = new Set<string>();
 		const escapes = new Set<string>();
 		const ranges: Chars = [];
-		// A range of more characters than a union holds is not written out: it is no finite
-		// set, unless the class is any character anyway.
+		// A range of more characters than kanagata writes is not written out: it is no
+		// finite set, unless the class is any character anyway.
 		let wide = false;
 		const one = (): string | { cls: string } => {
 			const c = this.next();
@@ -328,7 +361,7 @@ class Parser {
 				// With the `u` flag a range ends at a character, not a class escape.
 				const to = (one() as string).codePointAt(0) as number;
 				ranges.push([from, to]);
-				if (to - from >= MAX_UNION) wide = true;
+				if (to - from >= MAX_VALUES) wide = true;
 				else for (const x of range(from, to)) set.add(x);
 			} else {
 				ranges.push([from, from]);
@@ -352,15 +385,11 @@ class Parser {
 				chars: other(chars),
 				text: wide || set.size > 0 || escapes.size > 0 ? undefined : "any",
 			};
-		return {
-			chars,
-			text:
-				none || (!any && (wide || set.size > MAX_UNION))
-					? undefined
-					: any
-						? "any"
-						: [...set],
-		};
+		if (none) return { chars, text: undefined };
+		if (any) return { chars, text: "any" };
+		return wide || set.size > MAX_VALUES
+			? { chars, text: undefined, many: true }
+			: { chars, text: [...set] };
 	}
 }
 
@@ -371,7 +400,7 @@ class Parser {
 function lang(re: Re): Lang {
 	if ("chars" in re) {
 		// Any one character, which only `*` makes a template of, and characters none writes.
-		if (!Array.isArray(re.text)) throw new NoType();
+		if (!Array.isArray(re.text)) throw new NoType(re.many);
 		return [[{ set: re.text }]];
 	}
 	if ("seq" in re) return re.seq.reduce((l, r) => concat(l, lang(r)), EMPTY);
@@ -382,14 +411,54 @@ function lang(re: Re): Lang {
 		throw new NoType();
 	}
 	if (re.max === Infinity) throw new NoType();
-	const atom = lang(re.rep);
+	return repeated(lang(re.rep), re.min, re.max);
+}
+
+/** From `min` to `max` strings of `atom` one after the other. */
+function repeated(atom: Lang, min: number, max: number): Lang {
 	let out: Lang = [];
 	let power = EMPTY;
-	for (let k = 0; k <= re.max; k++) {
-		if (k >= re.min) out = bounded([...out, ...power]);
-		if (k < re.max) power = concat(power, atom);
+	for (let k = 0; k <= max; k++) {
+		if (k >= min) out = bounded([...out, ...power]);
+		if (k < max) power = concat(power, atom);
 	}
 	return out;
+}
+
+/**
+ * Templates of the strings an expression matches and more, where templates do not say
+ * exactly those: characters none writes (`.`, `[^/]`, `\D`), a repetition without end
+ * (`X+` is `X` and any text) and more strings than kanagata writes are any text. Every
+ * string it matches is one of them. What the parser reads no template of (lookarounds,
+ * word boundaries) is still `NoType`.
+ */
+function wideLang(re: Re): Lang {
+	if ("chars" in re)
+		return Array.isArray(re.text) ? [[{ set: re.text }]] : [[ANY]];
+	const many = (f: () => Lang, past = (): Lang => [[ANY]]): Lang => {
+		try {
+			return f();
+		} catch {
+			// Only `bounded` throws here: past the strings kanagata writes.
+			cutForSize = true;
+			return past();
+		}
+	};
+	// In a sequence, a part past them is any text after the parts before it.
+	if ("seq" in re)
+		return re.seq.reduce((l, r) => {
+			const next = wideLang(r);
+			return many(
+				() => concat(l, next),
+				() => concat(l, [[ANY]]),
+			);
+		}, EMPTY);
+	if ("alt" in re) return many(() => bounded(re.alt.flatMap(wideLang)));
+	if (re.max === Infinity || ("chars" in re.rep && re.rep.text === "any"))
+		return many(() =>
+			concat(repeated(wideLang(re.rep), re.min, re.min), [[ANY]]),
+		);
+	return many(() => repeated(wideLang(re.rep), re.min, re.max));
 }
 
 /** Characters a template literal would read as more than themselves. */
@@ -476,10 +545,20 @@ function readTemplates(pattern: string): Template[] | undefined {
 	if (regex(pattern) === null) return undefined;
 	try {
 		return lang(new Parser(pattern).alternatives(true)).map(written);
-	} catch {
+	} catch (e) {
 		// NoType: the parser throws nothing else on a pattern RegExp reads.
+		if ((e as NoType).many) tooMany.add(pattern);
 		return undefined;
 	}
+}
+
+/** The patterns whose templates make more strings than kanagata writes (`MAX_VALUES`). */
+const tooMany = new Set<string>();
+
+/** Whether a pattern is no type because its templates would make more than `MAX_VALUES` strings. */
+export function tooManyStrings(pattern: string): boolean {
+	templatesOf(pattern);
+	return tooMany.has(pattern);
 }
 
 /** Patterns compiled once each; null for one JavaScript cannot read. */
@@ -508,6 +587,9 @@ export function includes(outer: Template, inner: Template): boolean {
 export function admits(t: Template, key: string): boolean {
 	return inTemplate(t.seq, key);
 }
+
+/** How many strings a template's sets make, any text aside: the index signatures it keys. */
+export const keyCount = (t: { readonly seq: Seq }): number => count(t.seq);
 
 /** The strings of a template without any text; undefined for one with it. */
 export function strings(t: Template): string[] | undefined {
@@ -567,15 +649,20 @@ function common(
 /**
  * The strings both templates admit, as the fewest of these templates that say them
  * (`` `x-${string}` `` and `` `${string}-y` ``: `` `x-${string}-y` `` and `"x-y"`);
- * undefined where the ways they line up are too many to read.
+ * undefined where the ways they line up are too many to read, `"many"` where the strings
+ * of fixed length are more than kanagata writes (`MAX_VALUES`).
  */
-export function meet(a: Template, b: Template): Template[] | undefined {
+export function meet(
+	a: Template,
+	b: Template,
+): Template[] | "many" | undefined {
 	let seqs: Seq[];
 	try {
 		seqs = common(a.seq, b.seq, 0, 0, { n: 0 });
 	} catch {
 		return undefined;
 	}
+	if (size(seqs) > MAX_VALUES) return "many";
 	// A template another one includes says no more.
 	let kept: Template[] = [];
 	for (const t of seqs.map(written)) {
@@ -759,3 +846,48 @@ export function patternType(pattern: string): Ty | undefined {
 
 /** What `patternType` read of each pattern. */
 const typed = new Map<string, Ty | undefined>();
+
+/**
+ * The type of the strings a value's pattern admits: its templates where they say exactly
+ * those (`patternType`), else templates of those and more (`wideLang`): `^refs/(heads|tags)/.+$`
+ * is `` `refs/${"heads" | "tags"}/${string}` ``. undefined where no template says them
+ * and more either (a lookaround), or JavaScript cannot read the pattern. Only where more
+ * strings may pass: a value's pattern, the keys `propertyNames` admits; not the keys a
+ * `patternProperties` pattern gives its type to.
+ */
+export function valueType(pattern: string): Ty | undefined {
+	const exact = patternType(pattern);
+	if (exact !== undefined || regex(pattern) === null) return exact;
+	if (!wide.has(pattern)) {
+		let t: Ty | undefined;
+		cutForSize = false;
+		try {
+			const seqs = wideLang(new Parser(pattern).alternatives(true));
+			t = union(seqs.map((s) => written(s).key));
+			if (cutForSize) cut.add(pattern);
+		} catch {
+			// NoType from the parser: what no template says.
+			t = undefined;
+		}
+		wide.set(pattern, t);
+	}
+	return wide.get(pattern);
+}
+
+/** What `valueType` read of each pattern no template says exactly. */
+const wide = new Map<string, Ty | undefined>();
+
+/** Whether `wideLang` has read a part as any text for its strings, past those kanagata writes. */
+let cutForSize = false;
+
+/** The patterns whose templates `valueType` has any text in for their size (`cutForSize`). */
+const cut = new Set<string>();
+
+/**
+ * Whether a value's pattern is typed wider for its size: its templates would make more
+ * than `MAX_VALUES` strings (`tooManyStrings`), or its wider ones have any text for them.
+ */
+export function wideForSize(pattern: string): boolean {
+	valueType(pattern);
+	return tooManyStrings(pattern) || cut.has(pattern);
+}

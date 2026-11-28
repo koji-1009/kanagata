@@ -1,7 +1,17 @@
 // Turns `Ty` into TypeScript source text.
 
 import { isIdent, isNumericKey } from "./ident.ts";
-import { equal, type Keyed, type Prop, type Ty, type View } from "./ty.ts";
+import {
+	array,
+	equal,
+	type Keyed,
+	MAX_ITEMS,
+	type Prop,
+	type Ty,
+	tupleShape,
+	union,
+	type View,
+} from "./ty.ts";
 
 /**
  * The helper types the output declares where it uses them. Their names are lower case,
@@ -254,14 +264,18 @@ class Out {
 	 * is no JSON value, and reads back as one, so the items past `min` are a tuple for each
 	 * length: `[] | [A] | [A, B, ...R[]]`; an item that admits no value ends the arrays. In
 	 * a closed tuple, the equal items that end it are one rest, `...T[]` with `length`
-	 * bounding it, where that is shorter than a tuple for each of their lengths.
+	 * bounding it, where that is shorter than a tuple for each of their lengths (see
+	 * `tupleShape`). One of more items than kanagata writes a tuple of (`MAX_ITEMS`; a
+	 * `const` that lists them) is an array of their types, which admits every array it
+	 * does, and more.
 	 */
 	private members(t: Tuple): Member[] {
-		const cut = t.items.findIndex(
-			(item, i) => i >= t.min && item.kind === "never",
-		);
-		const items = cut === -1 ? t.items : t.items.slice(0, cut);
-		const rest = cut === -1 ? t.rest : undefined;
+		if (t.items.length > MAX_ITEMS) {
+			const all = t.rest === undefined ? t.items : [...t.items, t.rest];
+			const text = this.text(array(union(all)), Prec.Union);
+			return [{ text, bounded: false, repeated: false }];
+		}
+		const { items, rest, k } = tupleShape(t);
 		const n = items.length;
 		const texts: string[] = [];
 		for (const [i, item] of items.entries())
@@ -275,8 +289,6 @@ class Out {
 		if (t.min === n) return this.use([exact(n, rest)]);
 		// The items from `k` on are the rest's, or in a closed tuple, the last item's.
 		const last = (rest ?? items[n - 1]) as Ty;
-		let k = n;
-		while (k > t.min && equal(items[k - 1] as Ty, last)) k--;
 		const shorter: Member[] = [];
 		for (let length = t.min; length < k; length++) shorter.push(exact(length));
 		const tail =

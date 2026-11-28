@@ -205,6 +205,7 @@ function generateCommand(
 		},
 	);
 	for (const w of generated.warnings) err(`${w.at}: warning: ${w.msg}`);
+	for (const i of generated.infos) err(`${i.at}: info: ${i.msg}`);
 
 	const target = f.output;
 	if (target === undefined) {

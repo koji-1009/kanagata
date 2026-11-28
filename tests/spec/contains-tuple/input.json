@@ -1,0 +1,13 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Pair": { "description": "In a closed tuple, an item contains admits is at one of its places: a tuple of each length for each place.", "type": "array", "items": { "type": ["string", "number"] }, "maxItems": 2, "contains": { "type": "string" } },
+      "Prefixed": { "description": "A place no item contains admits can be is in none.", "type": "array", "prefixItems": [{ "type": "number" }, { "type": ["string", "number"] }], "items": false, "contains": { "type": "string" } },
+      "Longer": { "description": "From minItems.", "type": "array", "items": { "type": ["string", "number"] }, "minItems": 2, "maxItems": 3, "contains": { "type": "string" } },
+      "TooMany": { "description": "Past 20000 items in those tuples (42,925 for 50 places), only how many is typed, with a note.", "type": "array", "items": { "type": ["string", "number"] }, "maxItems": 50, "contains": { "type": "string" } },
+      "Open": { "description": "Nor in an open array, which no tuple says.", "type": "array", "items": { "type": ["string", "number"] }, "contains": { "type": "string" } }
+    }
+  }
+}

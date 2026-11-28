@@ -10,6 +10,7 @@ import {
 	strings,
 	type Template,
 	templates,
+	tooManyStrings,
 } from "../../src/template.ts";
 import { inter, lit, NEVER, type Ty } from "../../src/ty.ts";
 
@@ -135,7 +136,7 @@ test("templates write text a template would read as a string", () => {
 	assert.equal(printed("^[ab]c"), '`${"a" | "b"}c${string}`');
 });
 
-test("no more strings than TypeScript builds into a union", () => {
+test("no more strings than kanagata writes a union of", () => {
 	assert.equal(
 		printed("^\\d{4}$"),
 		`\`\${${DIGITS}}\${${DIGITS}}\${${DIGITS}}\${${DIGITS}}\``,
@@ -147,26 +148,29 @@ test("no more strings than TypeScript builds into a union", () => {
 		"100,000 in a sequence",
 	);
 	assert.equal(
-		printed("^\\d{4}[0-8]$|^\\d{4}9$"),
+		printed("^\\d{3}[0-8]$|^\\d{3}9$|^a$"),
 		undefined,
-		"100,000 in alternatives",
+		"10,001 in alternatives",
 	);
-	assert.equal(printed("^[a-z]{1,4}$"), undefined, "more than that in a range");
+	assert.equal(printed("^[a-z]{1,3}$"), undefined, "more than that in a range");
 	assert.equal(
-		printed("^[\\u{0}-\\u{1869E}]$")?.split(" | ").length,
-		99_999,
-		"a range of 99,999",
+		printed("^[\\u{0}-\\u{270F}]$")?.split(" | ").length,
+		10_000,
+		"a range of 10,000",
 	);
+	assert.equal(printed("^[\\u{0}-\\u{2710}]$"), undefined, "a range of 10,001");
 	assert.equal(
-		printed("^[\\u{0}-\\u{1869F}]$"),
+		printed("^[\\u{0}-\\u{176F}\\u{10000}-\\u{1176F}]$"),
 		undefined,
-		"a range of 100,000",
+		"two ranges of 6,000",
 	);
+	assert.equal(tooManyStrings("^\\d{5}$"), true, "noted as too many");
 	assert.equal(
-		printed("^[\\u{0}-\\u{EA5F}\\u{10000}-\\u{1EA5F}]$"),
-		undefined,
-		"two ranges of 60,000",
+		tooManyStrings("^[\\u{0}-\\u{2710}]$"),
+		true,
+		"a wide range too",
 	);
+	assert.equal(tooManyStrings("^a.$"), false, "no template at all");
 });
 
 test("a pattern JavaScript cannot read is no type", () => {
@@ -212,8 +216,11 @@ test("the strings of a template without any text", () => {
 });
 
 /** The keys of the templates `meet` gives, as printed. */
-function met(a: string, b: string): string[] | undefined {
-	return meet(one(a), one(b))?.map((t) => (t.key as { text: string }).text);
+function met(a: string, b: string): string[] | "many" | undefined {
+	const both = meet(one(a), one(b));
+	return both === "many"
+		? both
+		: both?.map((t) => (t.key as { text: string }).text);
 }
 
 test("the strings two templates admit, as templates", () => {
@@ -242,6 +249,11 @@ test("the strings two templates admit, as templates", () => {
 		met(`a${"[\\s\\S]*a".repeat(6)}`, `b${"[\\s\\S]*b".repeat(6)}`),
 		undefined,
 		"too many ways to line them up",
+	);
+	assert.equal(
+		met("^[0-9]{3}", "[0-9]{3}$"),
+		"many",
+		"more strings of fixed length than kanagata writes",
 	);
 });
 
@@ -296,7 +308,7 @@ test("whether a pattern that is a regular expression matches all strings of a te
 		"more states than read",
 	);
 	assert.equal(
-		matchesAll("a[ab]{14}$", one("^[\\s\\S]*a[ab]{14}$")),
+		matchesAll("^(?:[\\s\\S]*a[\\s\\S]{13}|x)", one("^x")),
 		false,
 		"more pairs of states than read, though it matches them all",
 	);

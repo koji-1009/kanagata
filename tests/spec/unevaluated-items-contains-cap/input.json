@@ -4,7 +4,7 @@
   "components": {
     "schemas": {
       "Plain": {
-        "description": "The member with contains matches or not, beside each of 512 others: 1,026 cases, which are read.",
+        "description": "The member with contains matches or not, beside each of 498 others: 998 cases, which are read.",
         "type": "array",
         "anyOf": [
           { "contains": { "type": "string" } },
@@ -23,12 +23,12 @@
           {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
           {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
           {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
-          {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+          {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
         ],
         "unevaluatedItems": false
       },
       "Many": {
-        "description": "Any set of the 17 members can match together: 131,072 cases, more than the 99,999 read, so unevaluatedItems is ignored.",
+        "description": "Any set of the 17 members can match together: 131,072 cases, more than the 1000 read, so unevaluatedItems is not typed, with a note.",
         "type": "array",
         "anyOf": [
           { "contains": { "const": 0 } },

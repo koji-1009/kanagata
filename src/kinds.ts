@@ -12,7 +12,7 @@ import { excluded, refuted } from "./not.ts";
 import { count, numeric } from "./number.ts";
 import { shared } from "./oneof.ts";
 import type { Ctx, Located } from "./pointer.ts";
-import { patternType } from "./template.ts";
+import { valueType } from "./template.ts";
 import {
 	inter,
 	isValueKind,
@@ -55,7 +55,7 @@ export function text(v: JsonObject): Ty {
 	if (max !== undefined && (count(v, "minLength") ?? 0) > max) return NEVER;
 	if (max === 0) return lit('""');
 	const pattern = v.str("pattern");
-	return (pattern === undefined ? undefined : patternType(pattern)) ?? STRING;
+	return (pattern === undefined ? undefined : valueType(pattern)) ?? STRING;
 }
 
 /**

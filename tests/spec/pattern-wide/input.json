@@ -1,0 +1,19 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Prefixed": { "description": "Next to the any text of an end without $, a repetition of none or more adds nothing: exactly x- and any text.", "type": "string", "pattern": "^x-.*" },
+      "Versioned": { "description": "One of one or more is one.", "type": "string", "pattern": "^v[0-9]+" },
+      "Json": { "description": "So at an end without ^.", "type": "string", "pattern": ".*\\.json$" },
+      "PrefixedKeys": { "description": "Exact, it keys an index signature.", "type": "object", "patternProperties": { "^x-.*": { "type": "string" } }, "additionalProperties": false },
+      "Ref": { "description": "A pattern no template says exactly is templates of its strings and more: a dot, any number past one, more strings than kanagata writes are any text.", "type": "string", "pattern": "^refs/(heads|tags|pull)/.*$" },
+      "Digest": { "description": "More strings than kanagata writes, with a note.", "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+      "Coded": { "description": "In a sequence, the part past them is any text after the parts before it.", "type": "string", "pattern": "^[0-9]{3}[a-z]{2}$" },
+      "Semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+      "Email": { "description": "A part past them in templates of more strings is any text too, with a note: [a-z]{2,} after two sets of 64 characters.", "type": "string", "pattern": "^[\\w.-]+@[\\w.-]+\\.[a-z]{2,}$" },
+      "WideKeys": { "description": "A patternProperties pattern gives its type only to the keys it matches: one no template says exactly keys no index signature.", "type": "object", "patternProperties": { "^[a-z]+$": { "type": "string" } }, "additionalProperties": false },
+      "Lookahead": { "description": "What no template says at all is any string.", "type": "string", "pattern": "^(?=a)b" }
+    }
+  }
+}

@@ -42,6 +42,16 @@
         "minProperties": 2,
         "maxProperties": 1,
         "properties": { "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" } }
+      },
+      "ManySets": {
+        "description": "Past 20000 properties in the object types of the sets (1716 sets of 13), the count is not typed, with a note.",
+        "type": "object",
+        "properties": {
+          "a": { "type": "string" }, "b": { "type": "string" }, "c": { "type": "string" }, "d": { "type": "string" }, "e": { "type": "string" }, "f": { "type": "string" }, "g": { "type": "string" },
+          "h": { "type": "string" }, "i": { "type": "string" }, "j": { "type": "string" }, "k": { "type": "string" }, "l": { "type": "string" }, "m": { "type": "string" }
+        },
+        "additionalProperties": false,
+        "maxProperties": 6
       }
     }
   }

@@ -17,8 +17,11 @@ import { readDialect, schema, schemaDoc } from "./schema.ts";
 import {
 	admitsAny,
 	bareRefs,
+	COMBINATIONS_LEFT_OUT,
+	combinations,
 	equal,
 	kindsWith,
+	leavingOut,
 	type Prop,
 	presentKeys,
 	prop,
@@ -36,10 +39,14 @@ import { parseYaml } from "./yaml.ts";
 export { GenerateError } from "./error.ts";
 export type { Diag } from "./pointer.ts";
 
-/** Generated declarations and the warnings raised on the way. */
+/**
+ * Generated declarations, the warnings raised on the way, and notes of the parts typed
+ * wider than the schema says for their size (see docs/types.md, Size).
+ */
 export interface Generated {
 	code: string;
 	warnings: Diag[];
+	infos: Diag[];
 }
 
 /** Where the document is, so that `$ref`s to other files can be followed. */
@@ -138,20 +145,29 @@ export function generate(
 	// Which kinds a reference admits is its component's type's, known once all of them
 	// are converted: what those kinds rule out is left out of the intersections that met
 	// it, in the types built with one.
-	const kinds = refKinds(converted);
-	const kinded = (t: Ty) => (pathsMet ? kinds(t) : t);
+	const refKinded = refKinds(converted);
+	// Combinations past those kanagata writes, known with the references', are noted where
+	// the type is declared.
+	const kinds = (t: Ty, at: string): Ty => {
+		const [built, left] = leavingOut(() => refKinded(t));
+		if (left) cx.info(at, COMBINATIONS_LEFT_OUT);
+		return built;
+	};
+	const kinded = (t: Ty, at: string) => (pathsMet ? kinds(t, at) : t);
 	const names = typeNames(converted.map((c) => c.key));
 	// typeNames gives one name per key, in order
 	const components: Component[] = converted.map((c, i) => ({
 		...c,
-		...(c.met ? { read: kinds(c.read), write: kinds(c.write) } : {}),
+		...(c.met
+			? { read: kinds(c.read, c.at), write: kinds(c.write, c.at) }
+			: {}),
 		name: names[i] as string,
 	}));
 	const differing = differingViews(components);
 	// An operation reached again is declared once, so its types must be declared alike:
 	// a reference to either view of a schema without a second type is the same name.
 	for (const a of p.again)
-		if (!equal(kinded(a.first.ty), kinded(a.ty), differing))
+		if (!equal(kinded(a.first.ty, a.first.at), kinded(a.ty, a.at), differing))
 			throw new DiagError(
 				a.at,
 				`operation ${JSON.stringify(a.id)} is also ${a.first.at}, where its type differs; operations[${JSON.stringify(a.id)}] has one type`,
@@ -183,16 +199,18 @@ export function generate(
 		const w = writeName.get(c.key);
 		if (w !== undefined) decls.push(decl(w, present(c.write)));
 	}
-	const props = (ps: Prop[]) =>
-		ps.map((q) => ({ ...q, ty: present(kinded(q.ty)) }));
+	const props = (ps: Prop[], at: (q: Prop, i: number) => string) =>
+		ps.map((q, i) => ({ ...q, ty: present(kinded(q.ty, at(q, i))) }));
 	const ops = {
-		paths: props(p.paths),
-		operations: props(p.operations),
-		...(p.webhooks === undefined ? {} : { webhooks: props(p.webhooks) }),
+		paths: props(p.paths, (q) => child("#/paths", q.key)),
+		operations: props(p.operations, (_, i) => p.operationsAt[i] as string),
+		...(p.webhooks === undefined
+			? {}
+			: { webhooks: props(p.webhooks, (q) => child("#/webhooks", q.key)) }),
 	};
 
 	const code = render({ ...ops, schemas: index, decls }, name, options.version);
-	return { code, warnings: [...read, ...cx.warnings] };
+	return { code, warnings: [...read, ...cx.warnings], infos: cx.infos };
 }
 
 /**
@@ -295,7 +313,20 @@ function refKinds(converted: readonly Converted[]): (t: Ty) => Ty {
 		return kinds;
 	};
 	const done = [new Map<Ty, Ty>(), new Map<Ty, Ty>()] as const;
-	return (t) => withRefKinds(t, { kinds: of, type }, done);
+	const kinded = (t: Ty): Ty =>
+		withRefKinds(t, { kinds: of, type, size }, done);
+	// The combinations of a component's type; one that reaches itself counts once.
+	const sizes = new Map<string, number>();
+	const size = (r: RefTy): number => {
+		const id = `${r.view} ${r.schema}`;
+		const known = sizes.get(id);
+		if (known !== undefined) return known;
+		sizes.set(id, 1);
+		const n = combinations(kinded(type(r)), size);
+		sizes.set(id, n);
+		return n;
+	};
+	return kinded;
 }
 
 /** `presentKeys`, with references resolved to the components' types in their view. */

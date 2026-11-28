@@ -26,6 +26,7 @@ import {
 	isWholeText,
 	KIND_TY,
 	literal,
+	MAX_ITEMS,
 	NEVER,
 	NULL,
 	NUMBER,
@@ -122,6 +123,13 @@ function lacking(names: Value[]): Ty {
 }
 
 /**
+ * Whether the arrays a `minItems` / `maxItems` of `n` leaves out (the shorter, the
+ * longer) take a tuple of more items than kanagata writes: then they are any array.
+ */
+export const refutedPast = (k: string, n: number): boolean =>
+	(k === "maxItems" ? n + 1 : n - 1) > MAX_ITEMS;
+
+/**
  * The values a schema does not admit (those `not` leaves, those `if` refutes), where
  * TypeScript can say them: every value for `false`, none for a schema without keywords,
  * and otherwise what any of its keywords leaves: the other kinds for `type`, the objects
@@ -131,7 +139,8 @@ function lacking(names: Value[]): Ty {
  * leaves for `anyOf`, and for `oneOf` that or what two members admit; what the schemas a
  * `$ref` or `$dynamicRef` reaches leave. `parents` are the schemas that read the same
  * value (the schema `not` or `if` is in, and those around it), which declare the values
- * of its properties. undefined where a keyword's are not said.
+ * of its properties. undefined where a keyword's are not said. Arrays of more items than
+ * kanagata writes a tuple of are any array (`refutedPast`).
  */
 export function refuted(
 	cx: Ctx,
@@ -174,6 +183,7 @@ function leaves(
 	if (k === "minItems" || k === "maxItems") {
 		// The arrays shorter or longer than it; a count that is none asks nothing.
 		const n = count(s, k);
+		if (n !== undefined && refutedPast(k, n)) return arrayTy(UNKNOWN);
 		if (n !== undefined && k === "maxItems")
 			return {
 				kind: "tuple",
@@ -276,7 +286,7 @@ export function listed(
 	seen: Set<string>,
 ): Value[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	return cx.inOwnResource(s, () => {
+	const values = cx.inOwnResource(s, () => {
 		for (const values of cx.eachTarget(s, seen, (t) =>
 			listed(cx, t.value, seen),
 		))
@@ -291,7 +301,24 @@ export function listed(
 		}
 		return undefined;
 	});
+	return values !== undefined && nullAdded(cx, s) && !values.includes(null)
+		? [...values, null]
+		: values;
 }
+
+/**
+ * Whether 3.0's `nullable: true` admits `null` beside the values a schema lists: next to
+ * `type` without `enum` or `const` (and not next to `$ref`, whose siblings 3.0 ignores),
+ * or anywhere with `looseNullable` (see `parts`).
+ */
+const nullAdded = (cx: Ctx, s: JsonObject): boolean =>
+	!cx.refSiblings &&
+	s.get("nullable") === true &&
+	(cx.looseNullable ||
+		(s.get("type") !== undefined &&
+			s.get("enum") === undefined &&
+			s.get("const") === undefined &&
+			s.get("$ref") === undefined));
 
 /** The values a schema itself lists. */
 function ownValues(s: JsonObject): Value[] | undefined {

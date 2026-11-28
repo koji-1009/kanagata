@@ -16,22 +16,30 @@ import { type Reading, schema, schemaDoc } from "./schema.ts";
 import {
 	admits,
 	includes,
+	keyCount,
 	matchesAll,
 	meet,
 	patternType,
 	strings,
 	type Template,
 	templates,
+	tooManyStrings,
+	valueType,
 } from "./template.ts";
 import {
 	admitsText,
 	inter,
 	type Keyed,
+	MAX_KEYS,
+	MAX_VALUES,
+	MAX_WRITTEN,
+	manyNote,
 	NEVER,
 	neverProp,
 	type Prop,
 	present,
 	RECORD,
+	type Segment,
 	STRING,
 	type Ty,
 	UNDEFINED,
@@ -40,6 +48,16 @@ import {
 } from "./ty.ts";
 import { additional as additionalKeys } from "./unevaluated.ts";
 import { asserted } from "./vocab.ts";
+
+/** The note for keys of more strings than kanagata writes a union of. */
+const MANY_KEYS = manyNote(MAX_VALUES, "keys", "typed by any string");
+
+/** The note for index signatures by more keys than kanagata keys an object type by. */
+const MANY_KEYED = manyNote(
+	MAX_KEYS,
+	"keys of index signatures",
+	"typed by any string",
+);
 
 /**
  * The keys an object's `propertyNames` admits: every key is a string it must admit, so
@@ -125,11 +143,12 @@ export function propertyNamesParts(
 		...(count(s, "maxLength") !== undefined ? ["maxLength"] : []),
 	];
 	const pattern = s.str("pattern");
+	// A pattern templates say with more strings is read as a value's is (see `valueType`).
 	if (
 		read === undefined ||
 		(read.kind === "string" &&
 			(lengths.length > 0 ||
-				(pattern !== undefined && patternType(pattern) === undefined)))
+				(pattern !== undefined && valueType(pattern) === undefined)))
 	)
 		cx.warn(
 			child(at, "propertyNames"),
@@ -152,7 +171,8 @@ export function propertyNamesParts(
  * A type of keys: where TypeScript keeps the strings as an intersection, of the templates of
  * patterns (`allOf: [{ pattern: "^x-" }, { pattern: "-y$" }]`), the strings all of them
  * admit, as templates (see `meet`): `"x-y" | `x-${string}-y``. undefined where those are
- * too many to read.
+ * too many to read. They are no more strings than kanagata writes: about as many as the
+ * combinations of the intersection, `MAX_COMBINATIONS` at most.
  */
 function meetKeys(keys: Ty): Ty | undefined {
 	if (keys.kind !== "inter") return keys;
@@ -167,7 +187,7 @@ function meetKeys(keys: Ty): Ty | undefined {
 		for (const a of met)
 			for (const b of terms) {
 				const both = meet(a, b);
-				if (both === undefined) return undefined;
+				if (!Array.isArray(both)) return undefined;
 				next.push(...both);
 			}
 		met = next;
@@ -249,6 +269,8 @@ interface Draft {
 	readonly everyKey: Ty[];
 	/** The type of each of `keyed`'s index signatures (see `sortPatterns`). */
 	exact: Ty[];
+	/** Where the schema is, for notes. */
+	readonly at: string;
 }
 
 /** The object type of a schema, whose conversion reads `read`. */
@@ -284,6 +306,7 @@ export function object(
 		unwritten: [],
 		everyKey: [],
 		exact: [],
+		at,
 	};
 	// A property a pattern matches has both types.
 	for (const p of props) {
@@ -429,9 +452,21 @@ function nameAll(
  * narrower one's type is within a wider one's, as TypeScript requires (`exact`).
  */
 function sortPatterns(d: Draft): void {
-	for (const [pattern, ty] of d.patterns) {
+	const keying = d.patterns.map(([pattern]) => {
 		const keys = patternType(pattern);
-		if (keys === undefined) d.unwritten.push({ pattern, ty });
+		return keys === undefined || keys.kind === "string"
+			? []
+			: templates(pattern).filter((t) => strings(t) === undefined);
+	});
+	// Past the keys kanagata keys an object type by, no template says them.
+	const over = keyTotal(keying.flat().map((t) => t.key)) > MAX_KEYS;
+	if (over) d.cx.info(child(d.at, "patternProperties"), MANY_KEYED);
+	for (const [i, [pattern, ty]] of d.patterns.entries()) {
+		const keys = patternType(pattern);
+		if (tooManyStrings(pattern))
+			d.cx.info(child(child(d.at, "patternProperties"), pattern), MANY_KEYS);
+		if (keys === undefined || (over && (keying[i] as Template[]).length > 0))
+			d.unwritten.push({ pattern, ty });
 		else if (keys.kind === "string") d.everyKey.push(ty);
 		else {
 			const all = templates(pattern);
@@ -460,6 +495,14 @@ function types(d: Draft, t: Template): Ty[] {
 }
 
 const textOf = (key: Ty) => (key as { text: string }).text;
+
+/** The keys template literal types make, each type once (see `MAX_KEYS`). */
+function keyTotal(keys: readonly Ty[]): number {
+	const each = new Map(keys.map((k) => [textOf(k), k]));
+	let n = 0;
+	for (const k of each.values()) n += keyCount(k as { seq: Segment[] });
+	return n;
+}
 
 /**
  * Adds an index signature where none is by its key: patterns of the same template are one
@@ -510,7 +553,7 @@ function kept(d: Draft): PropDraft[] {
 function closedOver(d: Draft, admits: (key: string) => boolean): Ty {
 	const props = kept(d);
 	const none = props.every((p) => p.optional && p.ty.kind === "never");
-	const t = counted(d.v, none ? [] : props);
+	const t = counted(d, none ? [] : props);
 	return t.kind === "map" ? t : forbid(t, outside(d, admits));
 }
 
@@ -535,13 +578,19 @@ function keyedObject(d: Draft, keys: Ty): Ty {
 	if (own.length === 0) return closedOver(d, admits);
 	// A pattern's signature is by the keys propertyNames admits too: all of its own where
 	// they are, else the keys each template of propertyNames shares with it, written as
-	// templates (see `meet`). Where those are too many to read, it stays.
+	// templates (see `meet`). Where those are too many to read, or more strings than
+	// kanagata writes, it stays.
 	const signatures: Keyed[] = [];
 	for (const [i, k] of d.keyed.entries()) {
 		const both = own.some((n) => includes(n, k.t))
 			? [k.t]
 			: own.map((n) => meet(n, k.t));
-		if (both.some((m) => m === undefined))
+		if (both.some((m) => m === "many"))
+			d.cx.info(
+				child(child(d.at, "patternProperties"), k.pattern),
+				manyNote(MAX_VALUES, "keys", "typed by the pattern's keys"),
+			);
+		if (both.some((m) => m === undefined || m === "many"))
 			signature(
 				signatures,
 				k.t.key,
@@ -581,8 +630,16 @@ function keyedObject(d: Draft, keys: Ty): Ty {
 		signature(out, t.key, signatureType(d, ty, within(t)));
 	}
 	if (out.length === 0) return closedOver(d, admits);
-	const forbidden = outside(d, admits).map(neverProp);
-	return { kind: "map", props: [...d.props, ...forbidden], keyed: out };
+	const props = [...d.props, ...outside(d, admits).map(neverProp)];
+	if (keyTotal(out.map((s) => s.key)) <= MAX_KEYS)
+		return { kind: "map", props, keyed: out };
+	// Past the keys kanagata keys an object type by, any key has their types.
+	d.cx.info(child(d.at, "propertyNames"), MANY_KEYED);
+	return {
+		kind: "map",
+		props,
+		index: signatureType(d, union(out.map((s) => s.ty)), () => true),
+	};
 }
 
 /** The object type of the properties, the patterns and additionalProperties. */
@@ -596,8 +653,9 @@ function patternObject(d: Draft): Ty {
 			signatureType(d, d.exact[i] as Ty, within(k.t)),
 		);
 	if (additional === undefined) {
+		// maxProperties says how many of its properties at most are present.
 		if (byPattern.length === 0)
-			return props.length === 0 ? RECORD : { kind: "object", props };
+			return props.length === 0 ? RECORD : counted(d, props, false);
 		// Without properties, other keys have any value, as for an object without either.
 		return props.length === 0
 			? { kind: "map", props, keyed: byPattern, index: UNKNOWN }
@@ -610,7 +668,7 @@ function patternObject(d: Draft): Ty {
 		byPattern.length === 0 &&
 		unwritten.length === 0
 	)
-		return counted(d.v, kept(d));
+		return counted(d, kept(d));
 	const index =
 		additional.kind === "never" && unwritten.length === 0
 			? undefined
@@ -642,37 +700,53 @@ const within = (t: Template) => (key: string) => admits(t, key);
  * A closed object, its properties all it can have: `minProperties` requires that many
  * of them (a union over which), `maxProperties` leaves out the others.
  */
-function counted(v: JsonObject, props: Prop[]): Ty {
+function counted(d: Draft, props: Prop[], closed = true): Ty {
 	if (props.length === 0) return { kind: "map", props: [], index: NEVER };
 	const optional = props.filter((p) => p.optional).map((p) => p.key);
 	const required = props.length - optional.length;
-	const min = count(v, "minProperties") ?? 0;
-	const max = count(v, "maxProperties") ?? props.length;
+	// An open object's other keys count too, so its properties have no fewest.
+	const min = closed ? (count(d.v, "minProperties") ?? 0) : 0;
+	const max = count(d.v, "maxProperties") ?? props.length;
 	if (min > Math.min(max, props.length) || required > max) return NEVER;
 	const variant = (f: (p: Prop) => Prop): Ty => ({
 		kind: "object",
 		props: props.map((p) => (p.optional ? f(p) : p)),
 	});
 	const parts: Ty[] = [];
-	if (min > required)
-		parts.push(
-			union(
-				subsets(optional, min - required).map((keys) =>
-					variant((p) =>
-						keys.includes(p.key) ? { ...p, optional: false, present: true } : p,
-					),
+	// Each set of that many optional properties, an object type of every property each,
+	// as many properties as kanagata writes.
+	const each = (key: string, size: number, f: (keys: string[]) => Ty) => {
+		const most = Math.floor(MAX_WRITTEN / props.length);
+		if (choices(optional.length, size, most) <= most)
+			parts.push(union(subsets(optional, size).map(f)));
+		else
+			d.cx.info(
+				child(d.at, key),
+				manyNote(
+					MAX_WRITTEN,
+					"properties in the object types of its sets",
+					"not typed",
 				),
+			);
+	};
+	if (min > required)
+		each("minProperties", min - required, (keys) =>
+			variant((p) =>
+				keys.includes(p.key) ? { ...p, optional: false, present: true } : p,
 			),
 		);
 	if (max < props.length)
-		parts.push(
-			union(
-				subsets(optional, max - required).map((keys) =>
-					variant((p) => (keys.includes(p.key) ? p : { ...p, ty: NEVER })),
-				),
-			),
+		each("maxProperties", max - required, (keys) =>
+			variant((p) => (keys.includes(p.key) ? p : { ...p, ty: NEVER })),
 		);
 	return parts.length === 0 ? { kind: "object", props } : inter(parts);
+}
+
+/** How many sets of `k` there are of `n`, past `most` any more than it. */
+function choices(n: number, k: number, most: number): number {
+	let c = 1;
+	for (let i = 1; i <= k && c <= most; i++) c = (c * (n - k + i)) / i;
+	return c;
 }
 
 /** The subsets of `items` with `size` members, in order. */

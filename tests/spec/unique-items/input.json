@@ -1,0 +1,16 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Cadence": { "description": "Items of listed values, each once: no more items than values.", "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["hourly", "daily", "weekly"] } },
+      "Bounded": { "description": "A maxItems below that stays.", "type": "array", "maxItems": 2, "uniqueItems": true, "items": { "enum": ["a", "b", "c", "d"] } },
+      "Flags": { "description": "A boolean is two values.", "type": "array", "uniqueItems": true, "items": { "type": "boolean" } },
+      "Repeated": { "description": "A value listed twice is one.", "type": "array", "uniqueItems": true, "items": { "enum": ["a", "b", "a"] } },
+      "TooMany": { "description": "A minItems past them admits no array.", "type": "array", "minItems": 3, "uniqueItems": true, "items": { "enum": ["a", "b"] } },
+      "Prefixed": { "description": "After prefixItems, which may be any.", "type": "array", "prefixItems": [{ "type": "string" }], "uniqueItems": true, "items": { "enum": ["a", "b"] } },
+      "Strings": { "description": "Items of any string are as many as any.", "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+      "Typeless": { "description": "uniqueItems asks nothing of other kinds: without type, any value.", "uniqueItems": true }
+    }
+  }
+}

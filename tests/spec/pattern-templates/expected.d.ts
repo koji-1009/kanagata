@@ -23,6 +23,7 @@ export interface schemas {
   Boundary: Boundary;
   Lookahead: Lookahead;
   TooMany: TooMany;
+  AtLimit: AtLimit;
   Unreadable: Unreadable;
   Listed: Listed;
   MemberValues: MemberValues;
@@ -62,18 +63,21 @@ export type Counted = "xx" | "xxx";
 /** Text a template literal would read is written as a string. */
 export type Quoted = `${"$"}{x}${"`\\"}${string}`;
 
-/** A dot does not match line breaks, which no type leaves out. */
-export type Dot = string;
+/** A dot does not match line breaks, which no type leaves out: any text is in its place, a template of its strings and more. */
+export type Dot = `a${string}`;
 
-/** Any number of a class is no template. */
-export type Repeated = string;
+/** Any number of a class past one is any text. */
+export type Repeated = `${"a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"}${string}`;
 
 export type Boundary = string;
 
 export type Lookahead = string;
 
-/** TypeScript builds no union of 100,000 strings. */
+/** kanagata writes no union of more than 10000 strings: the pattern is string, with a note. */
 export type TooMany = string;
+
+/** 10000 are a template. */
+export type AtLimit = `${"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"}${"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"}${"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"}${"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"}`;
 
 /** A pattern JavaScript cannot read leaves the string as it is. */
 export type Unreadable = string;

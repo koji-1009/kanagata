@@ -68,13 +68,15 @@ export type Ty =
 	  }
 	/**
 	 * A component schema, by its key in `components.schemas`; named when emitted. `kinds`
-	 * are those of its type, once all components are converted (see `withRefKinds`).
+	 * are those of its type, and `size` its combinations (see `combinations`), once all
+	 * components are converted (see `withRefKinds`).
 	 */
 	| {
 			readonly kind: "ref";
 			readonly schema: string;
 			readonly view: View;
-			readonly kinds?: ValueKind[];
+			readonly kinds?: ValueKind[] | undefined;
+			readonly size?: number;
 	  }
 	/** `operations[id]` */
 	| { readonly kind: "opRef"; readonly id: string }
@@ -128,6 +130,55 @@ export const ref = (schema: string, view: View = "read"): Ty => ({
 export const opRef = (id: string): Ty => ({ kind: "opRef", id });
 export const array = (elem: Ty): Ty => ({ kind: "array", elem });
 export const object = (props: Prop[]): Ty => ({ kind: "object", props });
+
+// The most of each part kanagata writes one type of. Past them it writes a wider type,
+// which admits every value the schema does, and notes it (`Ctx.info`): TypeScript rejects
+// some such types (a tuple of 10,000 items, TS2799; a union of 100,000 members, TS2590)
+// and slows down on others well before. Each is about where TypeScript 7 takes tens of
+// milliseconds to check one type.
+
+/** Items of a tuple. */
+export const MAX_ITEMS = 9999;
+
+/**
+ * Members of a union of values: the strings of a pattern's templates (and those patterns
+ * share), the numbers bounds admit.
+ */
+export const MAX_VALUES = 10_000;
+
+/**
+ * The strings of the sets of the templates that key an object type's index signatures,
+ * which TypeScript checks each against each other.
+ */
+export const MAX_KEYS = 300;
+
+/**
+ * Combinations of an intersection of unions, which TypeScript builds into the union of
+ * them (a template's strings among them), and the cases `unevaluatedItems` reads, a union
+ * of each set of branches.
+ */
+export const MAX_COMBINATIONS = 1000;
+
+/**
+ * Items or properties written in the members of one union: a tuple for each length past
+ * the required items, an object type for each set of properties, a tuple for each place
+ * of the item `contains` admits.
+ */
+export const MAX_WRITTEN = 20_000;
+
+/** The note for a part typed wider for its size: `more than 9999 items; not typed`. */
+export const manyNote = (most: number, what: string, typed: string): string =>
+	`more than ${most} ${what}; ${typed}`;
+
+/** The note for a count of more items than kanagata writes a tuple of. */
+export const MANY_ITEMS = manyNote(MAX_ITEMS, "items", "not typed");
+
+/** The note for an intersection that left out unions past `MAX_COMBINATIONS`. */
+export const COMBINATIONS_LEFT_OUT = manyNote(
+	MAX_COMBINATIONS,
+	"combinations",
+	"some of its parts are not typed",
+);
 
 /** A closed tuple whose items are all required. */
 export const tuple = (items: Ty[]): Ty => ({
@@ -373,10 +424,14 @@ export function presentKeys(t: Ty, any: (t: Ty) => boolean): Ty {
 	return out;
 }
 
-/** What a reference's component is: its type and the kinds of value it admits, in the reference's view. */
+/**
+ * What a reference's component is: its type, the kinds of value it admits and its
+ * combinations (see `combinations`), in the reference's view.
+ */
 interface Components {
 	kinds: (r: RefTy) => ValueKind[] | undefined;
 	type: (r: RefTy) => Ty;
+	size: (r: RefTy) => number;
 }
 
 /**
@@ -388,7 +443,8 @@ interface Components {
  * does not read it is written out there (`writtenOut`). `met` says whether `t` is met
  * there, through unions and intersections; `done` holds the types gone through already,
  * outside an intersection and in one, so that each is gone through once. A type nothing
- * in changes is itself.
+ * in changes is itself. A reference met also has its combinations, and an intersection
+ * whose combinations waited for them (`deferred`) is built again, of them at most.
  */
 export function withRefKinds(
 	t: Ty,
@@ -396,9 +452,26 @@ export function withRefKinds(
 	done: readonly [Map<Ty, Ty>, Map<Ty, Ty>],
 	met = false,
 ): Ty {
+	const was = final;
+	final = true;
+	try {
+		return refKinded(t, components, done, met);
+	} finally {
+		final = was;
+	}
+}
+
+function refKinded(
+	t: Ty,
+	components: Components,
+	done: readonly [Map<Ty, Ty>, Map<Ty, Ty>],
+	met: boolean,
+): Ty {
 	if (t.kind === "ref") {
-		const kinds = met ? components.kinds(t) : undefined;
-		return kinds === undefined ? t : { ...t, kinds };
+		if (!met) return t;
+		const kinds = components.kinds(t);
+		const size = components.size(t);
+		return kinds === undefined && size === 1 ? t : { ...t, kinds, size };
 	}
 	// Most types are of no parts, which nothing changes.
 	if (!PARTED.has(t.kind)) return t;
@@ -407,7 +480,7 @@ export function withRefKinds(
 	if (known !== undefined) return known;
 	let changed = false;
 	const go = (u: Ty, inside = false) => {
-		const out = withRefKinds(u, components, done, inside);
+		const out = refKinded(u, components, done, inside);
 		if (out !== u) changed = true;
 		return out;
 	};
@@ -465,7 +538,7 @@ export function withRefKinds(
 				changed = true;
 				written = writtenOut(items, components);
 			}
-			if (changed) out = inter(items);
+			if (changed || deferred.has(t)) out = inter(items);
 			break;
 		}
 	}
@@ -759,9 +832,14 @@ export function inter(items: Ty[]): Ty {
 	if (arrays.length > 1)
 		return inter([...out.filter((t) => !isArrayTy(t)), meetArrays(arrays)]);
 	// A union with arrays meets the other arrays member by member, so that their items
-	// read as both say: `(string | unknown[]) & (string | string[])` is `string | string[]`.
+	// read as both say: `(string | unknown[]) & (string | string[])` is `string | string[]`;
+	// past MAX_COMBINATIONS combinations of their members they stay as they are (below).
 	const arrayish = out.filter(hasArray);
-	if (arrayish.length > 1 && arrayish.some((t) => t.kind === "union")) {
+	if (
+		arrayish.length > 1 &&
+		arrayish.some((t) => t.kind === "union") &&
+		arrayish.reduce((n, t) => n * memberCount(t), 1) <= MAX_COMBINATIONS
+	) {
 		const combos = arrayish.reduce<Ty[][]>(
 			(acc, t) =>
 				acc.flatMap((c) =>
@@ -808,8 +886,95 @@ export function inter(items: Ty[]): Ty {
 	)
 		return NEVER;
 	if (out.length === 0) return UNKNOWN;
+	// TypeScript builds the union of every combination of the unions' members (and of the
+	// strings of templates, and of the components references are): past MAX_COMBINATIONS,
+	// those of the most are left out, as many as that takes, but one. Where a reference's are not
+	// known yet, nor are the kinds that leave members out, so the intersection waits for
+	// them (`withRefKinds`).
+	if (out.reduce((n, t) => n * combinations(t), 1) > MAX_COMBINATIONS) {
+		if (!final && out.some(refersDeep)) {
+			const waiting: Ty = { kind: "inter", items: out };
+			deferred.add(waiting);
+			metRefs++;
+			return waiting;
+		}
+		widened++;
+		const left = [...out];
+		while (
+			left.length > 1 &&
+			left.reduce((n, t) => n * combinations(t), 1) > MAX_COMBINATIONS
+		) {
+			const most = left.reduce((a, b) =>
+				combinations(b) > combinations(a) ? b : a,
+			);
+			left.splice(left.indexOf(most), 1);
+		}
+		return inter(left);
+	}
 	if (out.some(holdsRef)) metRefs++;
 	return { kind: "inter", items: out };
+}
+
+/** The members of a union, one for any other type. */
+const memberCount = (t: Ty): number =>
+	t.kind === "union" ? t.items.length : 1;
+
+/**
+ * The members TypeScript reads a type as where it meets another: a union's, an
+ * intersection's combinations, a template's strings of its sets (`` `${"a" | "b"}-${string}` ``
+ * is two), and a reference's those of its component (`size`, or `of`); one for any other.
+ */
+export function combinations(
+	t: Ty,
+	of: (r: RefTy) => number = (r) => r.size ?? 1,
+): number {
+	switch (t.kind) {
+		case "union":
+			return t.items.reduce((n, m) => n + combinations(m, of), 0);
+		case "inter":
+			return t.items.reduce((n, m) => n * combinations(m, of), 1);
+		case "ref":
+			return of(t);
+		case "template": {
+			let n = 1;
+			for (const s of t.seq) if ("set" in s) n *= s.set.length;
+			return n;
+		}
+		default:
+			return 1;
+	}
+}
+
+/**
+ * Whether references' kinds and combinations are known (`withRefKinds`), so that no
+ * intersection waits for them.
+ */
+let final = false;
+
+/** The intersections built before their references' combinations were known. */
+const deferred = new WeakSet<Ty>();
+
+/** Whether a type has a reference, as a part or a member of one, at any depth. */
+const refersDeep = (t: Ty): boolean =>
+	t.kind === "ref" ||
+	((t.kind === "union" || t.kind === "inter") && t.items.some(refersDeep));
+
+/** How many intersections have left out unions past `MAX_COMBINATIONS`. */
+let widened = 0;
+
+/**
+ * Builds a type, and says whether an intersection in it left out unions past
+ * `MAX_COMBINATIONS`, but in types built within it the same way, which say so themselves.
+ */
+export function leavingOut<T>(build: () => T): [T, boolean] {
+	const was = widened;
+	widened = 0;
+	try {
+		const built = build();
+		return [built, widened > 0];
+	} finally {
+		widened = was;
+	}
 }
 
 /**
@@ -1126,6 +1291,43 @@ export function admitsText(t: Ty, s: string): boolean {
 /** A reference to a component schema. */
 export type RefTy = Extract<Ty, { kind: "ref" }>;
 
+export type TupleTy = Extract<Ty, { kind: "tuple" }>;
+
+/**
+ * How a tuple is written as the members of a union (see `emit`): its items up to the first
+ * past `min` that admits no value, which ends the arrays, the rest where none does, and
+ * `k`, where the items equal to the last (to the rest, where there is one) start, those
+ * a closed tuple bounds by `length` and an open one leaves to the rest. The shorter
+ * arrays are a tuple for each length from `min` to `k - 1`.
+ */
+export function tupleShape(t: TupleTy): {
+	items: Ty[];
+	rest: Ty | undefined;
+	k: number;
+} {
+	const cut = t.items.findIndex(
+		(item, i) => i >= t.min && item.kind === "never",
+	);
+	const items = cut === -1 ? t.items : t.items.slice(0, cut);
+	const rest = cut === -1 ? t.rest : undefined;
+	const last = rest ?? items[items.length - 1];
+	let k = items.length;
+	while (k > t.min && last !== undefined && equal(items[k - 1] as Ty, last))
+		k--;
+	return { items, rest, k };
+}
+
+/**
+ * The items of the tuples a tuple is written with (`tupleShape`): one for each length from
+ * `min` to `k`, where the equal items that end it start.
+ */
+export function writtenItems(t: TupleTy): number {
+	const { k } = tupleShape(t);
+	let n = 0;
+	for (let length = t.min; length <= k; length++) n += length;
+	return n;
+}
+
 /**
  * The kinds of value a type admits, where its form says so: `{ a: A }` objects,
  * `string | A[]` strings and arrays, a reference those `ref` gives it. `of` reads the
@@ -1277,6 +1479,13 @@ function numberKey(text: string): string {
 	}
 	return `#${sign}${digits}e${e}`;
 }
+
+/**
+ * A key literal types have alike where `equalValues` reads them as one value: a literal's
+ * value, another type's structure.
+ */
+export const valueIdentity = (t: Ty): string =>
+	t.kind === "lit" ? `lit${valueKey(t)}` : structure(t);
 
 /** Whether two types of JSON values are the same value: literals by value (`1` and `1.0`), others by structure. */
 export function equalValues(a: Ty, b: Ty): boolean {

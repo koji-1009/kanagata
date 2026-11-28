@@ -89,6 +89,7 @@ Config, call options, results, typing a wrapper, how requests are built, and err
 
 - Every schema in `components.schemas` is a named type; operations are `paths[path][method]`, `webhooks[name][method]`, an operation's `callbacks[name][expression][method]` and `operations[operationId]`.
 - Types follow what the schema accepts, not another generator's output. Equal tuple items and integers in a row are written with the helper types `repeated` and `integers` where that is shorter, the same types; the file declares the ones it uses.
+- Past the parts TypeScript checks quickly (a tuple of 9999 items, a union of 10,000 values, 1000 combinations in an intersection; `maxItems: 100000`, a pattern of 100,000 strings), a type is written wider, admitting every value the schema does, with an `info` note on stderr ([docs/types.md](docs/types.md#size)).
 - A schema with a `readOnly` / `writeOnly` property gets a second type for what is sent to the API (a path's request, a webhook's responses), `UserInput`.
 - In 3.0, `nullable: true` adds `null` to the `type` next to it, as OpenAPI 3.0.3 says, so it takes no effect without `type`, next to `$ref`, or past an `enum` without `null`. Many documents mean "this schema or null" instead; `--loose-nullable` reads them that way.
 

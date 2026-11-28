@@ -1,0 +1,54 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Huge": { "description": "kanagata writes a tuple of 9999 items at most: a maxItems past them is not typed, with a note.", "type": "array", "items": { "type": "string" }, "maxItems": 100000 },
+      "AtLimit": { "description": "One of 9999 is.", "type": "array", "items": { "type": "string" }, "maxItems": 9999 },
+      "PastLimit": { "description": "One of 10000 is not.", "type": "array", "items": { "type": "string" }, "maxItems": 10000 },
+      "NonEmptyHuge": { "description": "minItems is typed where maxItems is not.", "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 100000 },
+      "ManyRequired": { "description": "A minItems past them is not typed either.", "type": "array", "items": { "type": "string" }, "minItems": 10000 },
+      "ClosedHuge": { "description": "A maxItems past the end of a closed tuple makes no longer tuple.", "type": "array", "prefixItems": [{ "type": "string" }], "items": false, "maxItems": 100000 },
+      "ContradictionHuge": { "description": "maxItems below minItems admits nothing, however large.", "type": "array", "minItems": 100001, "maxItems": 100000 },
+      "IfShortHuge": { "description": "The longer arrays a maxItems in if leaves out are any array past 9999 items: else holds for any array, and then where if admits it.", "type": "array", "if": { "maxItems": 100000 }, "then": { "items": { "type": "string" } }, "else": { "items": { "type": "number" } } },
+      "IfShortAtLimit": { "description": "Those of a maxItems of 9998 are a tuple of 9999 items.", "type": "array", "if": { "maxItems": 9998 }, "then": { "items": { "type": "string" } } },
+      "IfShortPastLimit": { "description": "Those of a maxItems of 9999 are not, though the arrays if admits are.", "type": "array", "if": { "maxItems": 9999 }, "then": { "items": { "type": "string" } }, "else": { "items": { "type": "number" } } },
+      "NotShortHuge": { "description": "So are those a maxItems in not leaves.", "type": "array", "items": { "type": "string" }, "not": { "maxItems": 100000 } },
+      "NotMemberHuge": { "description": "And in a member of it, noted where it is.", "type": "array", "items": { "type": "string" }, "not": { "allOf": [{ "maxItems": 100000 }] } },
+      "IfRefHuge": { "description": "Or in the schema a reference in if reaches.", "type": "array", "$defs": { "short": { "maxItems": 100000 } }, "if": { "$ref": "#/components/schemas/IfRefHuge/$defs/short" }, "then": { "items": { "type": "string" } }, "else": { "items": { "type": "number" } } },
+      "ContainsMany": { "description": "Nor is a minContains past 9999 where every item matches.", "type": "array", "contains": {}, "minContains": 100000 },
+      "ContainsMost": { "description": "Nor a maxContains past it.", "type": "array", "items": { "type": "string" }, "contains": {}, "maxContains": 100000 },
+      "SoleMany": { "description": "Nor where unevaluatedItems leaves only the items contains matches.", "type": "array", "contains": { "type": "string" }, "minContains": 100000, "unevaluatedItems": false },
+      "SoleMost": { "description": "With maxContains too.", "type": "array", "contains": { "type": "string" }, "maxContains": 100000, "unevaluatedItems": false },
+      "ManyPatternKeys": { "description": "A pattern of more than 10000 strings keys the object by any string, with a note.", "type": "object", "patternProperties": { "^[a-zA-Z]{3}-": { "type": "string" } }, "additionalProperties": false },
+      "SharedPattern": { "description": "Where a pattern and propertyNames share more than 10000 keys (11,100: two digits at each end), the pattern's signature stays, with a note.", "type": "object", "propertyNames": { "pattern": "^([0-9]{2}|x)" }, "patternProperties": { "[0-9]{2}$": { "type": "integer" } }, "additionalProperties": { "type": "string" } },
+      "KeysAtLimit": { "description": "An object type is keyed by the strings of the sets of 300 templates at most.", "type": "object", "patternProperties": { "^[a-c][0-9]{2}-": { "type": "string" } }, "additionalProperties": false },
+      "PatternKeys": { "description": "Past them, the patterns key it by any string, with a note.", "type": "object", "patternProperties": { "^[a-c][0-9]{2}-": { "type": "string" }, "^z-": { "type": "number" } }, "additionalProperties": false },
+      "NameKeys": { "description": "So are the templates of propertyNames; the properties are among the keys.", "type": "object", "properties": { "a00-x": { "type": "integer" } }, "propertyNames": { "anyOf": [{ "pattern": "^[a-c][0-9]{2}-" }, { "pattern": "^z-" }] }, "additionalProperties": { "type": "string" } },
+      "ManyNames": { "description": "A pattern of more than 10000 strings is any text in their place, with a note and no warning.", "type": "object", "propertyNames": { "pattern": "^([a-z]{3}|[A-Z]{3})-" }, "additionalProperties": { "type": "string" } },
+      "SharedNames": { "description": "Patterns all keys must match, as an intersection, are more combinations than 1000: the first of the most is left out, with a note.", "type": "object", "propertyNames": { "allOf": [{ "pattern": "^[0-9]{2}" }, { "pattern": "[0-9]{2}$" }] }, "additionalProperties": { "type": "string" } },
+      "Base": { "type": "object", "properties": { "id": { "type": "string" } } },
+      "Dependent": {
+        "description": "An intersection of unions TypeScript builds into the union of their combinations: past 1000, those of the most are left out, the first first, with a note; the other types stay.",
+        "type": "object",
+        "allOf": [{ "$ref": "#/components/schemas/Base" }],
+        "properties": { "a1": { "type": "string" }, "a2": { "type": "string" }, "a3": { "type": "string" }, "a4": { "type": "string" }, "a5": { "type": "string" }, "a6": { "type": "string" }, "a7": { "type": "string" }, "a8": { "type": "string" }, "a9": { "type": "string" }, "a10": { "type": "string" } },
+        "dependentRequired": { "a1": ["b1"], "a2": ["b2"], "a3": ["b3"], "a4": ["b4"], "a5": ["b5"], "a6": ["b6"], "a7": ["b7"], "a8": ["b8"], "a9": ["b9"], "a10": ["b10"] }
+      },
+      "Leading": { "type": "string", "pattern": "^[0-9]{3}" },
+      "Trailing": { "type": "string", "pattern": "[0-9]{3}$" },
+      "BothEnds": { "description": "A reference has the combinations of its component's type: 1000 strings each, so the first is left out, with a note.", "allOf": [{ "$ref": "#/components/schemas/Leading" }, { "$ref": "#/components/schemas/Trailing" }] },
+      "Card": { "type": "object", "properties": { "kind": { "const": "card" }, "number": { "type": "string" } }, "required": ["kind", "number"] },
+      "Bank": { "type": "object", "properties": { "kind": { "const": "bank" }, "iban": { "type": "string" } }, "required": ["kind", "iban"] },
+      "Wallet": { "type": "object", "properties": { "kind": { "const": "wallet" }, "address": { "type": "string" } }, "required": ["kind", "address"] },
+      "Cash": { "type": "object", "properties": { "kind": { "const": "cash" }, "currency": { "type": "string" } }, "required": ["kind", "currency"] },
+      "Check": { "type": "object", "properties": { "kind": { "const": "check" }, "routing": { "type": "string" } }, "required": ["kind", "routing"] },
+      "Credit": { "type": "object", "properties": { "kind": { "const": "credit" }, "limit": { "type": "integer" } }, "required": ["kind", "limit"] },
+      "Payment": {
+        "description": "Combinations are counted once the kinds of references leave members out: an object is none of the other kinds unevaluatedProperties lets pass. The union of every member's key is the most and is left out, which the oneOf says anyway.",
+        "oneOf": [{ "$ref": "#/components/schemas/Card" }, { "$ref": "#/components/schemas/Bank" }, { "$ref": "#/components/schemas/Wallet" }, { "$ref": "#/components/schemas/Cash" }, { "$ref": "#/components/schemas/Check" }, { "$ref": "#/components/schemas/Credit" }],
+        "unevaluatedProperties": false
+      }
+    }
+  }
+}

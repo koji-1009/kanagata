@@ -26,6 +26,7 @@ export interface schemas {
   OpenStep: OpenStep;
   NoStep: NoStep;
   TooMany: TooMany;
+  AtLimit: AtLimit;
   Listed: Listed;
   Empty: Empty;
   Unbounded: Unbounded;
@@ -85,8 +86,11 @@ export type OpenStep = 0.5;
 /** Any number between the bounds is no list. */
 export type NoStep = number;
 
-/** TypeScript builds no union of 100,000 values. */
+/** kanagata writes no union of more than 10000 values: they are a number, with a note. */
 export type TooMany = number;
+
+/** 10000 are a union. */
+export type AtLimit = integers<`${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}` | `10000`>;
 
 export type Listed = 2;
 

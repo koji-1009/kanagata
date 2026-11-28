@@ -250,6 +250,23 @@ test("warnings go to stderr, the declarations still to stdout", () => {
 	);
 });
 
+test("notes of types written wider for their size follow the warnings on stderr", () => {
+	const dir = join(SPEC, "unevaluated-items-contains-cap");
+	const { io, out } = memoryIo({
+		"api.json": readFileSync(join(dir, "input.json"), "utf8"),
+	});
+	assert.equal(run(["generate", "api.json"], io), 0);
+	const marked = (file: string, kind: string) =>
+		readFileSync(join(dir, file), "utf8").replace(
+			/^(.*?): /gm,
+			`$1: ${kind}: `,
+		);
+	assert.equal(
+		out.stderr,
+		marked("expected.warn", "warning") + marked("expected.info", "info"),
+	);
+});
+
 test("input errors exit 2 with the message on stderr", () => {
 	const { io, out } = memoryIo({
 		"bad.json": "{",

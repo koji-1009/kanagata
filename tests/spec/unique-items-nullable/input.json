@@ -1,0 +1,12 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "t", "version": "1" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Flags": { "description": "nullable adds null to the values of type: three.", "type": "array", "uniqueItems": true, "items": { "type": "boolean", "nullable": true } },
+      "Listed": { "description": "Past an enum without null it adds none.", "type": "array", "uniqueItems": true, "items": { "type": "string", "enum": ["a", "b"], "nullable": true } },
+      "ListedNull": { "description": "An enum with null lists it once.", "type": "array", "uniqueItems": true, "items": { "type": "string", "enum": ["a", null], "nullable": true } }
+    }
+  }
+}

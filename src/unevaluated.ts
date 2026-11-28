@@ -15,11 +15,14 @@ import { containsBounds, count, matches } from "./number.ts";
 import { keyLiterals, propertyKeys } from "./object.ts";
 import { type Ctx, child, type Place } from "./pointer.ts";
 import { membersIn, schema } from "./schema.ts";
-import { MAX_UNION } from "./template.ts";
 import {
 	array as arrayTy,
 	equal,
 	inter,
+	MANY_ITEMS,
+	MAX_COMBINATIONS,
+	MAX_ITEMS,
+	manyNote,
 	NEVER,
 	present,
 	type Ty,
@@ -61,10 +64,9 @@ const EVALUATING_ITEMS = [...EVALUATING, "contains"];
 /**
  * The most cases of what evaluates the items (`itemCases`) read where branches have
  * `contains`: each set of them is one, so they double with each such branch. They are
- * members of one union, kept to as many as a union kanagata builds (`MAX_UNION`); time
- * grows with them about in proportion (65,536 take about 3 s).
+ * members of one union, kept to as many as kanagata writes (`MAX_COMBINATIONS`).
  */
-const MAX_CASES = MAX_UNION;
+const MAX_CASES = MAX_COMBINATIONS;
 
 /**
  * What a schema evaluates for `unevaluatedProperties` / `unevaluatedItems` wherever it
@@ -638,10 +640,11 @@ export function unevaluatedParts(
 		}
 	}
 	const read = asked(ui) && !ev.rest ? e.cases() : undefined;
+	// Cases past those kanagata writes (see `itemCases`).
 	if (asked(ui) && !ev.rest && read === undefined)
-		cx.warn(
+		cx.info(
 			child(at, "unevaluatedItems"),
-			"unevaluatedItems next to an applicator cannot be expressed in TypeScript; ignored",
+			manyNote(MAX_CASES, "cases", "not typed"),
 		);
 	if (read !== undefined) {
 		const ty = schema(cx, ui as Value, child(at, "unevaluatedItems"));
@@ -687,7 +690,18 @@ function unevaluatedItems(
 	if (sole !== undefined && marks !== undefined) {
 		const { min, max } = containsBounds(sole.schema);
 		if (max !== undefined && max < min) return NEVER;
-		return containsCount(containsTy(cx, sole), marks, min, max);
+		// A count of more items than kanagata writes a tuple of is not typed.
+		const many = (key: string, n: number | undefined) => {
+			const is = n !== undefined && n > MAX_ITEMS;
+			if (is) cx.info(child(sole.at, key), MANY_ITEMS);
+			return is;
+		};
+		return containsCount(
+			containsTy(cx, sole),
+			marks,
+			many("minContains", min) ? 0 : min,
+			many("maxContains", max) ? undefined : max,
+		);
 	}
 	const rest = union([
 		...distinctHolders(c.contained).map((h) => containsTy(cx, h)),

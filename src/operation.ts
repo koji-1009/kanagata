@@ -29,6 +29,8 @@ interface Paths {
 	/** Present only when the document has `webhooks` and is 3.1 or later. */
 	webhooks?: Prop[];
 	operations: Prop[];
+	/** Where each of `operations` is. */
+	operationsAt: string[];
 	/** Operations with an operationId reached again, whose types `generate` compares. */
 	again: Again[];
 }
@@ -71,6 +73,7 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
 	const out: Paths = {
 		paths: pathItems(cx, root, "paths", operations),
 		operations: [],
+		operationsAt: [],
 		again: [],
 	};
 	// `webhooks` is an OpenAPI 3.1 field, no field of a 3.0 document (whose schemas ignore
@@ -78,6 +81,7 @@ export function paths(cx: Ctx, root: JsonObject): Paths {
 	if (cx.refSiblings && root.get("webhooks") !== undefined)
 		out.webhooks = pathItems(cx, root, "webhooks", operations);
 	out.operations = [...operations.values()].map((o) => o.prop);
+	out.operationsAt = [...operations.values()].map((o) => o.at);
 	out.again = [...operations].flatMap(([id, o]) =>
 		o.again.map((a) => ({ id, ...a, first: { ty: o.prop.ty, at: o.at } })),
 	);

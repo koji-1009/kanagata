@@ -7,11 +7,12 @@
 
 import { JsonNumber, type JsonObject } from "./json.ts";
 import type { Ctx } from "./pointer.ts";
-import { MAX_UNION, regex } from "./template.ts";
+import { regex } from "./template.ts";
 import {
 	INTEGER,
 	isWholeText,
 	lit,
+	MAX_VALUES,
 	NEVER,
 	NUMBER,
 	type Ty,
@@ -27,10 +28,16 @@ const numerics = new WeakMap<
 	[number: Ty | undefined, integer: Ty | undefined]
 >();
 
+/** The schemas whose bounds admit more values than kanagata writes a union of (`MAX_VALUES`). */
+const manyValues = new WeakSet<JsonObject>();
+
+/** Whether a schema's bounds, read, admit more values than kanagata writes: its type is the kind. */
+export const boundsTooWide = (v: JsonObject): boolean => manyValues.has(v);
+
 /**
  * A number (an integer if `integer`), or the values its bounds admit where they are
- * finitely many: the integers, or the multiples of `multipleOf`, between them, as long
- * as TypeScript builds their union.
+ * finitely many: the integers, or the multiples of `multipleOf`, between them, up to
+ * `MAX_VALUES` of them.
  */
 export function numeric(cx: Ctx, v: JsonObject, integer: boolean): Ty {
 	// A schema object is of one document, whose bounds read one way: as 3.0's or as 3.1's.
@@ -85,7 +92,10 @@ function valuesBetween(cx: Ctx, v: JsonObject, integer: boolean): Ty {
 	const first = above(low);
 	const last = below(high);
 	if (first > last) return NEVER;
-	if (last - first >= BigInt(MAX_UNION)) return any;
+	if (last - first >= BigInt(MAX_VALUES)) {
+		manyValues.add(v);
+		return any;
+	}
 	const values: Ty[] = [];
 	for (let k = first; k <= last; k++) {
 		const value = lit(

@@ -10,6 +10,7 @@ export interface schemas {
   RequiredBetween: RequiredBetween;
   AtLeastOne: AtLeastOne;
   Contradictory: Contradictory;
+  ManySets: ManySets;
 }
 
 /** minProperties 2 with three properties: any two of them. */
@@ -60,3 +61,20 @@ export type AtLeastOne = {
 
 /** minProperties above maxProperties admits nothing. */
 export type Contradictory = never;
+
+/** Past 20000 properties in the object types of the sets (1716 sets of 13), the count is not typed, with a note. */
+export type ManySets = {
+  a?: string;
+  b?: string;
+  c?: string;
+  d?: string;
+  e?: string;
+  f?: string;
+  g?: string;
+  h?: string;
+  i?: string;
+  j?: string;
+  k?: string;
+  l?: string;
+  m?: string;
+};

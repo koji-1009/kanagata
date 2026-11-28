@@ -10,7 +10,7 @@ export interface schemas {
   Shape: Shape;
 }
 
-export type Email = string;
+export type Email = `${string}@${string}`;
 
 export type Tags = string[];
 

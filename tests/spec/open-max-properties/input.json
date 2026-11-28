@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "paths": {},
+  "components": {
+    "schemas": {
+      "OnlyA": { "description": "maxProperties in an open object says how many of its properties at most are present: other keys count too.", "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } }, "required": ["a"], "maxProperties": 1 },
+      "AtMostOne": { "description": "Any one of them.", "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } }, "maxProperties": 1 },
+      "TooManyRequired": { "description": "More required than that admits no object.", "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } }, "required": ["a", "b"], "maxProperties": 1 },
+      "NoFewest": { "description": "minProperties says nothing of them: other keys may make the count.", "type": "object", "properties": { "a": { "type": "string" }, "b": { "type": "string" } }, "minProperties": 2 }
+    }
+  }
+}
