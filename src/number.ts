@@ -12,6 +12,7 @@ import {
 	INTEGER,
 	isWholeText,
 	lit,
+	MAX_INTEGERS,
 	MAX_VALUES,
 	NEVER,
 	NUMBER,
@@ -28,16 +29,24 @@ const numerics = new WeakMap<
 	[number: Ty | undefined, integer: Ty | undefined]
 >();
 
-/** The schemas whose bounds admit more values than kanagata writes a union of (`MAX_VALUES`). */
-const manyValues = new WeakSet<JsonObject>();
+/**
+ * The schemas whose bounds admit more values than kanagata writes a union of, and the most
+ * it writes of those (`MAX_INTEGERS` or `MAX_VALUES`).
+ */
+const manyValues = new WeakMap<JsonObject, number>();
 
-/** Whether a schema's bounds, read, admit more values than kanagata writes: its type is the kind. */
-export const boundsTooWide = (v: JsonObject): boolean => manyValues.has(v);
+/**
+ * The most values kanagata writes of a schema's bounds, where those, read, admit more:
+ * its type is the kind. undefined for any other schema.
+ */
+export const boundsPast = (v: JsonObject): number | undefined =>
+	manyValues.get(v);
 
 /**
  * A number (an integer if `integer`), or the values its bounds admit where they are
  * finitely many: the integers, or the multiples of `multipleOf`, between them, up to
- * `MAX_VALUES` of them.
+ * `MAX_INTEGERS` integers in a row, which `emit` spells by their digits (in a JavaScript
+ * number's exact range), and `MAX_VALUES` of others.
  */
 export function numeric(cx: Ctx, v: JsonObject, integer: boolean): Ty {
 	// A schema object is of one document, whose bounds read one way: as 3.0's or as 3.1's.
@@ -92,8 +101,12 @@ function valuesBetween(cx: Ctx, v: JsonObject, integer: boolean): Ty {
 	const first = above(low);
 	const last = below(high);
 	if (first > last) return NEVER;
-	if (last - first >= BigInt(MAX_VALUES)) {
-		manyValues.add(v);
+	const safe = BigInt(Number.MAX_SAFE_INTEGER);
+	const run =
+		unit.scale === 0 && unit.digits === 1n && first >= -safe && last <= safe;
+	const most = run ? MAX_INTEGERS : MAX_VALUES;
+	if (last - first >= BigInt(most)) {
+		manyValues.set(v, most);
 		return any;
 	}
 	const values: Ty[] = [];

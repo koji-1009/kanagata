@@ -1,1 +1,3 @@
-#/components/schemas/TooMany: more than 10000 values; typed as a number
+#/components/schemas/TooMany: more than 99999 integers in a row; typed as a number
+#/components/schemas/StepTooMany: more than 10000 values; typed as a number
+#/components/schemas/UnsafeTooMany: more than 10000 values; typed as a number

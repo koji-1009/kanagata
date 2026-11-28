@@ -142,9 +142,16 @@ export const MAX_ITEMS = 9999;
 
 /**
  * Members of a union of values: the strings of a pattern's templates (and those patterns
- * share), the numbers bounds admit.
+ * share), the numbers bounds admit but integers in a row.
  */
 export const MAX_VALUES = 10_000;
+
+/**
+ * Integers in a row bounds admit, which `emit` spells by their digits (`integers<…>`) and
+ * TypeScript builds into a union cheaply, below a union of 100,000 (TS2590): 99,999 take
+ * it about 190 ms.
+ */
+export const MAX_INTEGERS = 99_999;
 
 /**
  * The strings of the sets of the templates that key an object type's index signatures,
