@@ -33,11 +33,11 @@ The exports of `src/index.ts` and `src/client.ts` are public API under semver.
 pnpm install    # Node from .node-version (26; engines and CI also cover 24); pnpm from packageManager
 pnpm test       # typecheck, Biome, tests at 100% coverage, client type tests
 pnpm format     # Biome format and safe fixes
-pnpm test:real  # GitHub, Stripe, Petstore at pinned commits: generate (JSON = YAML), tsc, built client
+pnpm test:real  # GitHub, Stripe, OpenAI, Discord, Petstore at pinned commits: generate (JSON = YAML), tsc, built client
 pnpm build      # dist/
 ```
 
-`pnpm test` must pass before a change is done. When the generator changes, also run `pnpm test:real` and `diff -r` `.real-specs/out` against a copy from before: GitHub and Stripe output stays byte-identical unless the change means to alter it.
+`pnpm test` must pass before a change is done. When the generator changes, also run `pnpm test:real` and `diff -r` `.real-specs/out` against a copy from before: GitHub, Stripe, OpenAI and Discord output stays byte-identical unless the change means to alter it.
 
 ## Map
 
