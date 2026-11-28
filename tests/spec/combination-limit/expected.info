@@ -15,7 +15,7 @@
 #/components/schemas/SharedPattern/patternProperties/[0-9]{2}$: more than 10000 keys; typed by the pattern's keys
 #/components/schemas/PatternKeys/patternProperties: more than 300 keys of index signatures; typed by any string
 #/components/schemas/NameKeys/propertyNames: more than 300 keys of index signatures; typed by any string
-#/components/schemas/ManyNames/propertyNames/pattern: more than 10000 strings; typed as string
+#/components/schemas/ManyNames/propertyNames/pattern: more than 10000 strings; typed wider
 #/components/schemas/SharedNames/propertyNames: more than 1000 combinations; some of its parts are not typed
 #/components/schemas/Dependent: more than 1000 combinations; some of its parts are not typed
 #/components/schemas/BothEnds: more than 1000 combinations; some of its parts are not typed

@@ -122,9 +122,9 @@ export type NameKeys = {
   [key: string]: string | number | undefined;
 };
 
-/** A pattern of more than 10000 strings is string, with a note and no warning. */
+/** A pattern of more than 10000 strings is any text in their place, with a note and no warning. */
 export type ManyNames = {
-  [key: string]: string;
+  [key: `${string}-${string}`]: string;
 };
 
 /** Patterns all keys must match, as an intersection, are more combinations than 1000: the first of the most is left out, with a note. */

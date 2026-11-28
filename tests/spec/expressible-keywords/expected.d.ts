@@ -115,8 +115,10 @@ export type OneName = {
 /** A required key it does not list admits nothing. */
 export type RequiredName = never;
 
-/** Other propertyNames have no type. */
-export type PatternNames = Record<string, unknown>;
+/** A pattern no template says exactly keys the object by templates of its strings and more. */
+export type PatternNames = {
+  [key: `${"a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"}${string}`]: unknown;
+};
 
 /** Names not leaves out are no keys. */
 export type MixedNames = {

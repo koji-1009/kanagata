@@ -1,0 +1,3 @@
+#/components/schemas/Digest/pattern: more than 10000 strings; typed wider
+#/components/schemas/Coded/pattern: more than 10000 strings; typed wider
+#/components/schemas/Email/pattern: more than 10000 strings; typed wider

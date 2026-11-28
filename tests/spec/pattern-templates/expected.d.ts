@@ -63,11 +63,11 @@ export type Counted = "xx" | "xxx";
 /** Text a template literal would read is written as a string. */
 export type Quoted = `${"$"}{x}${"`\\"}${string}`;
 
-/** A dot does not match line breaks, which no type leaves out. */
-export type Dot = string;
+/** A dot does not match line breaks, which no type leaves out: any text is in its place, a template of its strings and more. */
+export type Dot = `a${string}`;
 
-/** Any number of a class is no template. */
-export type Repeated = string;
+/** Any number of a class past one is any text. */
+export type Repeated = `${"a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"}${string}`;
 
 export type Boundary = string;
 

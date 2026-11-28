@@ -112,4 +112,6 @@ export type NamesAndPatterns = {
 /** A required key propertyNames does not admit admits nothing. */
 export type NamesRequired = never;
 
-export type NamesUnwritten = Record<string, unknown>;
+export type NamesUnwritten = {
+  [key: `${"a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"}${string}`]: unknown;
+};

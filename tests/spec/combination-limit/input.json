@@ -25,7 +25,7 @@
       "KeysAtLimit": { "description": "An object type is keyed by the strings of the sets of 300 templates at most.", "type": "object", "patternProperties": { "^[a-c][0-9]{2}-": { "type": "string" } }, "additionalProperties": false },
       "PatternKeys": { "description": "Past them, the patterns key it by any string, with a note.", "type": "object", "patternProperties": { "^[a-c][0-9]{2}-": { "type": "string" }, "^z-": { "type": "number" } }, "additionalProperties": false },
       "NameKeys": { "description": "So are the templates of propertyNames; the properties are among the keys.", "type": "object", "properties": { "a00-x": { "type": "integer" } }, "propertyNames": { "anyOf": [{ "pattern": "^[a-c][0-9]{2}-" }, { "pattern": "^z-" }] }, "additionalProperties": { "type": "string" } },
-      "ManyNames": { "description": "A pattern of more than 10000 strings is string, with a note and no warning.", "type": "object", "propertyNames": { "pattern": "^([a-z]{3}|[A-Z]{3})-" }, "additionalProperties": { "type": "string" } },
+      "ManyNames": { "description": "A pattern of more than 10000 strings is any text in their place, with a note and no warning.", "type": "object", "propertyNames": { "pattern": "^([a-z]{3}|[A-Z]{3})-" }, "additionalProperties": { "type": "string" } },
       "SharedNames": { "description": "Patterns all keys must match, as an intersection, are more combinations than 1000: the first of the most is left out, with a note.", "type": "object", "propertyNames": { "allOf": [{ "pattern": "^[0-9]{2}" }, { "pattern": "[0-9]{2}$" }] }, "additionalProperties": { "type": "string" } },
       "Base": { "type": "object", "properties": { "id": { "type": "string" } } },
       "Dependent": {

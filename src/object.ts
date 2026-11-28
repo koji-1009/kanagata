@@ -24,6 +24,7 @@ import {
 	type Template,
 	templates,
 	tooManyStrings,
+	valueType,
 } from "./template.ts";
 import {
 	admitsText,
@@ -141,14 +142,12 @@ export function propertyNamesParts(
 		...(count(s, "maxLength") !== undefined ? ["maxLength"] : []),
 	];
 	const pattern = s.str("pattern");
-	// A pattern of more strings than kanagata writes is noted where it is (see `noteSizes`).
+	// A pattern templates say with more strings is read as a value's is (see `valueType`).
 	if (
 		read === undefined ||
 		(read.kind === "string" &&
 			(lengths.length > 0 ||
-				(pattern !== undefined &&
-					patternType(pattern) === undefined &&
-					!tooManyStrings(pattern))))
+				(pattern !== undefined && valueType(pattern) === undefined)))
 	)
 		cx.warn(
 			child(at, "propertyNames"),

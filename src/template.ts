@@ -159,6 +159,23 @@ const ANY_TEXT: Re = {
 };
 
 /**
+ * Reads the repetitions from `items[i]` inward (`step` 0 from the start, -1 from the end),
+ * next to any text: one of none or more is no more than that text, and is left out; one of
+ * `min` or more is `min` of it, and ends the reading.
+ */
+function absorb(items: Re[], i: number, step: 0 | -1): void {
+	for (let at = i; at >= 0 && at < items.length; at += step) {
+		const r = items[at] as Re;
+		if (!("rep" in r)) return;
+		if (r.min > 0) {
+			items[at] = { rep: r.rep, min: r.min, max: r.min };
+			return;
+		}
+		items.splice(at, 1);
+	}
+}
+
+/**
  * A parser over a pattern's code points (the `u` flag: JSON Schema patterns are Unicode),
  * the one place that reads a pattern; templates (`lang`) and machines (`Machine`) are
  * built from what it reads. Lookarounds, word boundaries, back references and property
@@ -213,6 +230,10 @@ class Parser {
 		// A `$` before the sequence ends anchors what neither a template nor a machine says.
 		if (end && !this.done && this.peek() !== "|") throw new NoType();
 		if (top && !end) items.push(ANY_TEXT);
+		// Next to the any text of an end without `^` / `$`, a repetition matches no more than
+		// its fewest: `^x-.*` is `^x-`, and `^v\d+` is `^v\d`.
+		if (top && !start) absorb(items, 1, 0);
+		if (top && !end) absorb(items, items.length - 2, -1);
 		return { seq: items };
 	}
 
@@ -390,14 +411,54 @@ function lang(re: Re): Lang {
 		throw new NoType();
 	}
 	if (re.max === Infinity) throw new NoType();
-	const atom = lang(re.rep);
+	return repeated(lang(re.rep), re.min, re.max);
+}
+
+/** From `min` to `max` strings of `atom` one after the other. */
+function repeated(atom: Lang, min: number, max: number): Lang {
 	let out: Lang = [];
 	let power = EMPTY;
-	for (let k = 0; k <= re.max; k++) {
-		if (k >= re.min) out = bounded([...out, ...power]);
-		if (k < re.max) power = concat(power, atom);
+	for (let k = 0; k <= max; k++) {
+		if (k >= min) out = bounded([...out, ...power]);
+		if (k < max) power = concat(power, atom);
 	}
 	return out;
+}
+
+/**
+ * Templates of the strings an expression matches and more, where templates do not say
+ * exactly those: characters none writes (`.`, `[^/]`, `\D`), a repetition without end
+ * (`X+` is `X` and any text) and more strings than kanagata writes are any text. Every
+ * string it matches is one of them. What the parser reads no template of (lookarounds,
+ * word boundaries) is still `NoType`.
+ */
+function wideLang(re: Re): Lang {
+	if ("chars" in re)
+		return Array.isArray(re.text) ? [[{ set: re.text }]] : [[ANY]];
+	const many = (f: () => Lang, past = (): Lang => [[ANY]]): Lang => {
+		try {
+			return f();
+		} catch {
+			// Only `bounded` throws here: past the strings kanagata writes.
+			cutForSize = true;
+			return past();
+		}
+	};
+	// In a sequence, a part past them is any text after the parts before it.
+	if ("seq" in re)
+		return re.seq.reduce((l, r) => {
+			const next = wideLang(r);
+			return many(
+				() => concat(l, next),
+				() => concat(l, [[ANY]]),
+			);
+		}, EMPTY);
+	if ("alt" in re) return many(() => bounded(re.alt.flatMap(wideLang)));
+	if (re.max === Infinity || ("chars" in re.rep && re.rep.text === "any"))
+		return many(() =>
+			concat(repeated(wideLang(re.rep), re.min, re.min), [[ANY]]),
+		);
+	return many(() => repeated(wideLang(re.rep), re.min, re.max));
 }
 
 /** Characters a template literal would read as more than themselves. */
@@ -785,3 +846,48 @@ export function patternType(pattern: string): Ty | undefined {
 
 /** What `patternType` read of each pattern. */
 const typed = new Map<string, Ty | undefined>();
+
+/**
+ * The type of the strings a value's pattern admits: its templates where they say exactly
+ * those (`patternType`), else templates of those and more (`wideLang`): `^refs/(heads|tags)/.+$`
+ * is `` `refs/${"heads" | "tags"}/${string}` ``. undefined where no template says them
+ * and more either (a lookaround), or JavaScript cannot read the pattern. Only where more
+ * strings may pass: a value's pattern, the keys `propertyNames` admits; not the keys a
+ * `patternProperties` pattern gives its type to.
+ */
+export function valueType(pattern: string): Ty | undefined {
+	const exact = patternType(pattern);
+	if (exact !== undefined || regex(pattern) === null) return exact;
+	if (!wide.has(pattern)) {
+		let t: Ty | undefined;
+		cutForSize = false;
+		try {
+			const seqs = wideLang(new Parser(pattern).alternatives(true));
+			t = union(seqs.map((s) => written(s).key));
+			if (cutForSize) cut.add(pattern);
+		} catch {
+			// NoType from the parser: what no template says.
+			t = undefined;
+		}
+		wide.set(pattern, t);
+	}
+	return wide.get(pattern);
+}
+
+/** What `valueType` read of each pattern no template says exactly. */
+const wide = new Map<string, Ty | undefined>();
+
+/** Whether `wideLang` has read a part as any text for its strings, past those kanagata writes. */
+let cutForSize = false;
+
+/** The patterns whose templates `valueType` has any text in for their size (`cutForSize`). */
+const cut = new Set<string>();
+
+/**
+ * Whether a value's pattern is typed wider for its size: its templates would make more
+ * than `MAX_VALUES` strings (`tooManyStrings`), or its wider ones have any text for them.
+ */
+export function wideForSize(pattern: string): boolean {
+	valueType(pattern);
+	return tooManyStrings(pattern) || cut.has(pattern);
+}

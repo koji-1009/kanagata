@@ -60,7 +60,7 @@ import {
 } from "./object.ts";
 import { booleansListed, exclusive, shared } from "./oneof.ts";
 import { type Ctx, child, DiagError, type RawPosition } from "./pointer.ts";
-import { tooManyStrings } from "./template.ts";
+import { wideForSize } from "./template.ts";
 import {
 	absent,
 	array as arrayTy,
@@ -418,10 +418,10 @@ function ownParts(cx: Ctx, v: JsonObject, at: string, read: Reading): Ty {
  */
 function noteSizes(cx: Ctx, v: JsonObject, at: string): void {
 	const pattern = v.str("pattern");
-	if (pattern !== undefined && tooManyStrings(pattern))
+	if (pattern !== undefined && wideForSize(pattern))
 		cx.info(
 			child(at, "pattern"),
-			manyNote(MAX_VALUES, "strings", "typed as string"),
+			manyNote(MAX_VALUES, "strings", "typed wider"),
 		);
 	if (boundsTooWide(v))
 		cx.info(at, manyNote(MAX_VALUES, "values", "typed as a number"));
