@@ -12,7 +12,8 @@
       "MaybeUser": { "description": "nullable without type adds null.", "allOf": [{ "$ref": "#/components/schemas/User" }], "nullable": true },
       "Either": { "oneOf": [{ "$ref": "#/components/schemas/User" }, { "type": "string" }], "nullable": true },
       "Owner": { "description": "nullable next to $ref adds null, though 3.0 ignores the keywords there.", "$ref": "#/components/schemas/User", "nullable": true },
-      "TypedOwner": { "type": "object", "allOf": [{ "$ref": "#/components/schemas/User" }], "nullable": true }
+      "TypedOwner": { "type": "object", "allOf": [{ "$ref": "#/components/schemas/User" }], "nullable": true },
+      "Value": { "description": "Read loosely, members with nullable admit null whatever else they say, so it is in neither.", "oneOf": [{ "enum": ["a"], "nullable": true }, { "type": "integer", "nullable": true }] }
     }
   }
 }

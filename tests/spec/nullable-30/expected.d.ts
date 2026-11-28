@@ -17,6 +17,7 @@ export interface schemas {
   MaybeNotNull: MaybeNotNull;
   StillNotNull: StillNotNull;
   MaybePoint: MaybePoint;
+  Value: Value;
 }
 
 export type Name = string | null;
@@ -53,3 +54,6 @@ export type MaybeNotNull = NotNull;
 export type StillNotNull = NotNull & string;
 
 export type MaybePoint = Point & (Record<string, unknown> | null);
+
+/** oneOf members that nullable adds null to both admit it: it is in neither. */
+export type Value = string | number | string[];

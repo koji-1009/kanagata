@@ -37,6 +37,7 @@ import {
 	UNKNOWN,
 	union,
 	type ValueKind,
+	valueIdentity,
 } from "./ty.ts";
 import { asserted, assertions, isAnnotation, onlyOf, REFS } from "./vocab.ts";
 
@@ -343,22 +344,29 @@ const VALUE_KEYWORDS = new Set([
 const OBJECT_KEYWORDS = new Set(onlyOf("object"));
 const ARRAY_KEYWORDS = new Set(onlyOf("array"));
 
-/** Whether a schema admits a value; undefined where it says what this cannot decide. */
+/**
+ * Whether a schema admits a value; undefined where it says what this cannot decide. In
+ * 3.0, `nullable: true` adds `null` to `type`, or with `looseNullable` to the schema.
+ */
 export function accepts(cx: Ctx, s: JsonObject, x: Value): boolean | undefined {
 	const t = literal(x);
 	const kind = jsonKind(x);
+	const nullable = !cx.refSiblings && s.get("nullable") === true;
+	if (x === null && nullable && cx.looseNullable) return true;
 	for (const [k, y] of s.entries) {
 		if (isAnnotation(k) || VALUE_KEYWORDS.has(k)) continue;
 		if (OBJECT_KEYWORDS.has(k) && kind !== "object") continue;
 		if (ARRAY_KEYWORDS.has(k) && kind !== "array") continue;
+		// An OpenAPI field, which 3.1 and 3.2 do not have: it asks nothing there.
+		if (k === "nullable") continue;
 		if (k === "type") {
 			const named = Array.isArray(y) ? y : [y];
-			if (!named.some((n) => typeof n === "string" && isOfKind(x, n)))
-				return false;
+			const typed = named.some((n) => typeof n === "string" && isOfKind(x, n));
+			if (!typed && !(x === null && nullable)) return false;
 		} else if (k === "const") {
 			if (!sameValue(x, y)) return false;
 		} else if (k === "enum" && Array.isArray(y)) {
-			if (!y.some((e) => sameValue(x, e))) return false;
+			if (!listedValues(y).has(valueIdentity(t))) return false;
 		} else if (k === "not" && notOnly(y) instanceof JsonObject) {
 			// not: { not: X } admits what X admits.
 			const a = accepts(cx, notOnly(y) as JsonObject, x);
@@ -367,6 +375,21 @@ export function accepts(cx: Ctx, s: JsonObject, x: Value): boolean | undefined {
 	}
 	return admitting(cx, s)(t);
 }
+
+/**
+ * The values an `enum` lists, by `valueIdentity`. Remembered: `accepts` reads one for each
+ * value another schema lists (see `shared`).
+ */
+function listedValues(e: Value[]): Set<string> {
+	let keys = enums.get(e);
+	if (keys === undefined) {
+		keys = new Set(e.map((x) => valueIdentity(literal(x))));
+		enums.set(e, keys);
+	}
+	return keys;
+}
+
+const enums = new WeakMap<Value[], Set<string>>();
 
 /** Whether a JSON value is of a kind `type` names. */
 function isOfKind(x: Value, kind: string): boolean {

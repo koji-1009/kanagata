@@ -178,6 +178,7 @@ export interface schemas {
   Either: Either;
   Owner: Owner;
   TypedOwner: TypedOwner;
+  Value: Value;
 }
 
 /** With looseNullable, nullable adds null even next to an enum without it. */
@@ -205,6 +206,9 @@ export type Either = User | string;
 export type Owner = User;
 
 export type TypedOwner = User & Record<string, unknown>;
+
+/** Read loosely, members with nullable admit null whatever else they say, so it is in neither. */
+export type Value = "a" | number | null;
 `,
 	);
 });

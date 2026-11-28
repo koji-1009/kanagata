@@ -116,7 +116,9 @@ function ownPassed(
 		ofKind(cx, m, kind),
 		...(each("allOf") ?? []),
 		...(any === undefined ? [] : [union(any)]),
-		...(one === undefined ? [] : [union(shared(one))]),
+		...(one === undefined
+			? []
+			: [union(shared(cx, m.get("oneOf") as Value[], one))]),
 	);
 	const n = m.get("not");
 	const left = n === undefined ? undefined : refuted(cx, n, [m, ...parents]);

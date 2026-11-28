@@ -8,6 +8,7 @@ export interface schemas {
   NullTwice: NullTwice;
   NullOnce: NullOnce;
   Literals: Literals;
+  Unsaid: Unsaid;
   ByKind: ByKind;
   Booleans: Booleans;
   FalseTwice: FalseTwice;
@@ -33,6 +34,9 @@ export type NullOnce = string | null | number;
 
 /** So does a literal two members list. */
 export type Literals = "a" | "c";
+
+/** Only where each member's keywords say they admit it: the second admits no a, which its type cannot say. */
+export type Unsaid = "a" | "b";
 
 /** TypeScript has no string but one literal. */
 export type ByKind = string;
