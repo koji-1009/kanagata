@@ -32,6 +32,7 @@ import {
 	type Keyed,
 	MAX_KEYS,
 	MAX_VALUES,
+	MAX_WRITTEN,
 	manyNote,
 	NEVER,
 	neverProp,
@@ -552,7 +553,7 @@ function kept(d: Draft): PropDraft[] {
 function closedOver(d: Draft, admits: (key: string) => boolean): Ty {
 	const props = kept(d);
 	const none = props.every((p) => p.optional && p.ty.kind === "never");
-	const t = counted(d.v, none ? [] : props);
+	const t = counted(d, none ? [] : props);
 	return t.kind === "map" ? t : forbid(t, outside(d, admits));
 }
 
@@ -652,8 +653,9 @@ function patternObject(d: Draft): Ty {
 			signatureType(d, d.exact[i] as Ty, within(k.t)),
 		);
 	if (additional === undefined) {
+		// maxProperties says how many of its properties at most are present.
 		if (byPattern.length === 0)
-			return props.length === 0 ? RECORD : { kind: "object", props };
+			return props.length === 0 ? RECORD : counted(d, props, false);
 		// Without properties, other keys have any value, as for an object without either.
 		return props.length === 0
 			? { kind: "map", props, keyed: byPattern, index: UNKNOWN }
@@ -666,7 +668,7 @@ function patternObject(d: Draft): Ty {
 		byPattern.length === 0 &&
 		unwritten.length === 0
 	)
-		return counted(d.v, kept(d));
+		return counted(d, kept(d));
 	const index =
 		additional.kind === "never" && unwritten.length === 0
 			? undefined
@@ -698,37 +700,53 @@ const within = (t: Template) => (key: string) => admits(t, key);
  * A closed object, its properties all it can have: `minProperties` requires that many
  * of them (a union over which), `maxProperties` leaves out the others.
  */
-function counted(v: JsonObject, props: Prop[]): Ty {
+function counted(d: Draft, props: Prop[], closed = true): Ty {
 	if (props.length === 0) return { kind: "map", props: [], index: NEVER };
 	const optional = props.filter((p) => p.optional).map((p) => p.key);
 	const required = props.length - optional.length;
-	const min = count(v, "minProperties") ?? 0;
-	const max = count(v, "maxProperties") ?? props.length;
+	// An open object's other keys count too, so its properties have no fewest.
+	const min = closed ? (count(d.v, "minProperties") ?? 0) : 0;
+	const max = count(d.v, "maxProperties") ?? props.length;
 	if (min > Math.min(max, props.length) || required > max) return NEVER;
 	const variant = (f: (p: Prop) => Prop): Ty => ({
 		kind: "object",
 		props: props.map((p) => (p.optional ? f(p) : p)),
 	});
 	const parts: Ty[] = [];
-	if (min > required)
-		parts.push(
-			union(
-				subsets(optional, min - required).map((keys) =>
-					variant((p) =>
-						keys.includes(p.key) ? { ...p, optional: false, present: true } : p,
-					),
+	// Each set of that many optional properties, an object type of every property each,
+	// as many properties as kanagata writes.
+	const each = (key: string, size: number, f: (keys: string[]) => Ty) => {
+		const most = Math.floor(MAX_WRITTEN / props.length);
+		if (choices(optional.length, size, most) <= most)
+			parts.push(union(subsets(optional, size).map(f)));
+		else
+			d.cx.info(
+				child(d.at, key),
+				manyNote(
+					MAX_WRITTEN,
+					"properties in the object types of its sets",
+					"not typed",
 				),
+			);
+	};
+	if (min > required)
+		each("minProperties", min - required, (keys) =>
+			variant((p) =>
+				keys.includes(p.key) ? { ...p, optional: false, present: true } : p,
 			),
 		);
 	if (max < props.length)
-		parts.push(
-			union(
-				subsets(optional, max - required).map((keys) =>
-					variant((p) => (keys.includes(p.key) ? p : { ...p, ty: NEVER })),
-				),
-			),
+		each("maxProperties", max - required, (keys) =>
+			variant((p) => (keys.includes(p.key) ? p : { ...p, ty: NEVER })),
 		);
 	return parts.length === 0 ? { kind: "object", props } : inter(parts);
+}
+
+/** How many sets of `k` there are of `n`, past `most` any more than it. */
+function choices(n: number, k: number, most: number): number {
+	let c = 1;
+	for (let i = 1; i <= k && c <= most; i++) c = (c * (n - k + i)) / i;
+	return c;
 }
 
 /** The subsets of `items` with `size` members, in order. */
