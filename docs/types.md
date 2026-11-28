@@ -177,6 +177,14 @@ A literal or `null` two members admit is left out: `oneOf: [{ type: [string, nul
 - A member that requires all of another's keys admits nothing: next to `{ required: [a] }`, `{ required: [a, b] }` is `never`. So next to one that requires no key, every member that only requires keys is `never`, and it lacks their keys: `oneOf: [{ required: [] }, { required: [a] }]` and `oneOf: [{ type: object }, { required: [a] }]` are `{ a?: never }`.
 - Other members keep their overlaps: with `{ properties: { b: { type: number } }, required: [b] }`, `{ a: 1, b: "x" }` matches only `{ required: [a] }`, so `{ required: [a] }` cannot leave out `b`, and `{ a: 1, b: 1 }`, which both match, stays admitted.
 
+## What TypeScript checks beside the types
+
+TypeScript checks some values more strictly than their types say, where they are written:
+
+- An object literal written where an object type is expected may have only the keys it declares (excess property checking): the type of `{ properties: { a: { type: string } } }` is `{ a?: string }`, which admits an object with other keys, as the schema does, but `const t: T = { a: "x", b: 1 }` is an error, while the same object through a variable (`const v = { a: "x", b: 1 }; const t: T = v`) is not. So in a union: an object literal of one member with a key only another declares is an error (`{ kind: "card", number: "1", iban: "x" }` for `Card | Bank`).
+- `Record<string, unknown>` (an object of any keys, see [Schemas](#schemas)) admits a value of a type alias of an object type, but not one of an `interface`, which TypeScript does not read as having an index signature: declare such a value's type as a `type`, or spread it (`{ ...value }`).
+- An array whose length is bounded (`string[] & { length: 0 | 1 | 2 | 3 }`, see [Array length](#array-length)) admits an array literal of those lengths, but not an array built at run time, whose `length` is any `number`: such an array needs a check of its length and a cast (`as T`).
+
 ## Content by media type
 
 | Media type                                                 | Type                                              |
