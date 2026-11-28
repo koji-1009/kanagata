@@ -23,6 +23,7 @@ export interface schemas {
   Boundary: Boundary;
   Lookahead: Lookahead;
   TooMany: TooMany;
+  AtLimit: AtLimit;
   Unreadable: Unreadable;
   Listed: Listed;
   MemberValues: MemberValues;
@@ -72,8 +73,11 @@ export type Boundary = string;
 
 export type Lookahead = string;
 
-/** TypeScript builds no union of 100,000 strings. */
+/** kanagata writes no union of more than 10000 strings: the pattern is string, with a note. */
 export type TooMany = string;
+
+/** 10000 are a template. */
+export type AtLimit = `${"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"}${"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"}${"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"}${"0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"}`;
 
 /** A pattern JavaScript cannot read leaves the string as it is. */
 export type Unreadable = string;

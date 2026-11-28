@@ -38,8 +38,20 @@ import {
 	valueKinds,
 	widen,
 } from "./kinds.ts";
-import { excluded, mayAdmit, notContained, refuted } from "./not.ts";
-import { admitting, containsBounds, count, numeric } from "./number.ts";
+import {
+	excluded,
+	mayAdmit,
+	notContained,
+	refuted,
+	refutedPast,
+} from "./not.ts";
+import {
+	admitting,
+	boundsTooWide,
+	containsBounds,
+	count,
+	numeric,
+} from "./number.ts";
 import {
 	object,
 	propertyKeys,
@@ -48,25 +60,35 @@ import {
 } from "./object.ts";
 import { booleansListed, exclusive, shared } from "./oneof.ts";
 import { type Ctx, child, DiagError, type RawPosition } from "./pointer.ts";
+import { tooManyStrings } from "./template.ts";
 import {
 	absent,
 	array as arrayTy,
 	BLOB,
 	BOOLEAN,
+	COMBINATIONS_LEFT_OUT,
 	INTEGER,
 	inter,
 	KIND_TY,
+	leavingOut,
 	literal,
+	MANY_ITEMS,
+	MAX_ITEMS,
+	MAX_VALUES,
+	MAX_WRITTEN,
+	manyNote,
 	NEVER,
 	NULL,
 	NUMBER,
 	present,
 	ref,
 	STRING,
+	type TupleTy,
 	type Ty,
 	UNKNOWN,
 	union,
 	type ValueKind,
+	writtenItems,
 } from "./ty.ts";
 import {
 	type Evaluation,
@@ -343,8 +365,16 @@ function leftOutTarget(
  * `nullable: true` (3.0 only; 3.1 has no such keyword) adds `null` to the `type` next
  * to it, and only then; the other keywords still apply to `null` (OAS 3.0.3). With
  * `looseNullable` it adds `null` to whatever the rest of the schema gives (see docs/types.md).
+ * An intersection built for it that leaves out unions past `MAX_COMBINATIONS` is noted
+ * here; one built for a schema it applies, there.
  */
 function parts(cx: Ctx, v: JsonObject, at: string, read: Reading): Ty {
+	const [t, left] = leavingOut(() => ownParts(cx, v, at, read));
+	if (left) cx.info(at, COMBINATIONS_LEFT_OUT);
+	return t;
+}
+
+function ownParts(cx: Ctx, v: JsonObject, at: string, read: Reading): Ty {
 	const nullable = !cx.refSiblings && v.get("nullable") === true;
 	const loose = nullable && cx.looseNullable;
 	const r = v.str("$ref");
@@ -376,8 +406,33 @@ function parts(cx: Ctx, v: JsonObject, at: string, read: Reading): Ty {
 		...keywordParts(cx, v, at, read),
 	];
 	out.push(...arrayTargets(cx, out, at));
+	noteSizes(cx, v, at);
 	const kept = withoutRejected(cx, v, at, inter(out));
 	return loose ? union([kept, NULL]) : kept;
+}
+
+/**
+ * Notes the keywords of a schema typed wider for their size: a pattern of more strings
+ * and bounds of more values than `MAX_VALUES`, a `const` or `enum` value with an array of
+ * more items than `MAX_ITEMS` (an array of their values; see `emit`).
+ */
+function noteSizes(cx: Ctx, v: JsonObject, at: string): void {
+	const pattern = v.str("pattern");
+	if (pattern !== undefined && tooManyStrings(pattern))
+		cx.info(
+			child(at, "pattern"),
+			manyNote(MAX_VALUES, "strings", "typed as string"),
+		);
+	if (boundsTooWide(v))
+		cx.info(at, manyNote(MAX_VALUES, "values", "typed as a number"));
+	const long = (x: Value | undefined): boolean =>
+		Array.isArray(x)
+			? x.length > MAX_ITEMS || x.some(long)
+			: x instanceof JsonObject && x.entries.some(([, y]) => long(y));
+	const array = manyNote(MAX_ITEMS, "items", "typed as an array");
+	if (long(v.get("const"))) cx.info(child(at, "const"), array);
+	const e = v.get("enum");
+	if (Array.isArray(e) && e.some(long)) cx.info(child(at, "enum"), array);
 }
 
 /** How members of a schema are met by its closed object (`closed`; see `parts`). */
@@ -515,6 +570,36 @@ function dependentParts(
 }
 
 /**
+ * A note on each count of `cond` (an `if` or `not` whose values `refuted` says) whose
+ * arrays left out are any array, past those kanagata writes a tuple of: its own, and
+ * those of the schemas it leaves what they leave of, its `allOf` / `anyOf` / `oneOf`
+ * members and the schemas its references reach, where they are.
+ */
+function countsPast(
+	cx: Ctx,
+	cond: Value,
+	at: string,
+	seen = new Set<string>(),
+): void {
+	if (!(cond instanceof JsonObject)) return;
+	cx.inOwnResource(cond, () => {
+		cx.eachTarget(cond, seen, (t) => countsPast(cx, t.value, t.where, seen));
+		if (!cx.readsSiblings(cond)) return;
+		for (const k of ["minItems", "maxItems"]) {
+			const n = count(cond, k);
+			if (n !== undefined && refutedPast(k, n))
+				cx.info(child(at, k), MANY_ITEMS);
+		}
+		for (const key of ["allOf", "anyOf", "oneOf"]) {
+			const members = cond.get(key);
+			if (Array.isArray(members))
+				for (const [i, m] of members.entries())
+					countsPast(cx, m, child(child(at, key), String(i)), seen);
+		}
+	});
+}
+
+/**
  * The value is as `then` says where `if` admits it, and as `else` says where it does not.
  * Where TypeScript cannot say which values `if` does not admit, `else` is read for every
  * value, with a warning; without `else`, that asks nothing, and the warning says so.
@@ -528,6 +613,7 @@ function conditionalParts(
 	if (!conditional(v)) return [];
 	const cond = v.get("if") as Value;
 	const said = refuted(cx, cond, [v, ...cx.around]);
+	if (said !== undefined) countsPast(cx, cond, child(at, "if"));
 	const otherwise = v.get("else") ?? true;
 	if (said === undefined && otherwise === true) {
 		cx.ifIgnored(child(at, "if"));
@@ -754,18 +840,22 @@ function containsParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 		const { min, max } = containsBounds(v);
 		const none = max === 0 ? notContained(cx, v, contains) : undefined;
 		const items = (n: number): Ty[] => Array.from({ length: n }, () => UNKNOWN);
+		// A count of more items than kanagata writes a tuple of is not typed, as in `array`.
+		const fits = (key: string, n: number): boolean => {
+			if (n <= MAX_ITEMS) return true;
+			cx.info(child(at, key), MANY_ITEMS);
+			return false;
+		};
 		// The arrays of min items or more.
-		const atLeast = (): Ty => ({
-			kind: "tuple",
-			items: items(min),
-			min,
-			rest: UNKNOWN,
-		});
+		const atLeast = (): Ty =>
+			fits("minContains", min)
+				? { kind: "tuple", items: items(min), min, rest: UNKNOWN }
+				: arrayTy(UNKNOWN);
 		if (max !== undefined && min > max)
 			parts.push(widen(cx, v, ["array"], NEVER));
 		else if (refuted(cx, contains, []) === NEVER) {
 			// Every item matches: the length is from min to max.
-			if (max !== undefined)
+			if (max !== undefined && fits("maxContains", max))
 				parts.push(
 					widen(cx, v, ["array"], { kind: "tuple", items: items(max), min }),
 				);
@@ -800,7 +890,10 @@ function notParts(cx: Ctx, v: JsonObject, at: string): Ty[] {
 	if (n === undefined) return [];
 	resolveRefs(cx, n, child(at, "not"));
 	const t = refuted(cx, n, [v, ...cx.around]);
-	if (t !== undefined) return [t];
+	if (t !== undefined) {
+		countsPast(cx, n, child(at, "not"));
+		return [t];
+	}
 	if (excluded(cx, v) === undefined)
 		cx.warn(child(at, "not"), "not cannot be expressed in TypeScript; ignored");
 	return [];
@@ -1054,7 +1147,10 @@ function isBinaryString(v: JsonObject): boolean {
  * An array, or a tuple where `prefixItems`, `minItems` or `maxItems` say more: the first
  * `minItems` items are required, `prefixItems` types the first ones and `items` the rest
  * (absent means any; false, next to `prefixItems`, none), and `maxItems` closes the tuple,
- * which TypeScript bounds only item by item.
+ * which TypeScript bounds only item by item. Past `MAX_ITEMS` items, a count is not
+ * typed, and `prefixItems` are an array of their types; past `MAX_WRITTEN` items in the
+ * tuples of its lengths (`writtenItems`), the items past the required ones are a rest of
+ * their types; each with a note.
  */
 function array(cx: Ctx, v: JsonObject, at: string): Ty {
 	// unevaluatedItems is items where nothing else evaluates the rest.
@@ -1073,10 +1169,25 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 			: items === false && Array.isArray(prefix)
 				? undefined
 				: cx.withRaw(part, () => schema(cx, items, child(at, key)));
-	const min = count(v, "minItems") ?? 0;
-	const max = count(v, "maxItems");
-	if (max !== undefined && max < min) return NEVER;
-	if (rest === undefined && min > head.length) return NEVER;
+	const minItems = count(v, "minItems") ?? 0;
+	const maxItems = count(v, "maxItems");
+	if (maxItems !== undefined && maxItems < minItems) return NEVER;
+	if (rest === undefined && minItems > head.length) return NEVER;
+	if (head.length > MAX_ITEMS) {
+		cx.info(
+			child(at, "prefixItems"),
+			manyNote(MAX_ITEMS, "items", "typed as an array of their types"),
+		);
+		return arrayTy(union(rest === undefined ? head : [...head, rest]));
+	}
+	// A count past them is not typed; a closed tuple ends within prefixItems.
+	const many = (key: string, n: number | undefined): boolean => {
+		const is = rest !== undefined && n !== undefined && n > MAX_ITEMS;
+		if (is) cx.info(child(at, key), MANY_ITEMS);
+		return is;
+	};
+	const min = many("minItems", minItems) ? 0 : minItems;
+	const max = many("maxItems", maxItems) ? undefined : maxItems;
 	if (!Array.isArray(prefix) && min === 0 && max === undefined)
 		return arrayTy(rest as Ty);
 	const length = max ?? Math.max(head.length, min);
@@ -1084,7 +1195,24 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 		{ length: rest === undefined ? Math.min(length, head.length) : length },
 		(_, i) => head[i] ?? (rest as Ty),
 	);
-	return max !== undefined || rest === undefined
-		? { kind: "tuple", items: written, min }
-		: { kind: "tuple", items: written, min, rest };
+	const t: TupleTy =
+		max !== undefined || rest === undefined
+			? { kind: "tuple", items: written, min }
+			: { kind: "tuple", items: written, min, rest };
+	if (writtenItems(t) <= MAX_WRITTEN) return t;
+	cx.info(
+		child(at, "prefixItems"),
+		manyNote(
+			MAX_WRITTEN,
+			"items in the tuples of its lengths",
+			"those past the required ones typed as an array of their types",
+		),
+	);
+	const optional = written.slice(min);
+	return {
+		kind: "tuple",
+		items: written.slice(0, min),
+		min,
+		rest: union(rest === undefined ? optional : [...optional, rest]),
+	};
 }

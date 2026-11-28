@@ -1,8 +1,9 @@
 // Specification runner.
 //
 // tests/spec/<name>/: input.json or input.yaml → expected.d.ts (and expected.warn, one warning per
-// line as `location: message`; absent means no warnings), generated with the options
-// in options.json (absent means none). Each input is generated twice to check determinism.
+// line as `location: message`, and expected.info, one note per line the same way; absent means
+// none), generated with the options in options.json (absent means none). Each input is generated
+// twice to check determinism.
 //
 // tests/errors/<name>/: input.json or input.yaml → the CLI's stderr (expected.err)
 // and exit code (expected.code).
@@ -63,6 +64,12 @@ for (const dir of cases("spec")) {
 			warnings,
 			readOrEmpty(join(dir, "expected.warn")),
 			"expected.warn",
+		);
+		const infos = generated.infos.map((i) => `${i.at}: ${i.msg}\n`).join("");
+		assert.equal(
+			infos,
+			readOrEmpty(join(dir, "expected.info")),
+			"expected.info",
 		);
 		assert.equal(
 			generate(src, source, options).code,

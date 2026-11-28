@@ -9,8 +9,8 @@ export interface schemas {
   Many: Many;
 }
 
-/** The member with contains matches or not, beside each of 512 others: 1,026 cases, which are read. */
+/** The member with contains matches or not, beside each of 498 others: 998 cases, which are read. */
 export type Plain = [] | [string, ...string[]];
 
-/** Any set of the 17 members can match together: 131,072 cases, more than the 99,999 read, so unevaluatedItems is ignored. */
+/** Any set of the 17 members can match together: 131,072 cases, more than the 1000 read, so unevaluatedItems is not typed, with a note. */
 export type Many = [unknown, ...unknown[]];

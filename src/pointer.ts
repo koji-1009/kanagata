@@ -227,6 +227,8 @@ export class Ctx {
 	readonly schemas: ReadonlySet<string>;
 	/** Warnings in the order first raised; the same schema converted for both views warns once. */
 	readonly #warnings = new Map<string, Diag>();
+	/** Notes of types written wider than the schema for their size (see `MAX_ITEMS` and the limits after it), each once. */
+	readonly #infos = new Map<string, Diag>();
 	/** The `if`s (`…/if`) whose `then` an `unevaluated*` reads for what it evaluates (`thenRead`). */
 	readonly #thenRead = new Set<string>();
 	/**
@@ -397,6 +399,16 @@ export class Ctx {
 				? { at: w.at, msg: THEN_READ }
 				: w,
 		);
+	}
+
+	/** Notes that the part of a schema at `at` is typed wider than it says, for its size. */
+	info(at: string, msg: string): void {
+		const key = `${at}\n${msg}`;
+		if (!this.#infos.has(key)) this.#infos.set(key, { at, msg });
+	}
+
+	get infos(): Diag[] {
+		return [...this.#infos.values()];
 	}
 
 	/**

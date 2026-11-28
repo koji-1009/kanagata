@@ -16,22 +16,28 @@ import { type Reading, schema, schemaDoc } from "./schema.ts";
 import {
 	admits,
 	includes,
+	keyCount,
 	matchesAll,
 	meet,
 	patternType,
 	strings,
 	type Template,
 	templates,
+	tooManyStrings,
 } from "./template.ts";
 import {
 	admitsText,
 	inter,
 	type Keyed,
+	MAX_KEYS,
+	MAX_VALUES,
+	manyNote,
 	NEVER,
 	neverProp,
 	type Prop,
 	present,
 	RECORD,
+	type Segment,
 	STRING,
 	type Ty,
 	UNDEFINED,
@@ -40,6 +46,16 @@ import {
 } from "./ty.ts";
 import { additional as additionalKeys } from "./unevaluated.ts";
 import { asserted } from "./vocab.ts";
+
+/** The note for keys of more strings than kanagata writes a union of. */
+const MANY_KEYS = manyNote(MAX_VALUES, "keys", "typed by any string");
+
+/** The note for index signatures by more keys than kanagata keys an object type by. */
+const MANY_KEYED = manyNote(
+	MAX_KEYS,
+	"keys of index signatures",
+	"typed by any string",
+);
 
 /**
  * The keys an object's `propertyNames` admits: every key is a string it must admit, so
@@ -125,11 +141,14 @@ export function propertyNamesParts(
 		...(count(s, "maxLength") !== undefined ? ["maxLength"] : []),
 	];
 	const pattern = s.str("pattern");
+	// A pattern of more strings than kanagata writes is noted where it is (see `noteSizes`).
 	if (
 		read === undefined ||
 		(read.kind === "string" &&
 			(lengths.length > 0 ||
-				(pattern !== undefined && patternType(pattern) === undefined)))
+				(pattern !== undefined &&
+					patternType(pattern) === undefined &&
+					!tooManyStrings(pattern))))
 	)
 		cx.warn(
 			child(at, "propertyNames"),
@@ -152,7 +171,8 @@ export function propertyNamesParts(
  * A type of keys: where TypeScript keeps the strings as an intersection, of the templates of
  * patterns (`allOf: [{ pattern: "^x-" }, { pattern: "-y$" }]`), the strings all of them
  * admit, as templates (see `meet`): `"x-y" | `x-${string}-y``. undefined where those are
- * too many to read.
+ * too many to read. They are no more strings than kanagata writes: about as many as the
+ * combinations of the intersection, `MAX_COMBINATIONS` at most.
  */
 function meetKeys(keys: Ty): Ty | undefined {
 	if (keys.kind !== "inter") return keys;
@@ -167,7 +187,7 @@ function meetKeys(keys: Ty): Ty | undefined {
 		for (const a of met)
 			for (const b of terms) {
 				const both = meet(a, b);
-				if (both === undefined) return undefined;
+				if (!Array.isArray(both)) return undefined;
 				next.push(...both);
 			}
 		met = next;
@@ -249,6 +269,8 @@ interface Draft {
 	readonly everyKey: Ty[];
 	/** The type of each of `keyed`'s index signatures (see `sortPatterns`). */
 	exact: Ty[];
+	/** Where the schema is, for notes. */
+	readonly at: string;
 }
 
 /** The object type of a schema, whose conversion reads `read`. */
@@ -284,6 +306,7 @@ export function object(
 		unwritten: [],
 		everyKey: [],
 		exact: [],
+		at,
 	};
 	// A property a pattern matches has both types.
 	for (const p of props) {
@@ -429,9 +452,21 @@ function nameAll(
  * narrower one's type is within a wider one's, as TypeScript requires (`exact`).
  */
 function sortPatterns(d: Draft): void {
-	for (const [pattern, ty] of d.patterns) {
+	const keying = d.patterns.map(([pattern]) => {
 		const keys = patternType(pattern);
-		if (keys === undefined) d.unwritten.push({ pattern, ty });
+		return keys === undefined || keys.kind === "string"
+			? []
+			: templates(pattern).filter((t) => strings(t) === undefined);
+	});
+	// Past the keys kanagata keys an object type by, no template says them.
+	const over = keyTotal(keying.flat().map((t) => t.key)) > MAX_KEYS;
+	if (over) d.cx.info(child(d.at, "patternProperties"), MANY_KEYED);
+	for (const [i, [pattern, ty]] of d.patterns.entries()) {
+		const keys = patternType(pattern);
+		if (tooManyStrings(pattern))
+			d.cx.info(child(child(d.at, "patternProperties"), pattern), MANY_KEYS);
+		if (keys === undefined || (over && (keying[i] as Template[]).length > 0))
+			d.unwritten.push({ pattern, ty });
 		else if (keys.kind === "string") d.everyKey.push(ty);
 		else {
 			const all = templates(pattern);
@@ -460,6 +495,14 @@ function types(d: Draft, t: Template): Ty[] {
 }
 
 const textOf = (key: Ty) => (key as { text: string }).text;
+
+/** The keys template literal types make, each type once (see `MAX_KEYS`). */
+function keyTotal(keys: readonly Ty[]): number {
+	const each = new Map(keys.map((k) => [textOf(k), k]));
+	let n = 0;
+	for (const k of each.values()) n += keyCount(k as { seq: Segment[] });
+	return n;
+}
 
 /**
  * Adds an index signature where none is by its key: patterns of the same template are one
@@ -535,13 +578,19 @@ function keyedObject(d: Draft, keys: Ty): Ty {
 	if (own.length === 0) return closedOver(d, admits);
 	// A pattern's signature is by the keys propertyNames admits too: all of its own where
 	// they are, else the keys each template of propertyNames shares with it, written as
-	// templates (see `meet`). Where those are too many to read, it stays.
+	// templates (see `meet`). Where those are too many to read, or more strings than
+	// kanagata writes, it stays.
 	const signatures: Keyed[] = [];
 	for (const [i, k] of d.keyed.entries()) {
 		const both = own.some((n) => includes(n, k.t))
 			? [k.t]
 			: own.map((n) => meet(n, k.t));
-		if (both.some((m) => m === undefined))
+		if (both.some((m) => m === "many"))
+			d.cx.info(
+				child(child(d.at, "patternProperties"), k.pattern),
+				manyNote(MAX_VALUES, "keys", "typed by the pattern's keys"),
+			);
+		if (both.some((m) => m === undefined || m === "many"))
 			signature(
 				signatures,
 				k.t.key,
@@ -581,8 +630,16 @@ function keyedObject(d: Draft, keys: Ty): Ty {
 		signature(out, t.key, signatureType(d, ty, within(t)));
 	}
 	if (out.length === 0) return closedOver(d, admits);
-	const forbidden = outside(d, admits).map(neverProp);
-	return { kind: "map", props: [...d.props, ...forbidden], keyed: out };
+	const props = [...d.props, ...outside(d, admits).map(neverProp)];
+	if (keyTotal(out.map((s) => s.key)) <= MAX_KEYS)
+		return { kind: "map", props, keyed: out };
+	// Past the keys kanagata keys an object type by, any key has their types.
+	d.cx.info(child(d.at, "propertyNames"), MANY_KEYED);
+	return {
+		kind: "map",
+		props,
+		index: signatureType(d, union(out.map((s) => s.ty)), () => true),
+	};
 }
 
 /** The object type of the properties, the patterns and additionalProperties. */

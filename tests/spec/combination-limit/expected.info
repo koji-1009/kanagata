@@ -1,0 +1,22 @@
+#/components/schemas/Huge/maxItems: more than 9999 items; not typed
+#/components/schemas/PastLimit/maxItems: more than 9999 items; not typed
+#/components/schemas/NonEmptyHuge/maxItems: more than 9999 items; not typed
+#/components/schemas/ManyRequired/minItems: more than 9999 items; not typed
+#/components/schemas/IfShortHuge/if/maxItems: more than 9999 items; not typed
+#/components/schemas/IfShortPastLimit/if/maxItems: more than 9999 items; not typed
+#/components/schemas/NotShortHuge/not/maxItems: more than 9999 items; not typed
+#/components/schemas/NotMemberHuge/not/allOf/0/maxItems: more than 9999 items; not typed
+#/components/schemas/IfRefHuge/$defs/short/maxItems: more than 9999 items; not typed
+#/components/schemas/ContainsMany/minContains: more than 9999 items; not typed
+#/components/schemas/ContainsMost/maxContains: more than 9999 items; not typed
+#/components/schemas/SoleMany/minContains: more than 9999 items; not typed
+#/components/schemas/SoleMost/maxContains: more than 9999 items; not typed
+#/components/schemas/ManyPatternKeys/patternProperties/^[a-zA-Z]{3}-: more than 10000 keys; typed by any string
+#/components/schemas/SharedPattern/patternProperties/[0-9]{2}$: more than 10000 keys; typed by the pattern's keys
+#/components/schemas/PatternKeys/patternProperties: more than 300 keys of index signatures; typed by any string
+#/components/schemas/NameKeys/propertyNames: more than 300 keys of index signatures; typed by any string
+#/components/schemas/ManyNames/propertyNames/pattern: more than 10000 strings; typed as string
+#/components/schemas/SharedNames/propertyNames: more than 1000 combinations; some of its parts are not typed
+#/components/schemas/Dependent: more than 1000 combinations; some of its parts are not typed
+#/components/schemas/BothEnds: more than 1000 combinations; some of its parts are not typed
+#/components/schemas/Payment: more than 1000 combinations; some of its parts are not typed
