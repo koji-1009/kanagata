@@ -61,7 +61,7 @@
         "description": "Where the other keywords do not say whether they admit a value, not is ignored, with a warning.",
         "type": "string",
         "enum": ["a", "b"],
-        "not": { "enum": ["a"], "minProperties": 1 }
+        "not": { "enum": ["a"], "allOf": [{ "minLength": 2 }] }
       },
       "NamesLeftOut": {
         "description": "propertyNames of any string but some makes those keys none.",

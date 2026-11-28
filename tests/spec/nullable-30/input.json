@@ -19,7 +19,8 @@
       "NotNull": { "type": "string", "nullable": false },
       "MaybeNotNull": { "description": "3.0 ignores the keywords next to $ref, nullable among them.", "$ref": "#/components/schemas/NotNull", "nullable": true },
       "StillNotNull": { "description": "null must also pass allOf.", "type": "string", "allOf": [{ "$ref": "#/components/schemas/NotNull" }], "nullable": true },
-      "MaybePoint": { "type": "object", "allOf": [{ "$ref": "#/components/schemas/Point" }], "nullable": true }
+      "MaybePoint": { "type": "object", "allOf": [{ "$ref": "#/components/schemas/Point" }], "nullable": true },
+      "Value": { "description": "oneOf members that nullable adds null to both admit it: it is in neither.", "oneOf": [{ "type": "string", "nullable": true }, { "type": "integer", "nullable": true }, { "type": "array", "nullable": true, "items": { "type": "string" } }] }
     }
   }
 }

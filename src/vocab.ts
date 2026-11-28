@@ -262,6 +262,13 @@ export function assertions(kind: Kind): string[] {
 	return keywords((w) => w.is === "assertion" && w.kind === kind);
 }
 
+/** The assertions and applicators on values of a kind, which values of other kinds pass: `required`, `properties`, … for `object`. */
+export function onlyOf(kind: Kind): string[] {
+	return keywords(
+		(w) => (w.is === "assertion" || w.is === "applicator") && w.kind === kind,
+	);
+}
+
 /** The keywords whose presence makes a schema of a kind, or a member without `type` of it only (`makes`). */
 export function making(kind: Kind, makes: "type" | "member"): string[] {
 	return keywords(

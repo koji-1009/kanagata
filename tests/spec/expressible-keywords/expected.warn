@@ -8,3 +8,5 @@
 #/components/schemas/ContainsNoX/maxContains: maxContains cannot be expressed in TypeScript; ignored
 #/components/schemas/ContainsNoObject/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
 #/components/schemas/ContainsNoObject/maxContains: maxContains cannot be expressed in TypeScript; ignored
+#/components/schemas/ContainsNoArray/contains: contains: which items match it cannot be expressed in TypeScript; only how many is typed
+#/components/schemas/ContainsNoArray/maxContains: maxContains cannot be expressed in TypeScript; ignored

@@ -5,8 +5,8 @@
 // `null` two members list (`shared`), and among members that ask only for keys, the
 // objects with all of another's (`exclusive`).
 
-import { get, JsonObject, stringsIn, type Value } from "./json.ts";
-import { sameValue } from "./not.ts";
+import { get, JsonObject, parse, stringsIn, type Value } from "./json.ts";
+import { accepts, sameValue } from "./not.ts";
 import type { Ctx } from "./pointer.ts";
 import {
 	absent,
@@ -24,10 +24,12 @@ import { asserted, isAnnotation, REFS, refsAndAnnotations } from "./vocab.ts";
  * oneOf admits a value only one member admits, so a literal or `null` two members
  * admit is in neither. It is left out of the members that list it; one that admits it
  * by its kind (`string` for `"a"`) keeps it in their union, as TypeScript cannot leave
- * it out of that; `boolean` is `true | false`, which it can. Other members, refs among
- * them, are not counted.
+ * it out of that; `boolean` is `true | false`, which it can. A member counts a value
+ * only where its schema (of `schemas`) says it admits it (`accepts`): its type admits
+ * more where TypeScript cannot say what a keyword leaves out (an `if` it ignores).
+ * Other members, refs among them, are not counted.
  */
-export function shared(tys: Ty[]): Ty[] {
+export function shared(cx: Ctx, schemas: Value[], tys: Ty[]): Ty[] {
 	const listed = (t: Ty): Ty[] => (t.kind === "union" ? t.items : [t]);
 	// A literal or null by its text, so that each is counted once per member.
 	const key = (m: Ty): string | undefined =>
@@ -36,13 +38,24 @@ export function shared(tys: Ty[]): Ty[] {
 		.flatMap(listed)
 		.filter((m) => m.kind === "lit" || m.kind === "null");
 	const members = tys.map((t) => booleansListed(listed(t), values));
-	const counts = new Map<string, number>();
-	for (const ms of members)
-		for (const k of new Set(ms.map(key)))
-			if (k !== undefined) counts.set(k, (counts.get(k) ?? 0) + 1);
-	const drop = new Set(
-		values.map(key).filter((k) => (counts.get(k as string) as number) > 1),
-	);
+	// The members that list each value, and of those listed by two, the members whose
+	// schema admits it.
+	const count = (admitted: (i: number, m: Ty) => boolean) => {
+		const counts = new Map<string, number>();
+		for (const [i, ms] of members.entries())
+			for (const [k, m] of new Map(ms.map((m) => [key(m), m])))
+				if (k !== undefined && admitted(i, m))
+					counts.set(k, (counts.get(k) ?? 0) + 1);
+		return new Set([...counts].filter(([, n]) => n > 1).map(([k]) => k));
+	};
+	const listedTwice = count(() => true);
+	if (listedTwice.size === 0) return tys;
+	const drop = count((i, m) => {
+		if (!listedTwice.has(key(m) as string)) return false;
+		const s = schemas[i];
+		const x = m.kind === "lit" ? parse(m.text) : null;
+		return s instanceof JsonObject && accepts(cx, s, x) === true;
+	});
 	if (drop.size === 0) return tys;
 	return members.map((ms) =>
 		union(ms.filter((m) => !drop.has(key(m) as string))),

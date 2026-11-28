@@ -6,6 +6,7 @@
       "NullTwice": { "description": "null two oneOf members admit is in neither.", "oneOf": [{ "type": ["string", "null"] }, { "type": ["integer", "null"] }, { "type": ["array", "null"], "items": { "type": "string" } }] },
       "NullOnce": { "description": "null one member admits stays.", "oneOf": [{ "type": ["string", "null"] }, { "type": "integer" }] },
       "Literals": { "description": "So does a literal two members list.", "oneOf": [{ "enum": ["a", "b"] }, { "enum": ["b", "c"] }] },
+      "Unsaid": { "description": "Only where each member's keywords say they admit it: the second admits no a, which its type cannot say.", "oneOf": [{ "enum": ["a", "b"] }, { "enum": ["a"], "if": { "minLength": 1 }, "then": false }] },
       "ByKind": { "description": "TypeScript has no string but one literal.", "oneOf": [{ "type": "string" }, { "const": "a" }] },
       "Booleans": { "description": "Booleans and numbers are literals too.", "oneOf": [{ "enum": [true, 1] }, { "enum": [true, 2] }] },
       "FalseTwice": { "description": "boolean is true or false, so it leaves out a false another member lists.", "oneOf": [{ "type": "boolean" }, { "const": false }] },
