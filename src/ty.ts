@@ -1480,6 +1480,13 @@ function numberKey(text: string): string {
 	return `#${sign}${digits}e${e}`;
 }
 
+/**
+ * A key literal types have alike where `equalValues` reads them as one value: a literal's
+ * value, another type's structure.
+ */
+export const valueIdentity = (t: Ty): string =>
+	t.kind === "lit" ? `lit${valueKey(t)}` : structure(t);
+
 /** Whether two types of JSON values are the same value: literals by value (`1` and `1.0`), others by structure. */
 export function equalValues(a: Ty, b: Ty): boolean {
 	return a.kind === "lit" && b.kind === "lit"

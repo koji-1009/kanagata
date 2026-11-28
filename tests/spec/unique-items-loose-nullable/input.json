@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "t", "version": "1" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Listed": { "description": "Read loosely, nullable adds null past an enum too.", "type": "array", "uniqueItems": true, "items": { "enum": ["a", "b"], "nullable": true } }
+    }
+  }
+}

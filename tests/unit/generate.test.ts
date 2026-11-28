@@ -542,6 +542,26 @@ export type Contained = unknown[];
 	]);
 });
 
+test("a bound uniqueItems gives past 9999 items is not typed, with a note at uniqueItems", () => {
+	const values = Array.from({ length: 10_000 }, (_, i) => `v${i}`);
+	const src = JSON.stringify({
+		openapi: "3.1.0",
+		components: {
+			schemas: {
+				Tags: { type: "array", uniqueItems: true, items: { enum: values } },
+			},
+		},
+	});
+	const generated = generate(src);
+	assert.match(generated.code, /export type Tags = \("v0" \| [^\n]*\)\[\];\n/);
+	assert.deepEqual(generated.infos, [
+		{
+			at: "#/components/schemas/Tags/uniqueItems",
+			msg: "more than 9999 items; not typed",
+		},
+	]);
+});
+
 test("past 20000 items in the tuples of the lengths of distinct prefixItems, the optional ones are a rest of their types, with a note", () => {
 	// The tuples of 1 to 200 items past the required one: 20,100 items.
 	const values = Array.from({ length: 201 }, (_, i) => `v${i}`);

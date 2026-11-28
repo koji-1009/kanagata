@@ -40,6 +40,7 @@ import {
 } from "./kinds.ts";
 import {
 	excluded,
+	listed,
 	mayAdmit,
 	notContained,
 	refuted,
@@ -88,6 +89,7 @@ import {
 	UNKNOWN,
 	union,
 	type ValueKind,
+	valueIdentity,
 	writtenItems,
 } from "./ty.ts";
 import {
@@ -1143,6 +1145,27 @@ function isBinaryString(v: JsonObject): boolean {
 	);
 }
 
+/** The lesser of two bounds, either of which may be none. */
+const atMost = (a: number | undefined, b: number | undefined) =>
+	a === undefined ? b : b === undefined ? a : Math.min(a, b);
+
+/**
+ * The most items an array of `uniqueItems: true` holds where its items past the `prefix`
+ * ones list their values (`listed`): as many as those values, after the prefix items.
+ * undefined for any other array.
+ */
+function distinctItems(
+	cx: Ctx,
+	v: JsonObject,
+	items: Value | undefined,
+	prefix: number,
+): number | undefined {
+	if (v.get("uniqueItems") !== true) return undefined;
+	const values = listed(cx, items, new Set());
+	if (values === undefined) return undefined;
+	return prefix + new Set(values.map((x) => valueIdentity(literal(x)))).size;
+}
+
 /**
  * An array, or a tuple where `prefixItems`, `minItems` or `maxItems` say more: the first
  * `minItems` items are required, `prefixItems` types the first ones and `items` the rest
@@ -1170,7 +1193,10 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 				? undefined
 				: cx.withRaw(part, () => schema(cx, items, child(at, key)));
 	const minItems = count(v, "minItems") ?? 0;
-	const maxItems = count(v, "maxItems");
+	const maxItems = atMost(
+		count(v, "maxItems"),
+		rest === undefined ? undefined : distinctItems(cx, v, items, head.length),
+	);
 	if (maxItems !== undefined && maxItems < minItems) return NEVER;
 	if (rest === undefined && minItems > head.length) return NEVER;
 	if (head.length > MAX_ITEMS) {
@@ -1187,7 +1213,9 @@ function array(cx: Ctx, v: JsonObject, at: string): Ty {
 		return is;
 	};
 	const min = many("minItems", minItems) ? 0 : minItems;
-	const max = many("maxItems", maxItems) ? undefined : maxItems;
+	// The bound uniqueItems gives where maxItems gives none, or a greater one.
+	const maxKey = maxItems === count(v, "maxItems") ? "maxItems" : "uniqueItems";
+	const max = many(maxKey, maxItems) ? undefined : maxItems;
 	if (!Array.isArray(prefix) && min === 0 && max === undefined)
 		return arrayTy(rest as Ty);
 	const length = max ?? Math.max(head.length, min);

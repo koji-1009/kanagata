@@ -3,7 +3,7 @@
 // Every list of keywords a reader asks for (the annotations, the keywords of a kind, the
 // applicators and what they apply to, the places that hold data or names) is read from
 // `KEYWORDS`, so a keyword is known the same way everywhere. A keyword not in it is one
-// kanagata does not read (`uniqueItems`); it says nothing to the types.
+// kanagata does not read; it says nothing to the types.
 
 import { get, type JsonObject, type Value } from "./json.ts";
 
@@ -99,6 +99,7 @@ export const KEYWORDS: readonly (readonly [string, Entry])[] = [
 	["maxItems", { is: "assertion", kind: "array", makes: "type", oas30: true }],
 	["minContains", { is: "assertion", kind: "array" }],
 	["maxContains", { is: "assertion", kind: "array" }],
+	["uniqueItems", { is: "assertion", kind: "array", oas30: true }],
 	["$ref", { is: "reference", oas30: true }],
 	["$dynamicRef", { is: "reference" }],
 	["allOf", { is: "applicator", to: "value", holds: "list", oas30: true }],

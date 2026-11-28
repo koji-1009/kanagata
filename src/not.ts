@@ -286,7 +286,7 @@ export function listed(
 	seen: Set<string>,
 ): Value[] | undefined {
 	if (!(s instanceof JsonObject)) return undefined;
-	return cx.inOwnResource(s, () => {
+	const values = cx.inOwnResource(s, () => {
 		for (const values of cx.eachTarget(s, seen, (t) =>
 			listed(cx, t.value, seen),
 		))
@@ -301,7 +301,24 @@ export function listed(
 		}
 		return undefined;
 	});
+	return values !== undefined && nullAdded(cx, s) && !values.includes(null)
+		? [...values, null]
+		: values;
 }
+
+/**
+ * Whether 3.0's `nullable: true` admits `null` beside the values a schema lists: next to
+ * `type` without `enum` or `const` (and not next to `$ref`, whose siblings 3.0 ignores),
+ * or anywhere with `looseNullable` (see `parts`).
+ */
+const nullAdded = (cx: Ctx, s: JsonObject): boolean =>
+	!cx.refSiblings &&
+	s.get("nullable") === true &&
+	(cx.looseNullable ||
+		(s.get("type") !== undefined &&
+			s.get("enum") === undefined &&
+			s.get("const") === undefined &&
+			s.get("$ref") === undefined));
 
 /** The values a schema itself lists. */
 function ownValues(s: JsonObject): Value[] | undefined {
